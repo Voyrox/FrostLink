@@ -2,13 +2,15 @@
 
 FrostLink is a powerful and flexible reverse proxy tool developed in Rust. It's designed to route requests efficiently from public domains to local servers, supporting both HTTP and HTTPS traffic. ArcticArch is particularly useful for exposing local development servers to the internet or for setting up a custom routing scheme in a microservices architecture.
 
-## Features
 
-- **Support for HTTP and HTTPS**: Handles both unencrypted and encrypted traffic, with easy SSL/TLS setup.
-- **Dynamic Configuration**: Configure your domains and SSL settings using simple `.conf` files.
-- **Asynchronous Processing**: Utilizes Rust's async capabilities for efficient handling of multiple connections.
-- **Detailed Logging**: Logs information about each request, including processing time, client IP address, domain, and request path.
-- **Customizable**: Extendable for various use cases and easily integrable into different environments.
+# 🚀 Features
+> [!TIP]
+> - **Support for HTTP and HTTPS**: Handles both unencrypted and encrypted traffic, with easy SSL/TLS setup.
+> - **Dynamic Configuration**: Configure your domains and SSL settings using simple `.conf` files.
+> - **Asynchronous Processing**: Utilizes Rust's async capabilities for efficient handling of multiple connections.
+> - **Detailed Logging**: Logs information about each request, including processing time, client IP address, domain, and request path.
+> - **Customizable**: Extendable for various use cases and easily integrable into different environments.
+> 
 
 ## Getting Started
 
