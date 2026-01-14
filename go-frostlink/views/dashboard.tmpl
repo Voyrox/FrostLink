@@ -1,0 +1,83 @@
+<{{ define "dashboard" }}
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>FrostLink • Dashboard</title>
+		<link rel="stylesheet" href="css/global.css" />
+		<link rel="stylesheet" href="css/sidebar.css" />
+		<link rel="stylesheet" href="css/dashboard.css" />
+	</head>
+	<body>
+		<div class="app">
+			{{ template "sidebar" . }}
+
+			<script>
+			(function(){
+				const card = document.querySelector('.profile-card');
+				if(!card) return;
+				const img = card.querySelector('.avatar');
+				const fallback = card.querySelector('.avatar-fallback');
+				const nameEl = card.querySelector('.username');
+				const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
+				if(fallback){ fallback.textContent = initial; }
+				function showFallback(){ if(img){ img.style.display='none'; } if(fallback){ fallback.style.display='grid'; } }
+				if(!img || !img.getAttribute('src')){ showFallback(); }
+				else { img.addEventListener('error', showFallback); }
+			})();
+			</script>
+
+			<main class="content" role="main" aria-labelledby="page-title">
+				<header class="page-header">
+					<h1 id="page-title">Dashboard</h1>
+					<p class="subtitle">Overview of system activity and usage</p>
+				</header>
+
+				<section class="stats-grid" aria-label="Key Metrics">
+					<article class="stat" aria-labelledby="fw-title">
+						<div class="stat-header">
+							<div class="stat-title" id="fw-title">Firewall blocked</div>
+						</div>
+						<div class="stat-value">1,024</div>
+						<div class="stat-meta">last 24h</div>
+					</article>
+
+					<article class="stat" aria-labelledby="ddos-title">
+						<div class="stat-header">
+							<div class="stat-title" id="ddos-title">DDoS attacks</div>
+						</div>
+						<div class="stat-value">7</div>
+						<div class="stat-meta">mitigated this week</div>
+					</article>
+
+					<article class="stat" aria-labelledby="users-title">
+						<div class="stat-header">
+							<div class="stat-title" id="users-title">Active users</div>
+						</div>
+						<div class="stat-value">238</div>
+						<div class="stat-meta">currently online</div>
+					</article>
+
+					<article class="stat" aria-labelledby="data-title">
+						<div class="stat-header">
+							<div class="stat-title" id="data-title">Data usage</div>
+						</div>
+						<div class="dual">
+							<div>
+								<div class="dual-label">Sent</div>
+								<div class="dual-value">32.4 GB</div>
+							</div>
+							<div>
+								<div class="dual-label">Retrieved</div>
+								<div class="dual-value">18.7 GB</div>
+							</div>
+						</div>
+						<div class="stat-meta">rolling 30 days</div>
+					</article>
+				</section>
+			</main>
+		</div>
+	</body>
+</html>
+{{ end }}

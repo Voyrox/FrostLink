@@ -1,0 +1,49 @@
+{{ define "notifications" }}
+<style>
+    .toast {
+        position: fixed;
+        top: 30px;
+        right: 30px;
+        background: #131313;
+        color: #ffffff;
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        border-left: 4px solid rgb(255, 193, 7);
+        z-index: 999999;
+        transform: translateX(150%);
+        transition: transform 0.4s ease;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 350px;
+    }
+
+    .toast.show {
+        transform: translateX(0);
+    }
+
+    .toast i {
+        color: rgb(255, 193, 7);
+        font-size: 1.2rem;
+    }
+</style>
+<div class="toast" id="toast">
+    <i class="fas fa-check-circle"></i>
+    <span id="toast-message">Service moved successfully!</span>
+</div>
+
+
+<script>
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+    function showToast(message) {
+        toastMessage.textContent = message;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 5000);
+    }
+</script>
+{{ end }}
