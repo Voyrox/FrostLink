@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FrostLink • Request Analytics</title>
+    <link rel="stylesheet" href="css/global.css" />
+    <link rel="stylesheet" href="css/sidebar.css" />
+    <link rel="stylesheet" href="css/analytics.css" />
+  </head>
+  <body class="page-analytics">
+    <div class="app">
+      <aside class="sidebar" aria-label="Primary">
+        <div class="profile-card">
+          <div class="avatar-wrap">
+            <img class="avatar" src="images/user.png" alt="User avatar" />
+            <div class="avatar-fallback" aria-hidden="true"></div>
+          </div>
+          <div class="username">Your Name</div>
+        </div>
+
+        <div class="sidebar-card">
+          <nav class="nav-group">
+            <div class="group-title">General</div>
+            <a class="nav-item" href="dashboard.html">
+              <span class="icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2"/>
+                  <rect x="13" y="3" width="8" height="5" rx="2" stroke="currentColor" stroke-width="2"/>
+                  <rect x="13" y="10" width="8" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
+                  <rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2"/>
+                </svg>
+              </span>
+              <span>Dashboard</span>
+            </a>
+            <a class="nav-item" href="domains.html">
+              <span class="icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+                  <path d="M3 12h18" stroke="currentColor" stroke-width="2"/>
+                  <path d="M12 3v18" stroke="currentColor" stroke-width="2"/>
+                </svg>
+              </span>
+              <span>Domains</span>
+            </a>
+            <a class="nav-item is-active" href="#">
+              <span class="icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 17l6-6 4 4 8-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span>Analytics</span>
+            </a>
+            <a class="nav-item" href="#">
+              <span class="icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 3h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2"/>
+                  <path d="M9 12h6M9 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span>Logs</span>
+            </a>
+          </nav>
+        </div>
+
+        <div class="sidebar-card">
+          <nav class="nav-group">
+            <div class="group-title">Access Control</div>
+            <a class="nav-item" href="#">
+              <span class="icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+                  <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span>Users</span>
+            </a>
+            <a class="nav-item" href="#">
+              <span class="icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2l7 4v6c0 5-4 9-7 10-3-1-7-5-7-10V6l7-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span>Roles</span>
+            </a>
+          </nav>
+        </div>
+      </aside>
+
+      <main class="content" role="main" aria-labelledby="page-title">
+        <header class="page-header">
+          <h1 id="page-title">Request Analytics</h1>
+          <p class="subtitle">View detailed request analytics</p>
+        </header>
+
+        <section class="panel stats" aria-label="Totals">
+          <div class="stat">
+            <div class="stat-title">Total requests</div>
+            <div class="stat-value">1,284,421</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Requests blocked by FrostLink</div>
+            <div class="stat-value">83,240 <span class="muted">(6.48%)</span></div>
+          </div>
+        </section>
+
+        <section class="panel" aria-label="Requests by day">
+          <div class="panel-header">
+            <h2>Requests by day</h2>
+          </div>
+          <canvas id="byDayChart" aria-label="Requests over last 8 days" role="img"></canvas>
+        </section>
+
+        <section class="grid-2" aria-label="Countries">
+          <div class="panel" aria-labelledby="by-country-title">
+            <div class="panel-header"><h2 id="by-country-title">Requests by country</h2></div>
+            <div class="map-wrap">
+              <svg class="world" viewBox="0 0 800 400" aria-hidden="true">
+                <rect x="0" y="0" width="800" height="400" fill="#0c111a" stroke="#141b28"/>
+                <g class="markers">
+                  <circle data-country="United States" data-count="520k" cx="180" cy="150" r="6" />
+                  <circle data-country="United Kingdom" data-count="120k" cx="360" cy="120" r="5" />
+                  <circle data-country="Germany" data-count="95k" cx="390" cy="135" r="5" />
+                  <circle data-country="India" data-count="210k" cx="520" cy="190" r="6" />
+                  <circle data-country="Australia" data-count="60k" cx="650" cy="290" r="5" />
+                  <circle data-country="Brazil" data-count="75k" cx="260" cy="240" r="5" />
+                </g>
+              </svg>
+              <div class="tooltip" role="tooltip" hidden></div>
+            </div>
+          </div>
+          <div class="panel" aria-labelledby="top-countries-title">
+            <div class="panel-header"><h2 id="top-countries-title">Top countries</h2></div>
+            <div class="table-wrap">
+              <table class="table" role="grid">
+                <thead>
+                  <tr>
+                    <th scope="col">Country</th>
+                    <th scope="col" class="num">Total</th>
+                    <th scope="col" class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>United States</td><td class="num">520,000</td><td class="num">40.5%</td></tr>
+                  <tr><td>India</td><td class="num">210,000</td><td class="num">16.4%</td></tr>
+                  <tr><td>United Kingdom</td><td class="num">120,000</td><td class="num">9.4%</td></tr>
+                  <tr><td>Germany</td><td class="num">95,000</td><td class="num">7.4%</td></tr>
+                  <tr><td>Brazil</td><td class="num">75,000</td><td class="num">5.8%</td></tr>
+                  <tr><td>Australia</td><td class="num">60,000</td><td class="num">4.7%</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+    (function(){
+      const card = document.querySelector('.profile-card');
+      if(card){
+        const img = card.querySelector('.avatar');
+        const fallback = card.querySelector('.avatar-fallback');
+        const nameEl = card.querySelector('.username');
+        const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
+        if(fallback){ fallback.textContent = initial; }
+        function showFallback(){ if(img){ img.style.display='none'; } if(fallback){ fallback.style.display='grid'; } }
+        if(!img || !img.getAttribute('src')){ showFallback(); }
+        else { img.addEventListener('error', showFallback); }
+      }
+
+      // Line chart - req by day
+      const c = document.getElementById('byDayChart');
+      if(c){
+        const data = [120, 160, 140, 200, 250, 220, 300, 280];
+        const labels = Array.from({length:8}, (_,i)=>`D${i+1}`);
+        function draw(){
+          const dpr = window.devicePixelRatio || 1;
+          const displayW = c.parentElement ? c.parentElement.clientWidth : 900;
+          const displayH = 300;
+          c.style.width = '100%';
+          c.style.height = displayH + 'px';
+          c.width = Math.floor(displayW * dpr);
+          c.height = Math.floor(displayH * dpr);
+          const ctx = c.getContext('2d');
+          ctx.setTransform(1,0,0,1,0,0);
+          ctx.scale(dpr, dpr);
+
+          const width = displayW;
+          const height = displayH;
+          const padding = {t:20, r:24, b:28, l:36};
+          const areaW = width - padding.l - padding.r;
+          const areaH = height - padding.t - padding.b;
+          const max = Math.max(...data) * 1.1;
+
+          ctx.clearRect(0,0,width,height);
+          // axes
+          ctx.strokeStyle = '#1b2230';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(padding.l, height - padding.b);
+          ctx.lineTo(width - padding.r, height - padding.b);
+          ctx.moveTo(padding.l, padding.t);
+          ctx.lineTo(padding.l, height - padding.b);
+          ctx.stroke();
+
+          // labels
+          ctx.fillStyle = '#a4acb9';
+          ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+          for(let i=0;i<labels.length;i++){
+            const x = padding.l + (i/(labels.length-1))*areaW;
+            ctx.fillText(labels[i], x-8, height - padding.b + 18);
+          }
+
+          // line
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#22d3ee';
+          ctx.beginPath();
+          for(let i=0;i<labels.length;i++){
+            const x = padding.l + (i/(labels.length-1))*areaW;
+            const y = padding.t + (1 - data[i]/max) * areaH;
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+          }
+          ctx.stroke();
+
+          // fill
+          const grad = ctx.createLinearGradient(0, padding.t, 0, height - padding.b);
+          grad.addColorStop(0, 'rgba(34,211,238,.25)');
+          grad.addColorStop(1, 'rgba(34,211,238,0)');
+          ctx.lineTo(width - padding.r, height - padding.b);
+          ctx.lineTo(padding.l, height - padding.b);
+          ctx.closePath();
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
+        window.addEventListener('resize', draw);
+        draw();
+      }
+
+      const map = document.querySelector('.map-wrap');
+      if(map){
+        const tip = map.querySelector('.tooltip');
+        map.addEventListener('mousemove', (e)=>{
+          const t = e.target;
+          if(t && t.tagName === 'circle' && t.dataset.country){
+            tip.hidden = false;
+            tip.textContent = `${t.dataset.country}: ${t.dataset.count}`;
+            tip.style.left = (e.offsetX + 12) + 'px';
+            tip.style.top = (e.offsetY + 12) + 'px';
+          } else {
+            tip.hidden = true;
+          }
+        });
+      }
+
+      (function(){
+        const titleEl = document.getElementById('top-countries-title');
+        if(!titleEl) return;
+        const panel = titleEl.closest('.panel');
+        if(!panel) return;
+        const rows = panel.querySelectorAll('.table tbody tr');
+        if(!rows || rows.length===0) return;
+        const nameToCode = {
+          'United States':'US','India':'IN','United Kingdom':'GB','Germany':'DE','Brazil':'BR','Australia':'AU','France':'FR','Canada':'CA','Japan':'JP','China':'CN','Netherlands':'NL','Spain':'ES','Italy':'IT','Sweden':'SE','Norway':'NO','Denmark':'DK','Finland':'FI','Poland':'PL','Mexico':'MX'
+        };
+        function codeToFlag(code){
+          if(!code) return '🏳️';
+          return code.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+        }
+        rows.forEach(tr => {
+          const td = tr.querySelector('td');
+          if(!td) return;
+          if(td.querySelector('.flag')) return;
+          const name = td.textContent.trim();
+          const flag = codeToFlag(nameToCode[name]);
+          const span = document.createElement('span');
+          span.className = 'flag';
+          span.textContent = flag + ' ';
+          td.prepend(span);
+        });
+      })();
+    })();
+    </script>
+  </body>
+</html>

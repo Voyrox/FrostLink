@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>FrostLink • Sidebar</title>
+		<link rel="stylesheet" href="css/global.css" />
+		<link rel="stylesheet" href="css/sidebar.css" />
+	</head>
+	<body class="only-sidebar">
+		<aside class="sidebar" aria-label="Primary">
+			<div class="profile-card">
+				<div class="avatar-wrap">
+					<img class="avatar" src="images/user.png" alt="User avatar" />
+					<div class="avatar-fallback" aria-hidden="true"></div>
+				</div>
+				<div class="username">Your Name</div>
+			</div>
+
+			<div class="sidebar-card">
+				<nav class="nav-group">
+					<a class="nav-item is-active" href="#">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2"/>
+								<rect x="13" y="3" width="8" height="5" rx="2" stroke="currentColor" stroke-width="2"/>
+								<rect x="13" y="10" width="8" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
+								<rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2"/>
+							</svg>
+						</span>
+						<span>Dashboard</span>
+					</a>
+				</nav>
+			</div>
+
+			<div class="sidebar-card">
+				<nav class="nav-group">
+					<div class="group-title">General</div>
+					<a class="nav-item" href="#">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+								<path d="M3 12h18" stroke="currentColor" stroke-width="2"/>
+								<path d="M12 3v18" stroke="currentColor" stroke-width="2"/>
+							</svg>
+						</span>
+						<span>Domains</span>
+					</a>
+					<a class="nav-item" href="#">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<path d="M3 17l6-6 4 4 8-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							</svg>
+						</span>
+						<span>Analytics</span>
+					</a>
+					<a class="nav-item" href="#">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<path d="M6 3h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2"/>
+								<path d="M9 12h6M9 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+							</svg>
+						</span>
+						<span>Logs</span>
+					</a>
+				</nav>
+			</div>
+
+			<div class="sidebar-card">
+				<nav class="nav-group">
+					<div class="group-title">Access Control</div>
+					<a class="nav-item" href="#">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+								<path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+							</svg>
+						</span>
+						<span>Users</span>
+					</a>
+					<a class="nav-item" href="#">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<path d="M12 2l7 4v6c0 5-4 9-7 10-3-1-7-5-7-10V6l7-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+							</svg>
+						</span>
+						<span>Roles</span>
+					</a>
+				</nav>
+			</div>
+		</aside>
+
+		<script>
+		(function(){
+		  const card = document.querySelector('.profile-card');
+		  if(!card) return;
+		  const img = card.querySelector('.avatar');
+		  const fallback = card.querySelector('.avatar-fallback');
+		  const nameEl = card.querySelector('.username');
+		  const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
+		  if(fallback){ fallback.textContent = initial; }
+		  function showFallback(){ if(img){ img.style.display='none'; } if(fallback){ fallback.style.display='grid'; } }
+		  if(!img || !img.getAttribute('src')){ showFallback(); }
+		  else { img.addEventListener('error', showFallback); }
+		})();
+		</script>
+	</body>
+</html>

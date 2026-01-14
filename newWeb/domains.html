@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FrostLink • Domains</title>
+    <link rel="stylesheet" href="css/global.css" />
+    <link rel="stylesheet" href="css/sidebar.css" />
+    <link rel="stylesheet" href="css/domains.css" />
+</head>
+
+<body class="page-domains">
+    <div class="app">
+        <aside class="sidebar" aria-label="Primary">
+            <div class="profile-card">
+                <div class="avatar-wrap">
+                    <img class="avatar" src="images/user.png" alt="User avatar" />
+                    <div class="avatar-fallback" aria-hidden="true"></div>
+                </div>
+                <div class="username">Your Name</div>
+            </div>
+
+            <div class="sidebar-card">
+                <nav class="nav-group">
+                    <div class="group-title">General</div>
+                    <a class="nav-item" href="dashboard.html">
+                        <span class="icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" />
+                                <rect x="13" y="3" width="8" height="5" rx="2" stroke="currentColor" stroke-width="2" />
+                                <rect x="13" y="10" width="8" height="11" rx="2" stroke="currentColor"
+                                    stroke-width="2" />
+                                <rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                        </span>
+                        <span>Dashboard</span>
+                    </a>
+                    <a class="nav-item is-active" href="#">
+                        <span class="icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+                                <path d="M3 12h18" stroke="currentColor" stroke-width="2" />
+                                <path d="M12 3v18" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                        </span>
+                        <span>Domains</span>
+                    </a>
+                    <a class="nav-item" href="#">
+                        <span class="icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <path d="M3 17l6-6 4 4 8-10" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </span>
+                        <span>Analytics</span>
+                    </a>
+                    <a class="nav-item" href="#">
+                        <span class="icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <path d="M6 3h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"
+                                    stroke="currentColor" stroke-width="2" />
+                                <path d="M9 12h6M9 16h6" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" />
+                            </svg>
+                        </span>
+                        <span>Logs</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="sidebar-card">
+                <nav class="nav-group">
+                    <div class="group-title">Access Control</div>
+                    <a class="nav-item" href="#">
+                        <span class="icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" />
+                                <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" />
+                            </svg>
+                        </span>
+                        <span>Users</span>
+                    </a>
+                    <a class="nav-item" href="#">
+                        <span class="icon" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2l7 4v6c0 5-4 9-7 10-3-1-7-5-7-10V6l7-4z" stroke="currentColor"
+                                    stroke-width="2" stroke-linejoin="round" />
+                            </svg>
+                        </span>
+                        <span>Roles</span>
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Manage Sites</h1>
+                <p class="subtitle">Create and manage sites to enable connectivity to private networks</p>
+            </header>
+
+            <section class="panel" aria-label="Sites Panel">
+                <div class="toolbar">
+                    <div class="left">
+                        <label class="input-icon" aria-label="Search sites">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+                                    <path d="M21 21l-3.5-3.5" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <input type="search" placeholder="Search sites..." />
+                        </label>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2" />
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn ghost" type="button">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Add site</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16px" height="16px" viewBox="0 0 48 48"
+                                                xmlns="http://www.w3.org/2000/svg">
+                                                <title>domain</title>
+                                                <g id="Layer_2" data-name="Layer 2">
+                                                    <g id="invisible_box" data-name="invisible box">
+                                                        <rect width="48" height="48" fill="none" />
+                                                    </g>
+                                                    <g id="icons_Q2" data-name="icons Q2">
+                                                        <path stroke="#ffffff"
+                                                            d="M24,2A22,22,0,1,0,46,24,21.9,21.9,0,0,0,24,2ZM40.1,16H35.2a27.8,27.8,0,0,0-3-8A18.5,18.5,0,0,1,40.1,16ZM42,24a17.5,17.5,0,0,1-.5,4H35.8c.1-1.3.2-2.6.2-4s-.1-2.7-.2-4h5.7A17.5,17.5,0,0,1,42,24ZM6,24a17.5,17.5,0,0,1,.5-4h5.7c-.1,1.3-.2,2.6-.2,4s.1,2.7.2,4H6.5A17.5,17.5,0,0,1,6,24Zm10,0c0-1.4.1-2.7.2-4H22v8H16.2C16.1,26.7,16,25.4,16,24ZM26,6.7a11.7,11.7,0,0,1,3,3.7A21.7,21.7,0,0,1,31.1,16H26Zm-4,0V16H16.9A21.7,21.7,0,0,1,19,10.4,11.7,11.7,0,0,1,22,6.7ZM22,32v9.3a11.7,11.7,0,0,1-3-3.7A21.7,21.7,0,0,1,16.9,32Zm4,9.3V32h5.1A21.7,21.7,0,0,1,29,37.6,11.7,11.7,0,0,1,26,41.3ZM26,28V20h5.8c.1,1.3.2,2.6.2,4s-.1,2.7-.2,4ZM15.8,8a27.8,27.8,0,0,0-3,8H7.9A18.5,18.5,0,0,1,15.8,8ZM7.9,32h4.9a27.8,27.8,0,0,0,3,8A18.5,18.5,0,0,1,7.9,32Zm24.3,8a27.8,27.8,0,0,0,3-8h4.9A18.5,18.5,0,0,1,32.2,40Z" />
+                                                    </g>
+                                                </g>
+                                            </svg>
+                                        </span> Name</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16px" height="16px" viewBox="0 0 24 24" fill="none"
+                                                xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M3 12H21M12 8V12M6.5 12V16M17.5 12V16M10.1 8H13.9C14.4601 8 14.7401 8 14.954 7.89101C15.1422 7.79513 15.2951 7.64215 15.391 7.45399C15.5 7.24008 15.5 6.96005 15.5 6.4V4.6C15.5 4.03995 15.5 3.75992 15.391 3.54601C15.2951 3.35785 15.1422 3.20487 14.954 3.10899C14.7401 3 14.4601 3 13.9 3H10.1C9.53995 3 9.25992 3 9.04601 3.10899C8.85785 3.20487 8.70487 3.35785 8.60899 3.54601C8.5 3.75992 8.5 4.03995 8.5 4.6V6.4C8.5 6.96005 8.5 7.24008 8.60899 7.45399C8.70487 7.64215 8.85785 7.79513 9.04601 7.89101C9.25992 8 9.53995 8 10.1 8ZM15.6 21H19.4C19.9601 21 20.2401 21 20.454 20.891C20.6422 20.7951 20.7951 20.6422 20.891 20.454C21 20.2401 21 19.9601 21 19.4V17.6C21 17.0399 21 16.7599 20.891 16.546C20.7951 16.3578 20.6422 16.2049 20.454 16.109C20.2401 16 19.9601 16 19.4 16H15.6C15.0399 16 14.7599 16 14.546 16.109C14.3578 16.2049 14.2049 16.3578 14.109 16.546C14 16.7599 14 17.0399 14 17.6V19.4C14 19.9601 14 20.2401 14.109 20.454C14.2049 20.6422 14.3578 20.7951 14.546 20.891C14.7599 21 15.0399 21 15.6 21ZM4.6 21H8.4C8.96005 21 9.24008 21 9.45399 20.891C9.64215 20.7951 9.79513 20.6422 9.89101 20.454C10 20.2401 10 19.9601 10 19.4V17.6C10 17.0399 10 16.7599 9.89101 16.546C9.79513 16.3578 9.64215 16.2049 9.45399 16.109C9.24008 16 8.96005 16 8.4 16H4.6C4.03995 16 3.75992 16 3.54601 16.109C3.35785 16.2049 3.20487 16.3578 3.10899 16.546C3 16.7599 3 17.0399 3 17.6V19.4C3 19.9601 3 20.2401 3.10899 20.454C3.20487 20.6422 3.35785 20.7951 3.54601 20.891C3.75992 21 4.03995 21 4.6 21Z"
+                                                    stroke="#ffffff" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round" />
+                                            </svg>
+                                        </span> Online</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2"
+                                                    stroke-linecap="round" />
+                                            </svg>
+                                        </span> Data in</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M19 12H5m7-7l-7 7 7 7" stroke="currentColor" stroke-width="2"
+                                                    stroke-linecap="round" />
+                                            </svg>
+                                        </span> Data out</span></th>
+                                <th scope="col" class="actions-col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>edge1.internal</td>
+                                <td><span class="status online"></span> Online</td>
+                                <td>12.8 GB</td>
+                                <td>7.3 GB</td>
+                                <td class="actions"><button class="btn small" type="button">
+                                        <span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"
+                                                    stroke="currentColor" stroke-width="2" />
+                                            </svg>
+                                        </span>
+                                        <span>Edit</span>
+                                    </button></td>
+                            </tr>
+                            <tr>
+                                <td>edge2.internal</td>
+                                <td><span class="status"></span> Offline</td>
+                                <td>0 GB</td>
+                                <td>0 GB</td>
+                                <td class="actions"><button class="btn small" type="button">
+                                        <span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"
+                                                    stroke="currentColor" stroke-width="2" />
+                                            </svg>
+                                        </span>
+                                        <span>Edit</span>
+                                    </button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pager">
+                    <div class="page-info">Page 1 of 1</div>
+                    <div class="page-controls">
+                        <button class="btn small ghost" aria-label="First page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6l-6 6 6 6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                    <path d="M12 6l-6 6 6 6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" aria-label="Previous page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" aria-label="Next page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" aria-label="Last page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M6 6l6 6-6 6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                    <path d="M12 6l6 6-6 6" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const card = document.querySelector('.profile-card');
+            if (!card) return;
+            const img = card.querySelector('.avatar');
+            const fallback = card.querySelector('.avatar-fallback');
+            const nameEl = card.querySelector('.username');
+            const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
+            if (fallback) { fallback.textContent = initial; }
+            function showFallback() { if (img) { img.style.display = 'none'; } if (fallback) { fallback.style.display = 'grid'; } }
+            if (!img || !img.getAttribute('src')) { showFallback(); }
+            else { img.addEventListener('error', showFallback); }
+        })();
+    </script>
+</body>
+
+</html>
