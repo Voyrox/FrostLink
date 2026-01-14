@@ -103,6 +103,24 @@
     background: #0c111a
 }
 
+.page-analytics .world .land path {
+    fill: #0e1420;
+    stroke: #141b28;
+    stroke-width: 1
+}
+
+/* Embedded map paths (when full world SVG is included inside .world) */
+.page-analytics .world svg path {
+    fill: #323236;
+    stroke: #18181b;
+    stroke-width: 0.8;
+    transition: fill .2s, stroke .2s;
+}
+
+.page-analytics .world svg path:hover {
+    stroke: #ffffff;
+}
+
 .page-analytics .markers circle {
     fill: var(--orange);
     opacity: .9;
@@ -122,7 +140,8 @@
     padding: 6px 8px;
     font-size: .9rem;
     pointer-events: none;
-    box-shadow: var(--shadow)
+    box-shadow: var(--shadow);
+    z-index: 10
 }
 
 /* Table */
