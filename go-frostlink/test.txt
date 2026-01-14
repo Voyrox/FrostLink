@@ -1,0 +1,3 @@
+curl -H "Host: dev.ewenmacculloch.com" http://localhost:8081/
+
+./.venv/bin/python test.py

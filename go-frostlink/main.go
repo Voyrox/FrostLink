@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	filepkg "frostlink-go/file"
+	proxyhttp "frostlink-go/http"
+	logger "frostlink-go/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -63,11 +65,13 @@ var (
 
 func main() {
 	loadEnv(".env")
-
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
 	tpl := template.Must(template.ParseGlob("./views/*.tmpl"))
 	r.SetHTMLTemplate(tpl)
+
+	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
 	r.Static("/css", "./public/css")
 	r.Static("/public", "./public")
@@ -83,11 +87,18 @@ func main() {
 	r.POST("/api/login", apiLogin)
 	r.GET("/api/proxys", apiProxys)
 
+	go func() {
+		cfgs := filepkg.ReadConfigs("./domains")
+		if err := proxyhttp.StartProxy(cfgs); err != nil {
+			logger.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
+		}
+	}()
+
 	addr := os.Getenv("ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
-	fmt.Printf("[FrostLink-Go] Dashboard started on %s\n", addr)
+	logger.SystemLog("info", "dashboard", fmt.Sprintf("Started on %s", addr))
 	r.Run(addr)
 }
 
@@ -120,8 +131,6 @@ func apiLogin(c *gin.Context) {
 
 func apiProxys(c *gin.Context) {
 	configs := filepkg.ReadConfigs("./domains")
-	// In a full port, stats would be updated by the reverse proxy handlers
-	// For now, return empty stats unless present
 	stats := make(map[string]ProxyDomainStats)
 
 	var cfgsOut []map[string]interface{}
