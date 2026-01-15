@@ -125,11 +125,11 @@ func lookupCountry(ip string) string {
 func lookupCountryGeoIP(netIP net.IP) string {
 	geoDBOnce.Do(initGeoDB)
 	if geoDB == nil {
-		return ""
+		return "AU"
 	}
 	rec, err := geoDB.Country(netIP)
 	if err != nil || rec == nil {
-		return ""
+		return "UNKNOWN"
 	}
 	if rec.Country.IsoCode != "" {
 		return rec.Country.IsoCode
