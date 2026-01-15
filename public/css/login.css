@@ -172,12 +172,12 @@ input:focus {
 }
 
 .btn.primary {
-    background: linear-gradient(180deg, rgba(34, 211, 238, .14), rgba(34, 211, 238, .08));
-    border-color: #193043
+    background: linear-gradient(180deg, #f38a48ba, #f38a48);
+    border-color: #e56c1f;
 }
 
 .btn.primary:hover {
-    background: linear-gradient(180deg, rgba(34, 211, 238, .18), rgba(34, 211, 238, .12))
+    background: linear-gradient(180deg, #f38a48ba, #f38a48);
 }
 
 .btn.ghost {
