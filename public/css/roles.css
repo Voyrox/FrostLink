@@ -1,0 +1,320 @@
+.page-roles .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+}
+
+.page-roles .content {
+    padding: 24px;
+}
+
+.page-roles .page-header h1 {
+    margin: 0 0 6px;
+}
+
+.page-roles .page-header .subtitle {
+    margin: 0 0 16px;
+}
+
+.page-roles .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: #0a0a0f96;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+}
+
+.page-roles .modal-backdrop[hidden] {
+    display: none;
+}
+
+.page-roles .modal-backdrop .modal {
+    width: 100%;
+    max-width: 760px;
+    padding: 4px;
+}
+
+.page-roles .role-form {
+    padding: 12px 12px 16px;
+    border-radius: 12px;
+    background: #101119;
+    border: 1px dashed rgba(148, 163, 184, .4);
+}
+
+.page-roles .role-form h2 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.page-roles .role-form .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.page-roles .role-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 160px;
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+.page-roles .role-form input,
+.page-roles .role-form select {
+    border-radius: 8px;
+    border: 1px solid #141b28;
+    background: #020617;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: .9rem;
+}
+
+.page-roles .role-form .permissions-row {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.page-roles .role-form .permissions-label {
+    flex: none;
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.page-roles .role-form .permissions-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 10px;
+    background: #0a0e16;
+    border-radius: 8px;
+    width: 100%;
+}
+
+.page-roles .role-form .permission-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    cursor: pointer;
+    font-size: .9rem;
+    color: var(--text);
+    padding: 6px 10px;
+    background: #141b28;
+    border-radius: 6px;
+}
+
+.page-roles .role-form .permission-checkbox:hover {
+    background: #1a2332;
+}
+
+.page-roles .role-form .permission-checkbox input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.page-roles .role-form .hint {
+    font-size: .8rem;
+    color: var(--muted);
+}
+
+.page-roles .role-form .actions-row {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Modal buttons */
+.page-roles .modal .actions-row .btn {
+    min-width: 110px;
+}
+
+.page-roles .modal .actions-row .btn.ghost {
+    background: transparent;
+    border-color: rgba(148, 163, 184, .5);
+}
+
+.page-roles .panel {
+    position: relative;
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.page-roles .panel::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    right: 20px;
+    height: 20px;
+    background: radial-gradient(200px 20px at 50% 0%, rgba(34, 211, 238, .12), transparent 70%);
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+}
+
+.page-roles .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.page-roles .toolbar .left,
+.page-roles .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-roles .input-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.page-roles .input-icon .icon {
+    position: absolute;
+    left: 10px;
+    color: var(--muted);
+}
+
+.page-roles .input-icon input {
+    padding: 10px 12px 10px 34px;
+    border-radius: 10px;
+    background: #0c111a;
+    border: 1px solid #141b28;
+    color: var(--text);
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.page-roles .input-icon input::placeholder {
+    color: #6b7280;
+}
+
+.page-roles .input-icon input:focus {
+    border-color: rgba(34, 211, 238, .6);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, .15);
+}
+
+.page-roles .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease;
+}
+
+.page-roles .btn:hover {
+    background: #121a28;
+    border-color: #1f2937;
+}
+
+.page-roles .btn:active {
+    transform: translateY(1px);
+}
+
+.page-roles .btn.ghost {
+    background: transparent;
+}
+
+.page-roles .btn.small {
+    padding: 8px 10px;
+    font-size: .9rem;
+    border-radius: 8px;
+}
+
+.page-roles .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-roles .btn .icon {
+    display: inline-flex;
+    color: var(--muted);
+}
+
+.page-roles .btn .icon.orange {
+    color: var(--orange);
+}
+
+.page-roles .table-wrap {
+    overflow: auto;
+    border-radius: 12px;
+}
+
+.page-roles .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 600px;
+    background: transparent;
+}
+
+.page-roles .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-roles .table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-roles .table tbody tr:hover {
+    background: #0c111a;
+}
+
+.page-roles .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+}
+
+.page-roles .page-info {
+    color: var(--muted);
+    font-size: .95rem;
+}
+
+.page-roles .page-controls {
+    display: flex;
+    gap: 8px;
+}
+
+@media (max-width:900px) {
+    .page-roles .table {
+        min-width: 500px;
+    }
+}

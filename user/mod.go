@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"SparkProxy/role"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -86,9 +87,15 @@ func List() []User {
 	return out
 }
 
-func Create(username, email, password, role, accessType string, domains []string) (User, error) {
+func Create(username, email, password, roleName, accessType string, domains []string) (User, error) {
 	if username == "" || password == "" {
 		return User{}, errors.New("username and password are required")
+	}
+	if roleName == "" {
+		roleName = "Member"
+	}
+	if _, ok := role.Get(roleName); !ok {
+		return User{}, errors.New("role does not exist")
 	}
 	if accessType != "all" && accessType != "custom" {
 		accessType = "all"
@@ -114,7 +121,7 @@ func Create(username, email, password, role, accessType string, domains []string
 		Email:             email,
 		PasswordHash:      string(hash),
 		IdentityProvider:  "Local",
-		Role:              role,
+		Role:              roleName,
 		AccessType:        accessType,
 		AllowedDomainList: allowed,
 	}
