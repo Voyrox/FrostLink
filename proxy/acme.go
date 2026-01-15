@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -100,7 +101,7 @@ func NewACMEClient(email string, dataPath string, useStaging bool) (*ACMEClient,
 	}, nil
 }
 
-func (c *ACMEClient) SetCloudflareProvider(apiToken string, apiEmail string, apiKey string) error {
+func (c *ACMEClient) SetCloudflareProvider(apiToken string, apiEmail string, apiKey string, zoneToken string) error {
 	config := cloudflare.NewDefaultConfig()
 
 	if apiEmail != "" && apiKey != "" {
@@ -110,6 +111,10 @@ func (c *ACMEClient) SetCloudflareProvider(apiToken string, apiEmail string, api
 		config.AuthToken = apiToken
 	} else {
 		return fmt.Errorf("cloudflare credentials required: either API token or API key+email")
+	}
+
+	if zoneToken != "" {
+		config.ZoneToken = zoneToken
 	}
 
 	provider, err := cloudflare.NewDNSProviderConfig(config)
@@ -122,6 +127,22 @@ func (c *ACMEClient) SetCloudflareProvider(apiToken string, apiEmail string, api
 		return fmt.Errorf("failed to set DNS provider: %w", err)
 	}
 	return nil
+}
+
+func parseCertFromPEMOrDER(data []byte) (*x509.Certificate, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no certificate data")
+	}
+
+	if data[0] == '-' {
+		block, _ := pem.Decode(data)
+		if block == nil {
+			return nil, fmt.Errorf("failed to decode PEM block")
+		}
+		return x509.ParseCertificate(block.Bytes)
+	}
+
+	return x509.ParseCertificate(data)
 }
 
 func (c *ACMEClient) ObtainCertificate(domain string) (*ACMECertificate, error) {
@@ -140,7 +161,7 @@ func (c *ACMEClient) ObtainCertificate(domain string) (*ACMECertificate, error) 
 		return nil, fmt.Errorf("failed to save certificate: %w", err)
 	}
 
-	x509Cert, err := x509.ParseCertificate(certs.Certificate)
+	x509Cert, err := parseCertFromPEMOrDER(certs.Certificate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
