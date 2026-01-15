@@ -26,7 +26,6 @@ type StreamConfig struct {
 	CertFile   string `json:"cert_file,omitempty"`
 	KeyFile    string `json:"key_file,omitempty"`
 	Enabled    bool   `json:"enabled"`
-	MaxConns   int    `json:"max_conns"`
 }
 
 type StreamStats struct {

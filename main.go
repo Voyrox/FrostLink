@@ -1249,7 +1249,6 @@ type createStreamRequest struct {
 	TLSMode    string `json:"tls_mode,omitempty"`
 	CertFile   string `json:"cert_file,omitempty"`
 	KeyFile    string `json:"key_file,omitempty"`
-	MaxConns   int    `json:"max_conns"`
 	Enabled    bool   `json:"enabled"`
 }
 
@@ -1284,10 +1283,6 @@ func apiStreamsCreate(c *gin.Context) {
 			return
 		}
 	}
-	maxConns := req.MaxConns
-	if maxConns <= 0 {
-		maxConns = 100
-	}
 
 	streamCfg := proxy.StreamConfig{
 		ID:         uuid.New().String(),
@@ -1298,7 +1293,6 @@ func apiStreamsCreate(c *gin.Context) {
 		CertFile:   strings.TrimSpace(req.CertFile),
 		KeyFile:    strings.TrimSpace(req.KeyFile),
 		Enabled:    req.Enabled,
-		MaxConns:   maxConns,
 	}
 
 	if err := proxy.CreateStream(streamCfg); err != nil {
@@ -1346,10 +1340,6 @@ func apiStreamsUpdate(c *gin.Context) {
 	if tlsMode == "" {
 		tlsMode = existing.TLSMode
 	}
-	maxConns := req.MaxConns
-	if maxConns <= 0 {
-		maxConns = existing.MaxConns
-	}
 	listenPort := req.ListenPort
 	if listenPort <= 0 {
 		listenPort = existing.ListenPort
@@ -1363,7 +1353,6 @@ func apiStreamsUpdate(c *gin.Context) {
 	streamCfg.CertFile = strings.TrimSpace(req.CertFile)
 	streamCfg.KeyFile = strings.TrimSpace(req.KeyFile)
 	streamCfg.Enabled = req.Enabled
-	streamCfg.MaxConns = maxConns
 
 	if err := proxy.UpdateStream(id, streamCfg); err != nil {
 		core.LogAudit("stream_update_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "failed", map[string]string{"reason": err.Error()})
