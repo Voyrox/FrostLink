@@ -1,45 +1,32 @@
 # SparkProxy
 
-SparkProxy is a powerful and flexible reverse proxy tool developed in Go. It's designed to route requests efficiently from public domains to local servers, supporting HTTP, HTTPS, and TCP traffic.
+SparkProxy is a powerful and flexible reverse proxy tool developed in go. It's designed to route requests efficiently from public domains to local servers, supporting both HTTP and HTTPS traffic. ArcticArch is particularly useful for exposing local development servers to the internet or for setting up a custom routing scheme in a microservices architecture.
 
-## Features
 
-- HTTP/HTTPS reverse proxy
-- TCP stream proxy (SMTP, IMAP, custom TCP)
-- Web dashboard
-- User authentication & sessions
-- API tokens
-- Audit logging
-- Firewall (IP blocking, country bans)
+# 🚀 Features
+> [!TIP]
+> - **Support for HTTP and HTTPS**: Handles both unencrypted and encrypted traffic, with easy SSL/TLS setup.
+> - **Dynamic Configuration**: Configure your domains and SSL settings using simple `.conf` files.
+> - **Asynchronous Processing**: Utilizes go's async capabilities for efficient handling of multiple connections.
+> - **Detailed Logging**: Logs information about each request, including processing time, client IP address, domain, and request path.
+> - **Customizable**: Extendable for various use cases and easily integrable into different environments.
+> 
 
 ## Getting Started
 
-### Prerequisites
+### Configuration
 
-- Go 1.21+
-- Linux (recommended), macOS, Windows
+SparkProxy requires domain configuration files to be placed in the `./domains` directory. Each file should have the `.conf` extension and follow this structure:
 
-### Building
+### Running the Proxy
 
-```bash
-git clone https://github.com/Voyrox/SparkProxy.git
-cd SparkProxy
-go build -o SparkProxy main.go
-```
+1. **Set Up Configuration Files:** Create `.conf` files for each domain in the `./domains` directory.
+2. **Start SparkProxy:** Execute the main program. By default, it listens on ports 80 (HTTP) and 443 (HTTPS).
+3. **Monitor Activity:** Observe the console output for logs detailing requests and server activity.
 
-### Running
+### Example Configuration File
 
-1. **Create configuration files** in `./domains` directory
-2. **Start the proxy:** `./SparkProxy`
-3. **Access dashboard:** http://localhost:8080
-
-Default credentials: `admin` / `admin`
-
-### Configuration Files
-
-Create `.conf` files in the `./domains` directory:
-
-**HTTP/HTTPS Proxy:**
+example.conf
 ```plaintext
 server: {
     domain: example.com
@@ -57,7 +44,9 @@ SSLCert: {
 }
 ```
 
-**TCP Stream Proxy:**
+### Streams Configuration File
+
+stream.conf
 ```plaintext
 server: {
     domain: smtp.example.com
@@ -68,16 +57,16 @@ server: {
 
 ### Dashboard
 
-SparkProxy includes a user-friendly dashboard for easy monitoring and management.
+SparkProxy includes a user-friendly dashboard for easy monitoring and management. Here's a glimpse of what the dashboard looks like:
 
 <p align="center">
-    <img src="./public/img/dashboard-preview.png">
+    <img src="./images/sites.png">
+    <img src="./images/analytics.png">
+    <img src="./images/auth.png">
 </p>
 
 ### Contributing
-
-Feel free to open issues or submit pull requests. Contributions are welcome!
+Feel free to open issues or submit pull requests if you have ideas or encounter issues. Contributions are always welcome!
 
 ### License
-
-See LICENSE file.
+SparkProxy is open-source software, and its license information can be found in the LICENSE file in the repository.
