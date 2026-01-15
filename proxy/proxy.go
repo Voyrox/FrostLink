@@ -630,8 +630,8 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
         p { margin-top:0;margin-bottom:16px;color:#9ca3af;font-size:.95rem; }
         label { display:block;font-size:.9rem;margin-bottom:4px;color:#e5e7eb; }
         input { width:100%;padding:8px 10px;border-radius:8px;border:1px solid #1f2937;background:#020617;color:#e5e7eb;margin-bottom:10px;box-sizing:border-box; }
-        .btn { width:100%;padding:9px 10px;border-radius:8px;border:1px solid #22c55e;background:#22c55e;color:#022c22;font-weight:600;cursor:pointer; }
-        .btn:hover { background:#16a34a; }
+        .btn { width:100%;padding:9px 10px;border-radius:8px;border:1px solid #fe8032;background:#fe8032;color:#022c22;font-weight:600;cursor:pointer; }
+        .btn:hover { background:#f38a48; }
         .error { background:#7f1d1d;color:#fecaca;padding:8px 10px;border-radius:8px;font-size:.85rem;margin-bottom:10px; }
         .meta { font-size:.8rem;color:#6b7280;margin-top:8px; }
     </style>
