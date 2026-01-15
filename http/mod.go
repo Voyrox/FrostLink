@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +23,12 @@ import (
 
 	"github.com/oschwald/geoip2-golang"
 )
+
+const requestLogsPath = "db/request_logs.json"
+
+type requestLogFile struct {
+	Logs []RequestLog `json:"logs"`
+}
 
 type domainStats struct {
 	Domain        string
@@ -69,9 +77,102 @@ var (
 	indexTpl     *template.Template
 )
 
+func init() {
+	loadRequestLogs()
+	go cleanupOldRequestLogs()
+}
+
 type ipRange struct {
 	network *net.IPNet
 	country string
+}
+
+func loadRequestLogs() {
+	logsMu.Lock()
+	defer logsMu.Unlock()
+
+	data, err := os.ReadFile(requestLogsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			requestLogs = []RequestLog{}
+			return
+		}
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to read request logs: %v", err))
+		requestLogs = []RequestLog{}
+		return
+	}
+
+	var rf requestLogFile
+	if err := json.Unmarshal(data, &rf); err != nil {
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to parse request logs: %v", err))
+		requestLogs = []RequestLog{}
+		return
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -8)
+	var validLogs []RequestLog
+	for _, log := range rf.Logs {
+		if log.Timestamp.After(cutoff) {
+			validLogs = append(validLogs, log)
+		}
+	}
+	requestLogs = validLogs
+
+	logger.SystemLog("info", "http-logs", fmt.Sprintf("Loaded %d request logs (pruned %d old entries)", len(requestLogs), len(rf.Logs)-len(validLogs)))
+}
+
+func saveRequestLogs() {
+	logsMu.Lock()
+	defer logsMu.Unlock()
+
+	data, err := json.MarshalIndent(requestLogFile{Logs: requestLogs}, "", "  ")
+	if err != nil {
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to serialize request logs: %v", err))
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(requestLogsPath), 0o755); err != nil {
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to create logs directory: %v", err))
+		return
+	}
+
+	if err := os.WriteFile(requestLogsPath, data, 0o600); err != nil {
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to write request logs: %v", err))
+	}
+}
+
+func cleanupOldRequestLogs() {
+	for {
+		time.Sleep(time.Hour)
+		logsMu.Lock()
+		cutoff := time.Now().AddDate(0, 0, -8)
+		var validLogs []RequestLog
+		var removed int
+		for _, log := range requestLogs {
+			if log.Timestamp.After(cutoff) {
+				validLogs = append(validLogs, log)
+			} else {
+				removed++
+			}
+		}
+		if removed > 0 {
+			requestLogs = validLogs
+			saveRequestLogsUnlocked()
+			logger.SystemLog("info", "http-logs", fmt.Sprintf("Cleaned up %d old request log entries", removed))
+		}
+		logsMu.Unlock()
+	}
+}
+
+func saveRequestLogsUnlocked() {
+	data, err := json.MarshalIndent(requestLogFile{Logs: requestLogs}, "", "  ")
+	if err != nil {
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to serialize request logs: %v", err))
+		return
+	}
+	if err := os.WriteFile(requestLogsPath, data, 0o600); err != nil {
+		logger.SystemLog("error", "http-logs", fmt.Sprintf("Failed to write request logs: %v", err))
+	}
 }
 
 type loggingResponseWriter struct {
@@ -240,7 +341,7 @@ func logRequestStats(cfg filepkg.Config, r *stdhttp.Request, bytesIn, bytesOut i
 	if len(requestLogs) >= maxRequestLogs {
 		requestLogs = requestLogs[1:]
 	}
-	requestLogs = append(requestLogs, RequestLog{
+	newLog := RequestLog{
 		Timestamp: time.Now(),
 		Action:    "Allow",
 		IP:        ip,
@@ -248,8 +349,10 @@ func logRequestStats(cfg filepkg.Config, r *stdhttp.Request, bytesIn, bytesOut i
 		Host:      domain,
 		Path:      path,
 		Method:    r.Method,
-	})
+	}
+	requestLogs = append(requestLogs, newLog)
 	logsMu.Unlock()
+	saveRequestLogs()
 
 	debugLog := os.Getenv("DEBUG")
 	if debugLog == "true" {
@@ -268,7 +371,7 @@ func logBlockedRequest(host, ip, country string, r *stdhttp.Request, reason stri
 	if len(requestLogs) >= maxRequestLogs {
 		requestLogs = requestLogs[1:]
 	}
-	requestLogs = append(requestLogs, RequestLog{
+	newLog := RequestLog{
 		Timestamp: time.Now(),
 		Action:    reason,
 		IP:        ip,
@@ -276,8 +379,10 @@ func logBlockedRequest(host, ip, country string, r *stdhttp.Request, reason stri
 		Host:      host,
 		Path:      r.URL.Path,
 		Method:    r.Method,
-	})
+	}
+	requestLogs = append(requestLogs, newLog)
 	logsMu.Unlock()
+	saveRequestLogs()
 
 	debugLog := os.Getenv("DEBUG")
 	if debugLog == "true" {

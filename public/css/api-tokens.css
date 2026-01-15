@@ -1,0 +1,333 @@
+.page-api-tokens .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+}
+
+.page-api-tokens .content {
+    padding: 24px;
+}
+
+.page-api-tokens .page-header h1 {
+    margin: 0 0 6px;
+}
+
+.page-api-tokens .page-header .subtitle {
+    margin: 0 0 16px;
+}
+
+.page-api-tokens .panel {
+    position: relative;
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.page-api-tokens .panel::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    right: 20px;
+    height: 20px;
+    background: radial-gradient(200px 20px at 50% 0%, rgba(34, 211, 238, .12), transparent 70%);
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+}
+
+.page-api-tokens .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.page-api-tokens .toolbar .left,
+.page-api-tokens .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-api-tokens .token-stats {
+    color: var(--text);
+    font-size: .95rem;
+}
+
+.page-api-tokens .token-stats .stat strong {
+    color: var(--orange);
+    font-size: 1.1rem;
+}
+
+.page-api-tokens .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease;
+}
+
+.page-api-tokens .btn:hover {
+    background: #121a28;
+    border-color: #1f2937;
+}
+
+.page-api-tokens .btn:active {
+    transform: translateY(1px);
+}
+
+.page-api-tokens .btn.ghost {
+    background: transparent;
+}
+
+.page-api-tokens .btn.primary {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: #fff;
+}
+
+.page-api-tokens .btn.primary:hover {
+    background: #e67e22;
+    border-color: #e67e22;
+}
+
+.page-api-tokens .btn.small {
+    padding: 6px 10px;
+    font-size: .85rem;
+    border-radius: 6px;
+}
+
+.page-api-tokens .btn.danger {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, .4);
+}
+
+.page-api-tokens .btn.danger:hover {
+    background: rgba(239, 68, 68, .1);
+    border-color: rgba(239, 68, 68, .6);
+}
+
+.page-api-tokens .btn .icon {
+    display: inline-flex;
+    color: var(--muted);
+}
+
+.page-api-tokens .btn .icon.orange {
+    color: var(--orange);
+}
+
+.page-api-tokens .table-wrap {
+    overflow: auto;
+    border-radius: 12px;
+}
+
+.page-api-tokens .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 800px;
+    background: transparent;
+}
+
+.page-api-tokens .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-api-tokens .table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: .9rem;
+}
+
+.page-api-tokens .table tbody tr:hover {
+    background: #0c111a;
+}
+
+.page-api-tokens .name-cell {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.page-api-tokens .token-cell {
+    font-family: monospace;
+    color: var(--muted);
+}
+
+.page-api-tokens .perm-cell.read {
+    color: #22c55e;
+}
+
+.page-api-tokens .perm-cell.write {
+    color: #f59e0b;
+}
+
+.page-api-tokens .expires-cell {
+    color: var(--muted);
+}
+
+.page-api-tokens .pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 12px;
+}
+
+.page-api-tokens .page-info {
+    color: var(--muted);
+    font-size: .95rem;
+}
+
+.page-api-tokens .muted {
+    color: var(--muted);
+}
+
+.page-api-tokens .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-api-tokens .modal.active {
+    display: flex;
+}
+
+.page-api-tokens .modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, .7);
+    backdrop-filter: blur(4px);
+}
+
+.page-api-tokens .modal-content {
+    position: relative;
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: var(--shadow);
+}
+
+.page-api-tokens .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.page-api-tokens .modal-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.page-api-tokens .modal-close {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.page-api-tokens .modal-close:hover {
+    color: var(--text);
+}
+
+.page-api-tokens .form-group {
+    margin-bottom: 16px;
+}
+
+.page-api-tokens .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: .9rem;
+    color: var(--muted);
+}
+
+.page-api-tokens .form-group input,
+.page-api-tokens .form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+    background: #0c111a;
+    color: var(--text);
+    font-size: .95rem;
+}
+
+.page-api-tokens .form-group input:focus,
+.page-api-tokens .form-group select:focus {
+    outline: none;
+    border-color: var(--orange);
+}
+
+.page-api-tokens .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.page-api-tokens .token-display .warning {
+    background: rgba(249, 115, 22, .1);
+    border: 1px solid rgba(249, 115, 22, .3);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: .9rem;
+    color: var(--orange);
+    margin-bottom: 16px;
+}
+
+.page-api-tokens .token-value {
+    display: flex;
+    gap: 8px;
+}
+
+.page-api-tokens .token-value input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+    background: #0c111a;
+    color: var(--text);
+    font-family: monospace;
+    font-size: .9rem;
+}
+
+@media (max-width:900px) {
+    .page-api-tokens .table {
+        min-width: 700px;
+    }
+}

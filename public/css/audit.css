@@ -1,0 +1,234 @@
+.page-audit .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+}
+
+.page-audit .content {
+    padding: 24px;
+}
+
+.page-audit .page-header h1 {
+    margin: 0 0 6px;
+}
+
+.page-audit .page-header .subtitle {
+    margin: 0 0 16px;
+}
+
+.page-audit .panel {
+    position: relative;
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.page-audit .panel::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    right: 20px;
+    height: 20px;
+    background: radial-gradient(200px 20px at 50% 0%, rgba(34, 211, 238, .12), transparent 70%);
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+}
+
+.page-audit .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.page-audit .toolbar .left,
+.page-audit .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-audit .filter-group {
+    display: flex;
+    gap: 8px;
+}
+
+.page-audit .filter-select,
+.page-audit .filter-input {
+    border-radius: 8px;
+    border: 1px solid #141b28;
+    background: #0c111a;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: .9rem;
+    outline: none;
+}
+
+.page-audit .filter-select:focus,
+.page-audit .filter-input:focus {
+    border-color: rgba(34, 211, 238, .6);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, .15);
+}
+
+.page-audit .filter-input {
+    min-width: 180px;
+}
+
+.page-audit .stats-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.page-audit .stat-card {
+    background: #0c111a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.page-audit .stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-audit .stat-label {
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+.page-audit .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease;
+}
+
+.page-audit .btn:hover {
+    background: #121a28;
+    border-color: #1f2937;
+}
+
+.page-audit .btn:active {
+    transform: translateY(1px);
+}
+
+.page-audit .btn.ghost {
+    background: transparent;
+}
+
+.page-audit .btn.small {
+    padding: 8px 10px;
+    font-size: .9rem;
+    border-radius: 8px;
+}
+
+.page-audit .btn .icon {
+    display: inline-flex;
+    color: var(--muted);
+}
+
+.page-audit .btn .icon.orange {
+    color: var(--orange);
+}
+
+.page-audit .table-wrap {
+    overflow: auto;
+    border-radius: 12px;
+}
+
+.page-audit .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 800px;
+    background: transparent;
+}
+
+.page-audit .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-audit .table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: .9rem;
+}
+
+.page-audit .table tbody tr:hover {
+    background: #0c111a;
+}
+
+.page-audit .action-cell {
+    text-transform: capitalize;
+}
+
+.page-audit .status-cell {
+    text-transform: capitalize;
+}
+
+.page-audit .status-cell.status-success {
+    color: #22c55e;
+}
+
+.page-audit .status-cell.status-failed,
+.page-audit .status-cell.status-error {
+    color: #ef4444;
+}
+
+.page-audit .status-cell.status-pending {
+    color: #f59e0b;
+}
+
+.page-audit .pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 12px;
+}
+
+.page-audit .page-info {
+    color: var(--muted);
+    font-size: .95rem;
+}
+
+.page-audit .page-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.page-audit .muted {
+    color: var(--muted);
+}
+
+@media (max-width:900px) {
+    .page-audit .table {
+        min-width: 700px;
+    }
+}

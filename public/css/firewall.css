@@ -14,7 +14,66 @@
 }
 
 .page-firewall .page-header .subtitle {
-    margin: 0 0 16px;
+    margin: 0 0 20px;
+}
+
+.page-firewall .stats-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.page-firewall .stat-card {
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    max-width: 280px;
+}
+
+.page-firewall .stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.page-firewall .stat-icon.red {
+    background: rgba(239, 68, 68, .15);
+    color: #ef4444;
+}
+
+.page-firewall .stat-icon.orange {
+    background: rgba(249, 115, 22, .15);
+    color: #f97316;
+}
+
+.page-firewall .stat-icon.green {
+    background: rgba(34, 197, 94, .15);
+    color: #22c55e;
+}
+
+.page-firewall .stat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.page-firewall .stat-value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-firewall .stat-label {
+    font-size: .85rem;
+    color: var(--muted);
 }
 
 .page-firewall .panel {
@@ -43,7 +102,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
 
 .page-firewall .toolbar .left,
@@ -81,6 +140,17 @@
     background: transparent;
 }
 
+.page-firewall .btn.primary {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: #fff;
+}
+
+.page-firewall .btn.primary:hover {
+    background: #e67e22;
+    border-color: #e67e22;
+}
+
 .page-firewall .btn.small {
     padding: 8px 10px;
     font-size: .9rem;
@@ -96,12 +166,220 @@
     color: var(--orange);
 }
 
+.page-firewall .firewall-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.page-firewall .firewall-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.page-firewall .form-section {
+    background: #0c111a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.page-firewall .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.page-firewall .section-icon {
+    width: 36px;
+    height: 36px;
+    background: rgba(34, 211, 238, .1);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--orange);
+    flex-shrink: 0;
+}
+
+.page-firewall .section-header h2 {
+    margin: 0 0 2px;
+    font-size: .95rem;
+    font-weight: 600;
+}
+
+.page-firewall .section-header .subtitle {
+    margin: 0;
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+.page-firewall .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.page-firewall .field-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 160px;
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+.page-firewall .field-row input,
+.page-firewall .field-row select {
+    border-radius: 8px;
+    border: 1px solid #141b28;
+    background: #020617;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: .9rem;
+}
+
+.page-firewall .field-row input:focus,
+.page-firewall .field-row select:focus {
+    outline: none;
+    border-color: var(--orange);
+}
+
+.page-firewall label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    font-size: .85rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+
+.page-firewall label input[type="text"],
+.page-firewall label input[type="file"] {
+    border-radius: 8px;
+    border: 1px solid #141b28;
+    background: #020617;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: .9rem;
+}
+
+.page-firewall label input[type="text"]:focus,
+.page-firewall label input[type="file"]:focus {
+    outline: none;
+    border-color: var(--orange);
+}
+
+.page-firewall label input[type="file"] {
+    padding: 6px 10px;
+}
+
 .page-firewall .hint {
     margin: 6px 0 0;
     font-size: .8rem;
     color: var(--muted);
 }
 
-.page-firewall .table-wrap {
-    overflow: visible;
+.page-firewall .actions-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.page-firewall .firewall-current {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.page-firewall .ban-list h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 8px;
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-firewall .ban-list h3 svg {
+    color: var(--muted);
+}
+
+.page-firewall .ban-list-ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.page-firewall .ban-list-ul li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: .85rem;
+    font-family: monospace;
+}
+
+.page-firewall .ban-list-ul li.muted {
+    background: transparent;
+    border: 1px dashed #334155;
+    color: var(--muted);
+    font-family: inherit;
+}
+
+.page-firewall .ban-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-firewall .ban-item span {
+    font-family: monospace;
+}
+
+.page-firewall .remove-btn {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color .15s ease;
+}
+
+.page-firewall .remove-btn:hover {
+    color: #ef4444;
+}
+
+.page-firewall .muted {
+    color: var(--muted);
+}
+
+@media (max-width: 900px) {
+    .page-firewall .firewall-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-firewall .stats-row {
+        flex-direction: column;
+    }
+
+    .page-firewall .stat-card {
+        max-width: none;
+    }
 }

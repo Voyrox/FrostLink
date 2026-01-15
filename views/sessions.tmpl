@@ -1,0 +1,255 @@
+{{ define "sessions" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • Sessions</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/sessions.css" />
+</head>
+
+<body class="page-sessions">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Sessions</h1>
+                <p class="subtitle">Manage active user sessions and revoke access</p>
+            </header>
+
+            <section class="panel" aria-label="Sessions">
+                <div class="toolbar">
+                    <div class="left">
+                        <div class="session-stats">
+                            <span class="stat"><strong id="total-sessions">0</strong> active sessions</span>
+                        </div>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button" id="refresh-sessions-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2"></path>
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col">User</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">IP Address</th>
+                                <th scope="col">User Agent</th>
+                                <th scope="col">Created</th>
+                                <th scope="col">Last Active</th>
+                                <th scope="col">Expires</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessions-table-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pager">
+                    <div class="page-info" id="page-info">Showing all sessions</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const tableBody = document.getElementById('sessions-table-body');
+            const refreshBtn = document.getElementById('refresh-sessions-btn');
+            const totalSessionsEl = document.getElementById('total-sessions');
+
+            let allSessions = [];
+
+            function formatTime(ts) {
+                if (!ts) return 'Unknown';
+                const date = new Date(ts);
+                if (isNaN(date.getTime())) return 'Unknown';
+                const now = new Date();
+                const diff = now - date;
+
+                if (diff < 60000) {
+                    return 'Just now';
+                } else if (diff < 3600000) {
+                    return Math.floor(diff / 60000) + 'm ago';
+                } else if (diff < 86400000) {
+                    return Math.floor(diff / 3600000) + 'h ago';
+                } else {
+                    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                }
+            }
+
+            function formatCountdown(expiresAt) {
+                if (!expiresAt) return 'Unknown';
+                const expDate = new Date(expiresAt);
+                if (isNaN(expDate.getTime())) return 'Unknown';
+
+                const now = new Date();
+                const diff = expDate - now;
+
+                if (diff <= 0) {
+                    return 'Expired';
+                }
+
+                const hours = Math.floor(diff / 3600000);
+                const minutes = Math.floor((diff % 3600000) / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+
+                if (hours > 0) {
+                    return hours + 'h ' + minutes + 'm ' + seconds + 's';
+                } else if (minutes > 0) {
+                    return minutes + 'm ' + seconds + 's';
+                } else {
+                    return seconds + 's';
+                }
+            }
+
+            function updateCountdowns() {
+                const cells = document.querySelectorAll('.countdown-cell');
+                cells.forEach(function(cell) {
+                    const expiresAt = cell.getAttribute('data-expires');
+                    const text = formatCountdown(expiresAt);
+                    cell.textContent = text;
+                    if (text === 'Expired') {
+                        cell.classList.add('expired');
+                    }
+                });
+            }
+
+            function truncate(str, max) {
+                if (!str) return '';
+                if (str.length <= max) return str;
+                return str.substring(0, max) + '...';
+            }
+
+            function renderSessions() {
+                if (!tableBody) return;
+
+                tableBody.innerHTML = '';
+                if (allSessions.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 8;
+                    td.textContent = 'No active sessions';
+                    td.className = 'muted';
+                    tr.appendChild(td);
+                    tableBody.appendChild(tr);
+                    return;
+                }
+
+                allSessions.forEach(function(session) {
+                    const tr = document.createElement('tr');
+
+                    const tdUser = document.createElement('td');
+                    tdUser.textContent = session.username;
+                    tdUser.className = 'username-cell';
+
+                    const tdRole = document.createElement('td');
+                    tdRole.textContent = session.role || '-';
+
+                    const tdIP = document.createElement('td');
+                    tdIP.textContent = session.ip || '-';
+
+                    const tdUA = document.createElement('td');
+                    tdUA.textContent = truncate(session.user_agent || '', 40);
+                    tdUA.title = session.user_agent || '';
+                    tdUA.className = 'ua-cell';
+
+                    const tdCreated = document.createElement('td');
+                    tdCreated.textContent = formatTime(session.created_at);
+
+                    const tdLast = document.createElement('td');
+                    tdLast.textContent = formatTime(session.last_accessed);
+
+                    const tdExpires = document.createElement('td');
+                    tdExpires.setAttribute('data-expires', session.expires_at);
+                    tdExpires.className = 'countdown-cell';
+                    tdExpires.textContent = formatCountdown(session.expires_at);
+
+                    const tdActions = document.createElement('td');
+                    const revokeBtn = document.createElement('button');
+                    revokeBtn.type = 'button';
+                    revokeBtn.className = 'btn small ghost danger';
+                    revokeBtn.textContent = 'Revoke';
+                    revokeBtn.addEventListener('click', function() {
+                        if (!confirm('Revoke session for ' + session.username + '?')) return;
+                        fetch('/api/sessions/' + encodeURIComponent(session.id), { method: 'DELETE' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                if (data && data.error) {
+                                    if (typeof showToast === 'function') {
+                                        showToast(data.error);
+                                    }
+                                    return;
+                                }
+                                if (typeof showToast === 'function') {
+                                    showToast('Session revoked');
+                                }
+                                loadSessions();
+                            })
+                            .catch(function(err) {
+                                console.error('Failed to revoke session', err);
+                                if (typeof showToast === 'function') {
+                                    showToast('Failed to revoke session');
+                                }
+                            });
+                    });
+                    tdActions.appendChild(revokeBtn);
+
+                    tr.appendChild(tdUser);
+                    tr.appendChild(tdRole);
+                    tr.appendChild(tdIP);
+                    tr.appendChild(tdUA);
+                    tr.appendChild(tdCreated);
+                    tr.appendChild(tdLast);
+                    tr.appendChild(tdExpires);
+                    tr.appendChild(tdActions);
+
+                    tableBody.appendChild(tr);
+                });
+
+                updateCountdowns();
+            }
+
+            function loadSessions() {
+                fetch('/api/sessions')
+                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                    .then(function(data) {
+                        allSessions = (data && data.sessions) || [];
+                        renderSessions();
+                        if (totalSessionsEl) totalSessionsEl.textContent = allSessions.length;
+                    })
+                    .catch(function(err) {
+                        console.error('Failed to load sessions', err);
+                    });
+            }
+
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', loadSessions);
+            }
+
+            loadSessions();
+
+            setInterval(updateCountdowns, 1000);
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

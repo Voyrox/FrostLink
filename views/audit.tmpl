@@ -1,0 +1,233 @@
+{{ define "audit" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • Audit Logs</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/audit.css" />
+</head>
+
+<body class="page-audit">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Audit Logs</h1>
+                <p class="subtitle">Track administrative actions and security events</p>
+            </header>
+
+            <section class="panel" aria-label="Audit Logs">
+                <div class="toolbar">
+                    <div class="left">
+                        <div class="filter-group">
+                            <select id="action-filter" class="filter-select">
+                                <option value="">All Actions</option>
+                                <option value="user_login">User Login</option>
+                                <option value="user_login_failed">Login Failed</option>
+                                <option value="user_logout">User Logout</option>
+                                <option value="user_create">User Created</option>
+                                <option value="user_delete">User Deleted</option>
+                                <option value="role_create">Role Created</option>
+                                <option value="role_update">Role Updated</option>
+                                <option value="role_delete">Role Deleted</option>
+                                <option value="domain_create">Domain Created</option>
+                                <option value="domain_delete">Domain Deleted</option>
+                                <option value="session_revoke">Session Revoked</option>
+                            </select>
+                            <input type="text" id="actor-filter" placeholder="Filter by actor..." class="filter-input">
+                        </div>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button" id="refresh-audit-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2"></path>
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn ghost" type="button" id="export-audit-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <span>Export JSON</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <span class="stat-value" id="total-logs">0</span>
+                        <span class="stat-label">Total Logs</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="last-24h">0</span>
+                        <span class="stat-label">Last 24 Hours</span>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col">Timestamp</th>
+                                <th scope="col">Actor</th>
+                                <th scope="col">Action</th>
+                                <th scope="col">IP</th>
+                                <th scope="col">Resource</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-table-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pager">
+                    <div class="page-info" id="page-info">Showing all entries</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const tableBody = document.getElementById('audit-table-body');
+            const actionFilter = document.getElementById('action-filter');
+            const actorFilter = document.getElementById('actor-filter');
+            const refreshBtn = document.getElementById('refresh-audit-btn');
+            const exportBtn = document.getElementById('export-audit-btn');
+            const totalLogsEl = document.getElementById('total-logs');
+            const last24hEl = document.getElementById('last-24h');
+
+            let allLogs = [];
+
+            function formatAction(action) {
+                return action.replace(/_/g, ' ').replace(/\b\w/g, function(c) {
+                    return c.toUpperCase();
+                });
+            }
+
+            function formatTimestamp(ts) {
+                const date = new Date(ts);
+                return date.toLocaleString();
+            }
+
+            function renderLogs() {
+                if (!tableBody) return;
+                const action = actionFilter ? actionFilter.value : '';
+                const actor = actorFilter ? actorFilter.value.toLowerCase() : '';
+
+                let filtered = allLogs;
+                if (action) {
+                    filtered = filtered.filter(function(log) {
+                        return log.action === action;
+                    });
+                }
+                if (actor) {
+                    filtered = filtered.filter(function(log) {
+                        return (log.actor || '').toLowerCase().includes(actor);
+                    });
+                }
+
+                tableBody.innerHTML = '';
+                if (filtered.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 6;
+                    td.textContent = 'No audit logs found';
+                    td.className = 'muted';
+                    tr.appendChild(td);
+                    tableBody.appendChild(tr);
+                    return;
+                }
+
+                filtered.slice().reverse().forEach(function(log) {
+                    const tr = document.createElement('tr');
+
+                    const tdTs = document.createElement('td');
+                    tdTs.textContent = formatTimestamp(log.timestamp);
+
+                    const tdActor = document.createElement('td');
+                    tdActor.textContent = log.actor || '-';
+
+                    const tdAction = document.createElement('td');
+                    tdAction.textContent = formatAction(log.action);
+                    tdAction.className = 'action-cell';
+
+                    const tdIP = document.createElement('td');
+                    tdIP.textContent = log.ip || '-';
+
+                    const tdResource = document.createElement('td');
+                    tdResource.textContent = log.resource || '-';
+
+                    const tdStatus = document.createElement('td');
+                    tdStatus.textContent = log.status || '-';
+                    tdStatus.className = 'status-cell status-' + (log.status || 'unknown');
+
+                    tr.appendChild(tdTs);
+                    tr.appendChild(tdActor);
+                    tr.appendChild(tdAction);
+                    tr.appendChild(tdIP);
+                    tr.appendChild(tdResource);
+                    tr.appendChild(tdStatus);
+
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            function loadLogs() {
+                fetch('/api/audit')
+                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                    .then(function(data) {
+                        allLogs = (data && data.logs) || [];
+                        renderLogs();
+                        if (totalLogsEl) totalLogsEl.textContent = data && data.total || 0;
+                        if (last24hEl) last24hEl.textContent = data && data.last_24h || 0;
+                    })
+                    .catch(function(err) {
+                        console.error('Failed to load audit logs', err);
+                    });
+            }
+
+            function exportLogs() {
+                const data = JSON.stringify({ logs: allLogs }, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'audit-logs-' + new Date().toISOString().split('T')[0] + '.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            if (actionFilter) {
+                actionFilter.addEventListener('change', renderLogs);
+            }
+            if (actorFilter) {
+                actorFilter.addEventListener('input', renderLogs);
+            }
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', loadLogs);
+            }
+            if (exportBtn) {
+                exportBtn.addEventListener('click', exportLogs);
+            }
+
+            loadLogs();
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

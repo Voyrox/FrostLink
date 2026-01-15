@@ -6,19 +6,71 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
+	auditpkg "SparkProxy/audit"
+	csrfpkg "SparkProxy/csrf"
 	filepkg "SparkProxy/file"
 	firewallpkg "SparkProxy/firewall"
 	proxyhttp "SparkProxy/http"
 	logger "SparkProxy/logger"
 	rolepkg "SparkProxy/role"
+	sessionpkg "SparkProxy/session"
+	tokenpkg "SparkProxy/token"
 	userpkg "SparkProxy/user"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
+
+func isHTTPS(c *gin.Context) bool {
+	return c.Request.URL.Scheme == "https" || c.GetHeader("X-Forwarded-Proto") == "https"
+}
+
+func setSessionCookie(c *gin.Context, sessionID string) {
+	isSecure := isHTTPS(c)
+	c.SetCookie("session", sessionID, 3600*24, "/", "", isSecure, true)
+}
+
+func clearSessionCookie(c *gin.Context) {
+	c.SetCookie("session", "", -1, "/", "", true, true)
+}
+
+func setCSRFCookie(c *gin.Context, token string) {
+	isSecure := isHTTPS(c)
+	c.SetCookie("csrf_token", token, 3600, "/", "", isSecure, true)
+}
+
+func csrfMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
+			c.Next()
+			return
+		}
+
+		sid, err := c.Cookie("session")
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "csrf: no session"})
+			c.Abort()
+			return
+		}
+
+		token := c.GetHeader("X-CSRF-Token")
+		if token == "" {
+			cookie, err := c.Cookie("csrf_token")
+			if err == nil {
+				token = cookie
+			}
+		}
+
+		if token == "" || !csrfpkg.ValidateToken(sid, token) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "csrf: invalid token"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
 
 type FirewallStats struct {
 	Blocked     int      `json:"blocked"`
@@ -71,11 +123,45 @@ type DashboardStats struct {
 }
 
 var (
-	sessions   = map[string]string{}
-	sessionsMu sync.RWMutex
-
 	healthClient = &http.Client{Timeout: 1500 * time.Millisecond}
 )
+
+func authRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sid, err := c.Cookie("session")
+		if err != nil {
+			c.Redirect(http.StatusFound, "/login")
+			c.Abort()
+			return
+		}
+		if !sessionpkg.Validate(sid) {
+			clearSessionCookie(c)
+			c.Redirect(http.StatusFound, "/login")
+			c.Abort()
+			return
+		}
+		c.Set("session_id", sid)
+		c.Next()
+	}
+}
+
+func apiAuthRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sid, err := c.Cookie("session")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.Abort()
+			return
+		}
+		if !sessionpkg.Validate(sid) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+			c.Abort()
+			return
+		}
+		c.Set("session_id", sid)
+		c.Next()
+	}
+}
 
 func main() {
 	loadEnv(".env")
@@ -92,37 +178,73 @@ func main() {
 	r.Static("/img", "./public/img")
 	r.Static("/public", "./public")
 
-	r.GET("/", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
-	r.GET("/login", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
-	r.POST("/login", loginPost)
-	r.GET("/dashboard", func(c *gin.Context) { c.HTML(http.StatusOK, "dashboard", gin.H{"ActivePage": "dashboard"}) })
-	r.GET("/domains", func(c *gin.Context) { c.HTML(http.StatusOK, "domains", gin.H{"ActivePage": "domains"}) })
-	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{"ActivePage": "analytics"}) })
-	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{"ActivePage": "logs"}) })
-	r.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{"ActivePage": "users"}) })
-	r.GET("/firewall", func(c *gin.Context) { c.HTML(http.StatusOK, "firewall", gin.H{"ActivePage": "firewall"}) })
-	r.GET("/roles", func(c *gin.Context) { c.HTML(http.StatusOK, "roles", gin.H{"ActivePage": "roles"}) })
-	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
+	public := r.Group("/")
+	{
+		public.GET("/", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
+		public.GET("/login", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
+		public.POST("/login", loginPost)
+		public.POST("/api/login", apiLogin)
+		public.POST("/api/logout", apiLogout)
+	}
+
+	dashboard := r.Group("/")
+	dashboard.Use(authRequired())
+	{
+		dashboard.GET("/dashboard", func(c *gin.Context) { c.HTML(http.StatusOK, "dashboard", gin.H{"ActivePage": "dashboard"}) })
+		dashboard.GET("/domains", func(c *gin.Context) { c.HTML(http.StatusOK, "domains", gin.H{"ActivePage": "domains"}) })
+		dashboard.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{"ActivePage": "analytics"}) })
+		dashboard.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{"ActivePage": "logs"}) })
+		dashboard.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{"ActivePage": "users"}) })
+		dashboard.GET("/firewall", func(c *gin.Context) { c.HTML(http.StatusOK, "firewall", gin.H{"ActivePage": "firewall"}) })
+		dashboard.GET("/roles", func(c *gin.Context) { c.HTML(http.StatusOK, "roles", gin.H{"ActivePage": "roles"}) })
+		dashboard.GET("/sessions", func(c *gin.Context) { c.HTML(http.StatusOK, "sessions", gin.H{"ActivePage": "sessions"}) })
+		dashboard.GET("/audit", func(c *gin.Context) { c.HTML(http.StatusOK, "audit", gin.H{"ActivePage": "audit"}) })
+		dashboard.GET("/api-tokens", func(c *gin.Context) { c.HTML(http.StatusOK, "api-tokens", gin.H{"ActivePage": "api-tokens"}) })
+		dashboard.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
+	}
+
 	r.NoRoute(func(c *gin.Context) {
 		c.HTML(http.StatusNotFound, "404", gin.H{})
 	})
-	r.POST("/api/login", apiLogin)
-	r.GET("/api/dashboard", apiDashboard)
-	r.GET("/api/firewall", apiFirewallGet)
-	r.POST("/api/firewall/ban-ip", apiFirewallBanIP)
-	r.POST("/api/firewall/ban-ip-upload", apiFirewallBanIPUpload)
-	r.POST("/api/firewall/ban-country", apiFirewallBanCountry)
-	r.GET("/api/proxys", apiProxys)
-	r.PUT("/api/domains/:domain/auth", apiDomainAuthUpdate)
-	r.POST("/api/domains", apiDomainsCreate)
-	r.GET("/api/logs", apiLogs)
-	r.GET("/api/users", apiUsersList)
-	r.POST("/api/users", apiUsersCreate)
-	r.DELETE("/api/users/:username", apiUsersDelete)
-	r.GET("/api/roles", apiRolesList)
-	r.POST("/api/roles", apiRolesCreate)
-	r.PUT("/api/roles/:name", apiRolesUpdate)
-	r.DELETE("/api/roles/:name", apiRolesDelete)
+
+	apiRead := r.Group("/api")
+	apiRead.Use(apiAuthRequired())
+	{
+		apiRead.GET("/dashboard", apiDashboard)
+		apiRead.GET("/firewall", apiFirewallGet)
+		apiRead.GET("/proxys", apiProxys)
+		apiRead.GET("/logs", apiLogs)
+		apiRead.GET("/users", apiUsersList)
+		apiRead.GET("/roles", apiRolesList)
+		apiRead.GET("/sessions", apiSessionsList)
+		apiRead.GET("/audit", apiAuditList)
+	}
+
+	apiWrite := r.Group("/api")
+	apiWrite.Use(apiAuthRequired(), csrfMiddleware())
+	{
+		apiWrite.POST("/firewall/ban-ip", apiFirewallBanIP)
+		apiWrite.POST("/firewall/ban-ip-upload", apiFirewallBanIPUpload)
+		apiWrite.POST("/firewall/ban-country", apiFirewallBanCountry)
+		apiWrite.DELETE("/firewall/ip/:ip", apiFirewallUnbanIP)
+		apiWrite.DELETE("/firewall/country/:code", apiFirewallUnbanCountry)
+		apiWrite.PUT("/domains/:domain/auth", apiDomainAuthUpdate)
+		apiWrite.POST("/domains", apiDomainsCreate)
+		apiWrite.POST("/users", apiUsersCreate)
+		apiWrite.DELETE("/api/users/:username", apiUsersDelete)
+		apiWrite.POST("/roles", apiRolesCreate)
+		apiWrite.PUT("/api/roles/:name", apiRolesUpdate)
+		apiWrite.DELETE("/api/roles/:name", apiRolesDelete)
+		apiWrite.DELETE("/api/sessions/:id", apiSessionRevoke)
+		apiWrite.DELETE("/api/sessions/user/:username", apiSessionsRevokeAll)
+	}
+
+	apiTokens := r.Group("/api/tokens")
+	{
+		apiTokens.GET("", apiTokensList)
+		apiTokens.POST("", apiAuthRequired(), csrfMiddleware(), apiTokensCreate)
+		apiTokens.DELETE("/:id", apiAuthRequired(), csrfMiddleware(), apiTokensRevoke)
+	}
 
 	go func() {
 		cfgs := filepkg.ReadConfigs("./domains")
@@ -175,33 +297,45 @@ type firewallCountryBanRequest struct {
 func apiLogin(c *gin.Context) {
 	var req loginRequest
 	if err := c.BindJSON(&req); err != nil {
+		auditpkg.Log("user_login_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/login", "failed", map[string]string{"reason": "invalid payload"})
 		c.JSON(http.StatusOK, gin.H{"valid": false})
 		return
 	}
+
+	ip := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
 
 	validUser := os.Getenv("USER")
 	validPass := os.Getenv("PASSWORD")
 
 	if req.Username == validUser && req.Password == validPass && validUser != "" && validPass != "" {
-		sid := uuid.NewString()
-		sessionsMu.Lock()
-		sessions[sid] = req.Username
-		sessionsMu.Unlock()
-		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
-		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid})
+		sessionpkg.RevokeByUser(req.Username)
+		sid := sessionpkg.Create(req.Username, "Owner", ip, userAgent)
+		csrfToken := csrfpkg.GenerateToken(sid)
+		setSessionCookie(c, sid)
+		setCSRFCookie(c, csrfToken)
+		auditpkg.Log("user_login", req.Username, ip, userAgent, "/api/login", "success", nil)
+		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid, "csrf_token": csrfToken})
 		return
 	}
 
-	if u, ok := userpkg.Authenticate(req.Username, req.Password); ok && u != nil {
-		sid := uuid.NewString()
-		sessionsMu.Lock()
-		sessions[sid] = u.Username
-		sessionsMu.Unlock()
-		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
-		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid})
+	u, ok := userpkg.Authenticate(req.Username, req.Password)
+	if ok && u != nil {
+		role := "Member"
+		if u.Role != "" {
+			role = u.Role
+		}
+		sessionpkg.RevokeByUser(u.Username)
+		sid := sessionpkg.Create(u.Username, role, ip, userAgent)
+		csrfToken := csrfpkg.GenerateToken(sid)
+		setSessionCookie(c, sid)
+		setCSRFCookie(c, csrfToken)
+		auditpkg.Log("user_login", u.Username, ip, userAgent, "/api/login", "success", nil)
+		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid, "csrf_token": csrfToken})
 		return
 	}
 
+	auditpkg.Log("user_login_failed", req.Username, ip, userAgent, "/api/login", "failed", map[string]string{"reason": "invalid credentials"})
 	c.JSON(http.StatusOK, gin.H{"valid": false})
 }
 
@@ -319,6 +453,7 @@ func apiFirewallBanIP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditpkg.Log("firewall_rule_add", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ban-ip", "success", map[string]string{"type": "ip", "value": ip})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -379,6 +514,7 @@ func apiFirewallBanCountry(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditpkg.Log("firewall_rule_add", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ban-country", "success", map[string]string{"type": "country", "count": fmt.Sprintf("%d", added)})
 	c.JSON(http.StatusOK, gin.H{"ok": true, "added": added})
 }
 
@@ -434,12 +570,11 @@ func apiDomainsCreate(c *gin.Context) {
 	}
 
 	if err := filepkg.WriteConfig("./domains", cfg); err != nil {
-		logger.SystemLog("error", "api_domains_create", fmt.Sprintf("failed to write config for '%s': %v", domain, err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write domain config"})
 		return
 	}
 
-	logger.SystemLog("success", "api_domains_create", fmt.Sprintf("created domain '%s' -> %s", domain, target))
+	auditpkg.Log("domain_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains", "success", map[string]string{"domain": domain, "target": target})
 	c.JSON(http.StatusOK, gin.H{"domain": cfg.Domain, "host": cfg.Location, "SSL": cfg.AllowSSL, "HTTP": cfg.AllowHTTP})
 }
 
@@ -479,7 +614,7 @@ func apiUsersList(c *gin.Context) {
 func apiUsersCreate(c *gin.Context) {
 	var req createUserRequest
 	if err := c.BindJSON(&req); err != nil {
-		logger.SystemLog("error", "api_users_create", fmt.Sprintf("invalid payload: %v", err))
+		auditpkg.Log("user_create_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "failed", map[string]string{"reason": "invalid payload"})
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
@@ -488,11 +623,11 @@ func apiUsersCreate(c *gin.Context) {
 	}
 	u, err := userpkg.Create(req.Username, req.Email, req.Password, req.Role, req.AccessType, req.Domains)
 	if err != nil {
-		logger.SystemLog("error", "api_users_create", fmt.Sprintf("failed to create user '%s': %v", req.Username, err))
+		auditpkg.Log("user_create_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "failed", map[string]string{"reason": err.Error()})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logger.SystemLog("success", "api_users_create", fmt.Sprintf("created user '%s' (%s)", u.Username, u.Email))
+	auditpkg.Log("user_create", u.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "success", map[string]string{"email": u.Email, "role": u.Role})
 	c.JSON(http.StatusOK, gin.H{"user": map[string]interface{}{
 		"username":          u.Username,
 		"email":             u.Email,
@@ -506,11 +641,12 @@ func apiUsersCreate(c *gin.Context) {
 func apiUsersDelete(c *gin.Context) {
 	username := c.Param("username")
 	if err := userpkg.Delete(username); err != nil {
-		logger.SystemLog("error", "api_users_delete", fmt.Sprintf("failed to delete user '%s': %v", username, err))
+		auditpkg.Log("user_delete_failed", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/"+username, "failed", map[string]string{"reason": err.Error()})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logger.SystemLog("success", "api_users_delete", fmt.Sprintf("deleted user '%s'", username))
+	sessionpkg.RevokeByUser(username)
+	auditpkg.Log("user_delete", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/"+username, "success", nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -544,7 +680,7 @@ func apiRolesCreate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logger.SystemLog("success", "api_roles_create", fmt.Sprintf("created role '%s'", r.Name))
+	auditpkg.Log("role_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles", "success", map[string]string{"role": r.Name})
 	c.JSON(http.StatusOK, gin.H{"role": r})
 }
 
@@ -568,7 +704,7 @@ func apiRolesUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logger.SystemLog("success", "api_roles_update", fmt.Sprintf("updated role '%s'", r.Name))
+	auditpkg.Log("role_update", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles/"+name, "success", map[string]string{"role": r.Name})
 	c.JSON(http.StatusOK, gin.H{"role": r})
 }
 
@@ -582,7 +718,7 @@ func apiRolesDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logger.SystemLog("success", "api_roles_delete", fmt.Sprintf("deleted role '%s'", name))
+	auditpkg.Log("role_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles/"+name, "success", map[string]string{"role": name})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -613,16 +749,19 @@ func apiDomainAuthUpdate(c *gin.Context) {
 func loginPost(c *gin.Context) {
 	email := c.PostForm("email")
 	password := c.PostForm("password")
+	ip := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
 
 	validUser := os.Getenv("USER")
 	validPass := os.Getenv("PASSWORD")
 
 	if email == validUser && password == validPass && validUser != "" && validPass != "" {
-		sid := uuid.NewString()
-		sessionsMu.Lock()
-		sessions[sid] = email
-		sessionsMu.Unlock()
-		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
+		sessionpkg.RevokeByUser(email)
+		sid := sessionpkg.Create(email, "Owner", ip, userAgent)
+		csrfToken := csrfpkg.GenerateToken(sid)
+		setSessionCookie(c, sid)
+		setCSRFCookie(c, csrfToken)
+		auditpkg.Log("user_login", email, ip, userAgent, "/login", "success", nil)
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": "Logged in successfully, redirecting…",
 			"Redirect":     "/dashboard",
@@ -630,12 +769,18 @@ func loginPost(c *gin.Context) {
 		return
 	}
 
-	if u, ok := userpkg.Authenticate(email, password); ok && u != nil {
-		sid := uuid.NewString()
-		sessionsMu.Lock()
-		sessions[sid] = u.Username
-		sessionsMu.Unlock()
-		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
+	u, ok := userpkg.Authenticate(email, password)
+	if ok && u != nil {
+		role := "Member"
+		if u.Role != "" {
+			role = u.Role
+		}
+		sessionpkg.RevokeByUser(u.Username)
+		sid := sessionpkg.Create(u.Username, role, ip, userAgent)
+		csrfToken := csrfpkg.GenerateToken(sid)
+		setSessionCookie(c, sid)
+		setCSRFCookie(c, csrfToken)
+		auditpkg.Log("user_login", u.Username, ip, userAgent, "/login", "success", nil)
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": "Logged in successfully, redirecting…",
 			"Redirect":     "/dashboard",
@@ -643,6 +788,7 @@ func loginPost(c *gin.Context) {
 		return
 	}
 
+	auditpkg.Log("user_login_failed", email, ip, userAgent, "/login", "failed", map[string]string{"reason": "invalid credentials"})
 	c.HTML(http.StatusOK, "login", gin.H{
 		"ToastMessage": "Invalid credentials. Please try again.",
 	})
@@ -670,4 +816,185 @@ func loadEnv(path string) {
 		val = strings.Trim(val, " \"'")
 		_ = os.Setenv(key, val)
 	}
+}
+
+func apiLogout(c *gin.Context) {
+	sid, err := c.Cookie("session")
+	if err == nil && sid != "" {
+		sessionpkg.Revoke(sid)
+		auditpkg.Log("user_logout", "", c.ClientIP(), c.GetHeader("User-Agent"), "/api/logout", "success", nil)
+	}
+	clearSessionCookie(c)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func apiSessionsList(c *gin.Context) {
+	sessions := sessionpkg.List()
+	var out []map[string]interface{}
+	for _, s := range sessions {
+		out = append(out, map[string]interface{}{
+			"id":          s.ID,
+			"username":    s.Username,
+			"role":        s.Role,
+			"ip":          s.IP,
+			"user_agent":  s.UserAgent,
+			"created_at":  s.CreatedAt.Format(time.RFC3339),
+			"last_access": s.LastAccess.Format(time.RFC3339),
+			"expires_at":  s.ExpiresAt.Format(time.RFC3339),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"sessions": out})
+}
+
+func apiSessionRevoke(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session id is required"})
+		return
+	}
+	s, ok := sessionpkg.Get(id)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	sessionpkg.Revoke(id)
+	auditpkg.Log("session_revoke", s.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/sessions/"+id, "success", nil)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func apiSessionsRevokeAll(c *gin.Context) {
+	username := c.Param("username")
+	if username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+		return
+	}
+	count := sessionpkg.RevokeByUser(username)
+	auditpkg.Log("session_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/sessions/user/"+username, "success", map[string]string{"count": fmt.Sprintf("%d", count)})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "revoked": count})
+}
+
+func apiAuditList(c *gin.Context) {
+	action := c.Query("action")
+	actor := c.Query("actor")
+	var limit int
+	fmt.Sscanf(c.Query("limit"), "%d", &limit)
+
+	logs := auditpkg.List(action, actor, limit)
+	total, last24h := auditpkg.GetStats()
+
+	var out []map[string]interface{}
+	for _, l := range logs {
+		out = append(out, map[string]interface{}{
+			"id":         l.ID,
+			"timestamp":  l.Timestamp.Format(time.RFC3339),
+			"action":     l.Action,
+			"actor":      l.Actor,
+			"ip":         l.IP,
+			"user_agent": l.UserAgent,
+			"resource":   l.Resource,
+			"status":     l.Status,
+			"details":    l.Details,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"logs":     out,
+		"total":    total,
+		"last_24h": last24h,
+	})
+}
+
+func apiFirewallUnbanIP(c *gin.Context) {
+	ip := c.Param("ip")
+	if ip == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ip is required"})
+		return
+	}
+	if err := firewallpkg.UnbanIP(ip); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditpkg.Log("firewall_rule_remove", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ip/"+ip, "success", map[string]string{"type": "ip", "value": ip})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func apiFirewallUnbanCountry(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "country code is required"})
+		return
+	}
+	if err := firewallpkg.UnbanCountry(code); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditpkg.Log("firewall_rule_remove", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/country/"+code, "success", map[string]string{"type": "country", "value": code})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type createTokenRequest struct {
+	Name       string `json:"name"`
+	Permission string `json:"permission"`
+	Expiration int    `json:"expiration"`
+}
+
+func apiTokensList(c *gin.Context) {
+	tokens := tokenpkg.ListPublic()
+	c.JSON(http.StatusOK, gin.H{"tokens": tokens})
+}
+
+func apiTokensCreate(c *gin.Context) {
+	var req createTokenRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+	if req.Permission != "read" && req.Permission != "write" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "permission must be read or write"})
+		return
+	}
+
+	sid, _ := c.Cookie("session")
+	s, _ := sessionpkg.Get(sid)
+	username := s.Username
+	if username == "" {
+		username = "unknown"
+	}
+
+	var expiresDays *int
+	if req.Expiration > 0 {
+		expiresDays = &req.Expiration
+	}
+
+	fullToken, err := tokenpkg.Create(req.Name, req.Permission, username, expiresDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
+		return
+	}
+
+	auditpkg.Log("token_create", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens", "success", map[string]string{"name": req.Name, "permission": req.Permission})
+	c.JSON(http.StatusOK, gin.H{"token": fullToken})
+}
+
+func apiTokensRevoke(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token id is required"})
+		return
+	}
+	if !tokenpkg.Revoke(id) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
+		return
+	}
+	sid, _ := c.Cookie("session")
+	s, _ := sessionpkg.Get(sid)
+	username := s.Username
+	if username == "" {
+		username = "unknown"
+	}
+	auditpkg.Log("token_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens/"+id, "success", nil)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

@@ -1,0 +1,343 @@
+{{ define "api-tokens" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • API Tokens</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/api-tokens.css" />
+</head>
+
+<body class="page-api-tokens">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">API Tokens</h1>
+                <p class="subtitle">Manage API tokens for external access</p>
+            </header>
+
+            <section class="panel" aria-label="API Tokens">
+                <div class="toolbar">
+                    <div class="left">
+                        <div class="token-stats">
+                            <span class="stat"><strong id="total-tokens">0</strong> active tokens</span>
+                        </div>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button" id="refresh-tokens-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2"></path>
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn primary" type="button" id="create-token-btn">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <span>Create Token</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Token</th>
+                                <th scope="col">Permission</th>
+                                <th scope="col">Created</th>
+                                <th scope="col">Last Used</th>
+                                <th scope="col">Expires</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tokens-table-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pager">
+                    <div class="page-info" id="page-info">Showing all tokens</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="create-token-modal" class="modal" role="dialog" aria-labelledby="modal-title" aria-hidden="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Create API Token</h2>
+                <button type="button" class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <form id="create-token-form">
+                <div class="form-group">
+                    <label for="token-name">Token Name</label>
+                    <input type="text" id="token-name" name="name" placeholder="e.g. Production API" required />
+                </div>
+                <div class="form-group">
+                    <label for="token-permission">Permission</label>
+                    <select id="token-permission" name="permission" required>
+                        <option value="read">Read-only</option>
+                        <option value="write">Read-write</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="token-expiration">Expiration</label>
+                    <select id="token-expiration" name="expiration">
+                        <option value="30">30 days</option>
+                        <option value="60">60 days</option>
+                        <option value="90">90 days</option>
+                        <option value="0">Never</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn ghost modal-cancel">Cancel</button>
+                    <button type="submit" class="btn primary">Create Token</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="token-display-modal" class="modal" role="dialog" aria-labelledby="display-modal-title" aria-hidden="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="display-modal-title">Your New Token</h2>
+                <button type="button" class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="token-display">
+                <p class="warning">Make sure to copy your token now. You won't be able to see it again!</p>
+                <div class="token-value">
+                    <input type="text" id="new-token-value" readonly />
+                    <button type="button" class="btn ghost" id="copy-token-btn">Copy</button>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn primary modal-done">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            if (typeof window.showToast !== 'function') {
+                window.showToast = function (msg) { alert(msg); };
+            }
+
+            const tableBody = document.getElementById('tokens-table-body');
+            const refreshBtn = document.getElementById('refresh-tokens-btn');
+            const createTokenBtn = document.getElementById('create-token-btn');
+            const totalTokensEl = document.getElementById('total-tokens');
+            const createModal = document.getElementById('create-token-modal');
+            const displayModal = document.getElementById('token-display-modal');
+            const createForm = document.getElementById('create-token-form');
+            const newTokenInput = document.getElementById('new-token-value');
+
+            let allTokens = [];
+
+            function formatDate(date) {
+                if (!date) return 'Never';
+                const d = new Date(date);
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }
+
+            function formatExpires(date) {
+                if (!date) return 'Never';
+                const d = new Date(date);
+                const now = new Date();
+                const diff = d - now;
+                if (diff < 0) return 'Expired';
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                if (days > 30) {
+                    return d.toLocaleDateString();
+                }
+                if (days > 0) {
+                    return days + ' days';
+                }
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                if (hours > 0) {
+                    return hours + ' hours';
+                }
+                return 'Soon';
+            }
+
+            function renderTokens() {
+                if (!tableBody) return;
+
+                tableBody.innerHTML = '';
+                if (allTokens.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 7;
+                    td.textContent = 'No API tokens yet';
+                    td.className = 'muted';
+                    tr.appendChild(td);
+                    tableBody.appendChild(tr);
+                    return;
+                }
+
+                allTokens.forEach(function(token) {
+                    const tr = document.createElement('tr');
+
+                    const tdName = document.createElement('td');
+                    tdName.textContent = token.name;
+                    tdName.className = 'name-cell';
+
+                    const tdToken = document.createElement('td');
+                    tdToken.textContent = '••••••••••' + token.token_prefix;
+                    tdToken.className = 'token-cell';
+
+                    const tdPerm = document.createElement('td');
+                    tdPerm.textContent = token.permission === 'write' ? 'Read-write' : 'Read-only';
+                    tdPerm.className = 'perm-cell ' + token.permission;
+
+                    const tdCreated = document.createElement('td');
+                    tdCreated.textContent = formatDate(token.created_at);
+
+                    const tdLast = document.createElement('td');
+                    tdLast.textContent = formatDate(token.last_used);
+
+                    const tdExpires = document.createElement('td');
+                    tdExpires.textContent = formatExpires(token.expires_at);
+                    tdExpires.className = 'expires-cell';
+
+                    const tdActions = document.createElement('td');
+                    const revokeBtn = document.createElement('button');
+                    revokeBtn.type = 'button';
+                    revokeBtn.className = 'btn small ghost danger';
+                    revokeBtn.textContent = 'Revoke';
+                    revokeBtn.addEventListener('click', function() {
+                        if (!confirm('Revoke token "' + token.name + '"? This action cannot be undone.')) return;
+                        fetch('/api/tokens/' + encodeURIComponent(token.id), { method: 'DELETE' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                if (data && data.error) {
+                                    showToast(data.error || 'Failed to revoke token');
+                                    return;
+                                }
+                                showToast('Token revoked');
+                                loadTokens();
+                            })
+                            .catch(function(err) {
+                                console.error('Failed to revoke token', err);
+                                showToast('Failed to revoke token');
+                            });
+                    });
+                    tdActions.appendChild(revokeBtn);
+
+                    tr.appendChild(tdName);
+                    tr.appendChild(tdToken);
+                    tr.appendChild(tdPerm);
+                    tr.appendChild(tdCreated);
+                    tr.appendChild(tdLast);
+                    tr.appendChild(tdExpires);
+                    tr.appendChild(tdActions);
+
+                    tableBody.appendChild(tr);
+                });
+            }
+
+            function loadTokens() {
+                fetch('/api/tokens')
+                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                    .then(function(data) {
+                        allTokens = (data && data.tokens) || [];
+                        renderTokens();
+                        if (totalTokensEl) totalTokensEl.textContent = allTokens.length;
+                    })
+                    .catch(function(err) {
+                        console.error('Failed to load tokens', err);
+                    });
+            }
+
+            function showModal(modal) {
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function hideModal(modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', loadTokens);
+            }
+
+            if (createTokenBtn) {
+                createTokenBtn.addEventListener('click', function() {
+                    showModal(createModal);
+                });
+            }
+
+            document.querySelectorAll('.modal-close, .modal-cancel, .modal-done, .modal-backdrop').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    hideModal(createModal);
+                    hideModal(displayModal);
+                });
+            });
+
+            if (createForm) {
+                createForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(createForm);
+                    const data = {
+                        name: formData.get('name'),
+                        permission: formData.get('permission'),
+                        expiration: parseInt(formData.get('expiration')) || 0
+                    };
+                    fetch('/api/tokens', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    })
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data && data.error) {
+                                showToast(data.error || 'Failed to create token');
+                                return;
+                            }
+                            hideModal(createModal);
+                            createForm.reset();
+                            if (data && data.token) {
+                                newTokenInput.value = data.token;
+                                showModal(displayModal);
+                            }
+                            loadTokens();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to create token', err);
+                            showToast('Failed to create token');
+                        });
+                });
+            }
+
+            if (document.getElementById('copy-token-btn')) {
+                document.getElementById('copy-token-btn').addEventListener('click', function() {
+                    newTokenInput.select();
+                    document.execCommand('copy');
+                    showToast('Token copied to clipboard');
+                });
+            }
+
+            loadTokens();
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

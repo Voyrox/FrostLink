@@ -260,3 +260,53 @@ func IsBlocked(ip, country string) bool {
 
 	return false
 }
+
+// UnbanIP removes a single IP from the banned list.
+func UnbanIP(ip string) error {
+	load()
+	norm, err := normalizeIP(ip)
+	if err != nil {
+		return err
+	}
+	rulesMu.Lock()
+	defer rulesMu.Unlock()
+
+	filtered := make([]string, 0, len(rules.BannedIPs))
+	for _, existing := range rules.BannedIPs {
+		if existing != norm {
+			filtered = append(filtered, existing)
+		}
+	}
+	rules.BannedIPs = filtered
+	dedupeAndSort(&rules)
+	return saveLocked()
+}
+
+// UnbanCountry removes a country code from the banned list.
+func UnbanCountry(code string) error {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if code == "" {
+		return errors.New("country code is empty")
+	}
+	load()
+	rulesMu.Lock()
+	defer rulesMu.Unlock()
+
+	filtered := make([]string, 0, len(rules.BannedCountries))
+	for _, existing := range rules.BannedCountries {
+		if existing != code {
+			filtered = append(filtered, existing)
+		}
+	}
+	rules.BannedCountries = filtered
+	dedupeAndSort(&rules)
+	return saveLocked()
+}
+
+// GetStats returns statistics about the firewall.
+func GetStats() (ipCount, countryCount int) {
+	load()
+	rulesMu.RLock()
+	defer rulesMu.RUnlock()
+	return len(rules.BannedIPs), len(rules.BannedCountries)
+}
