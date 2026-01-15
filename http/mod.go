@@ -216,7 +216,7 @@ func initGeoDB() {
 func lookupCountry(ip string) string {
 	netIP := net.ParseIP(ip)
 	if netIP == nil {
-		return "AU"
+		return "UNKNOWN"
 	}
 
 	if country := lookupCountryGeoIP(netIP); country != "" {
@@ -225,17 +225,17 @@ func lookupCountry(ip string) string {
 	if country := lookupCountryCIDR(netIP); country != "" {
 		return country
 	}
-	return "AU"
+	return "UNKNOWN"
 }
 
 func lookupCountryGeoIP(netIP net.IP) string {
 	geoDBOnce.Do(initGeoDB)
 	if geoDB == nil {
-		return "AU"
+		return "UNKNOWN"
 	}
 	rec, err := geoDB.Country(netIP)
 	if err != nil || rec == nil {
-		return "AU"
+		return "UNKNOWN"
 	}
 	if rec.Country.IsoCode != "" {
 		return rec.Country.IsoCode
@@ -243,7 +243,7 @@ func lookupCountryGeoIP(netIP net.IP) string {
 	if name, ok := rec.Country.Names["en"]; ok && name != "" {
 		return name
 	}
-	return "AU"
+	return "UNKNOWN"
 }
 
 func initCIDRDB() {
