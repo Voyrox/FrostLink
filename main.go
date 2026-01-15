@@ -10,6 +10,7 @@ import (
 	"time"
 
 	filepkg "SparkProxy/file"
+	firewallpkg "SparkProxy/firewall"
 	proxyhttp "SparkProxy/http"
 	logger "SparkProxy/logger"
 	rolepkg "SparkProxy/role"
@@ -107,6 +108,10 @@ func main() {
 	})
 	r.POST("/api/login", apiLogin)
 	r.GET("/api/dashboard", apiDashboard)
+	r.GET("/api/firewall", apiFirewallGet)
+	r.POST("/api/firewall/ban-ip", apiFirewallBanIP)
+	r.POST("/api/firewall/ban-ip-upload", apiFirewallBanIPUpload)
+	r.POST("/api/firewall/ban-country", apiFirewallBanCountry)
 	r.GET("/api/proxys", apiProxys)
 	r.PUT("/api/domains/:domain/auth", apiDomainAuthUpdate)
 	r.POST("/api/domains", apiDomainsCreate)
@@ -156,6 +161,15 @@ type createDomainRequest struct {
 	CertMode string `json:"cert_mode"`
 	CertPath string `json:"cert_path"`
 	KeyPath  string `json:"key_path"`
+}
+
+type firewallIPBanRequest struct {
+	IP string `json:"ip"`
+}
+
+type firewallCountryBanRequest struct {
+	Country   string   `json:"country"`
+	Countries []string `json:"countries"`
 }
 
 func apiLogin(c *gin.Context) {
@@ -280,6 +294,92 @@ func apiDashboard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
+}
+
+func apiFirewallGet(c *gin.Context) {
+	rules := firewallpkg.List()
+	c.JSON(http.StatusOK, gin.H{
+		"banned_ips":       rules.BannedIPs,
+		"banned_countries": rules.BannedCountries,
+	})
+}
+
+func apiFirewallBanIP(c *gin.Context) {
+	var req firewallIPBanRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	ip := strings.TrimSpace(req.IP)
+	if ip == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ip is required"})
+		return
+	}
+	if err := firewallpkg.BanIP(ip); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func apiFirewallBanIPUpload(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open file"})
+		return
+	}
+	defer f.Close()
+
+	data := make([]byte, file.Size)
+	if _, err := f.Read(data); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read file"})
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	var ips []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		ips = append(ips, line)
+	}
+	added, err := firewallpkg.BanIPs(ips)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "added": added})
+}
+
+func apiFirewallBanCountry(c *gin.Context) {
+	var req firewallCountryBanRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	var codes []string
+	if len(req.Countries) > 0 {
+		codes = req.Countries
+	} else if strings.TrimSpace(req.Country) != "" {
+		codes = []string{req.Country}
+	}
+	if len(codes) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "country code is required"})
+		return
+	}
+	added, err := firewallpkg.BanCountries(codes)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "added": added})
 }
 
 func apiDomainsCreate(c *gin.Context) {

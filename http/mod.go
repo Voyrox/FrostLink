@@ -15,6 +15,7 @@ import (
 	"time"
 
 	filepkg "SparkProxy/file"
+	firewallpkg "SparkProxy/firewall"
 	logger "SparkProxy/logger"
 	sslpkg "SparkProxy/ssl"
 
@@ -258,6 +259,33 @@ func logRequestStats(cfg filepkg.Config, r *stdhttp.Request, bytesIn, bytesOut i
 	}
 }
 
+func logBlockedRequest(host, ip, country string, r *stdhttp.Request, reason string) {
+	if reason == "" {
+		reason = "blocked"
+	}
+	logsMu.Lock()
+	const maxRequestLogs = 1000
+	if len(requestLogs) >= maxRequestLogs {
+		requestLogs = requestLogs[1:]
+	}
+	requestLogs = append(requestLogs, RequestLog{
+		Timestamp: time.Now(),
+		Action:    reason,
+		IP:        ip,
+		Country:   country,
+		Host:      host,
+		Path:      r.URL.Path,
+		Method:    r.Method,
+	})
+	logsMu.Unlock()
+
+	debugLog := os.Getenv("DEBUG")
+	if debugLog == "true" {
+		logger.SystemLog("info", "proxy-firewall-block",
+			fmt.Sprintf("host=%s ip=%s country=%s path=%s reason=%s", host, ip, country, r.URL.Path, reason))
+	}
+}
+
 func GetDomainStats() []DomainStats {
 	statsMu.Lock()
 	defer statsMu.Unlock()
@@ -285,6 +313,15 @@ func StartProxy(configs []filepkg.Config) error {
 
 	mux := stdhttp.NewServeMux()
 	mux.HandleFunc("/", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		ip := clientIP(r)
+		country := lookupCountry(ip)
+		if firewallpkg.IsBlocked(ip, country) {
+			logBlockedRequest(r.Host, ip, country, r, "firewall-block")
+			w.WriteHeader(stdhttp.StatusForbidden)
+			_, _ = w.Write([]byte("Access blocked by firewall"))
+			return
+		}
+
 		if strings.HasPrefix(r.URL.Path, "/_auth/") {
 			handleAuthRoutes(w, r)
 			return

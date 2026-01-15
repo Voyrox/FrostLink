@@ -85,3 +85,49 @@
 .dual-value {
     font-size: 1.2rem
 }
+
+.firewall-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+@media (max-width: 900px) {
+    .firewall-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.firewall-column h2 {
+    margin: 0 0 6px;
+}
+
+.firewall-column form label {
+    display: block;
+    margin: 8px 0;
+}
+
+.firewall-column input[type="text"],
+.firewall-column input[type="file"] {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0f1118;
+    color: var(--text);
+}
+
+.firewall-current {
+    margin-top: 8px;
+}
+
+.firewall-list {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.firewall-list li.muted {
+    color: var(--muted);
+}

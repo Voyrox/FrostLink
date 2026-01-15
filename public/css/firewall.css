@@ -1,0 +1,107 @@
+.page-firewall .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+}
+
+.page-firewall .content {
+    padding: 24px;
+}
+
+.page-firewall .page-header h1 {
+    margin: 0 0 6px;
+}
+
+.page-firewall .page-header .subtitle {
+    margin: 0 0 16px;
+}
+
+.page-firewall .panel {
+    position: relative;
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+.page-firewall .panel::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    right: 20px;
+    height: 20px;
+    background: radial-gradient(200px 20px at 50% 0%, rgba(34, 211, 238, .12), transparent 70%);
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+}
+
+.page-firewall .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.page-firewall .toolbar .left,
+.page-firewall .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-firewall .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease;
+}
+
+.page-firewall .btn:hover {
+    background: #121a28;
+    border-color: #1f2937;
+}
+
+.page-firewall .btn:active {
+    transform: translateY(1px);
+}
+
+.page-firewall .btn.ghost {
+    background: transparent;
+}
+
+.page-firewall .btn.small {
+    padding: 8px 10px;
+    font-size: .9rem;
+    border-radius: 8px;
+}
+
+.page-firewall .btn .icon {
+    display: inline-flex;
+    color: var(--muted);
+}
+
+.page-firewall .btn .icon.orange {
+    color: var(--orange);
+}
+
+.page-firewall .hint {
+    margin: 6px 0 0;
+    font-size: .8rem;
+    color: var(--muted);
+}
+
+.page-firewall .table-wrap {
+    overflow: visible;
+}
