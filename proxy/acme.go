@@ -100,14 +100,23 @@ func NewACMEClient(email string, dataPath string, useStaging bool) (*ACMEClient,
 	}, nil
 }
 
-func (c *ACMEClient) SetCloudflareProvider(apiToken string) error {
+func (c *ACMEClient) SetCloudflareProvider(apiToken string, apiEmail string, apiKey string) error {
 	config := cloudflare.NewDefaultConfig()
-	config.AuthToken = apiToken
+
+	if apiEmail != "" && apiKey != "" {
+		config.AuthEmail = apiEmail
+		config.AuthKey = apiKey
+	} else if apiToken != "" {
+		config.AuthToken = apiToken
+	} else {
+		return fmt.Errorf("cloudflare credentials required: either API token or API key+email")
+	}
 
 	provider, err := cloudflare.NewDNSProviderConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create cloudflare provider: %w", err)
 	}
+
 	err = c.client.Challenge.SetDNS01Provider(provider)
 	if err != nil {
 		return fmt.Errorf("failed to set DNS provider: %w", err)

@@ -1371,7 +1371,14 @@ func apiCertsRequest(c *gin.Context) {
 		apiToken = os.Getenv("CLOUDFLARE_API_TOKEN")
 	}
 	if apiToken == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cloudflare API token required (set CLOUDFLARE_API_TOKEN or provide in request)"})
+		apiToken = os.Getenv("CLOUDFLARE_DNS_API_TOKEN")
+	}
+
+	apiKey := os.Getenv("CLOUDFLARE_API_KEY")
+	apiEmail := os.Getenv("CLOUDFLARE_API_EMAIL")
+
+	if apiToken == "" && (apiKey == "" || apiEmail == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cloudflare credentials required: set CLOUDFLARE_API_TOKEN or CLOUDFLARE_API_KEY+CLOUDFLARE_API_EMAIL"})
 		return
 	}
 
@@ -1381,7 +1388,7 @@ func apiCertsRequest(c *gin.Context) {
 		return
 	}
 
-	if err := acmeClient.SetCloudflareProvider(apiToken); err != nil {
+	if err := acmeClient.SetCloudflareProvider(apiToken, apiEmail, apiKey); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to set DNS provider: %v", err)})
 		return
 	}
@@ -1389,9 +1396,14 @@ func apiCertsRequest(c *gin.Context) {
 	cert, err := acmeClient.ObtainCertificate(req.Domain)
 	if err != nil {
 		ui.SystemLog("error", "certs", fmt.Sprintf("Failed to obtain certificate for %s: %v", req.Domain, err))
+		errMsg := err.Error()
+		hint := ""
+		if strings.Contains(errMsg, "zone could not be found") {
+			hint = "Your Cloudflare API token cannot access this domain. Use a Global API Key (set CLOUDFLARE_API_KEY + CLOUDFLARE_API_EMAIL) or create a token with Zone:Read and DNS:Edit permissions for " + req.Domain
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to obtain certificate: %v", err),
-			"hint":  "Check that your Cloudflare API token has DNS:Edit permission for this zone and the domain is in your Cloudflare account"})
+			"hint":  hint})
 		return
 	}
 
@@ -1420,8 +1432,11 @@ func apiCertsRenew(c *gin.Context) {
 	}
 
 	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	if apiToken == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "CLOUDFLARE_API_TOKEN environment variable not set"})
+	apiKey := os.Getenv("CLOUDFLARE_API_KEY")
+	apiEmail := os.Getenv("CLOUDFLARE_API_EMAIL")
+
+	if apiToken == "" && (apiKey == "" || apiEmail == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cloudflare credentials required: set CLOUDFLARE_API_TOKEN or CLOUDFLARE_API_KEY+CLOUDFLARE_API_EMAIL"})
 		return
 	}
 
@@ -1431,7 +1446,7 @@ func apiCertsRenew(c *gin.Context) {
 		return
 	}
 
-	if err := acmeClient.SetCloudflareProvider(apiToken); err != nil {
+	if err := acmeClient.SetCloudflareProvider(apiToken, apiEmail, apiKey); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to set DNS provider: %v", err)})
 		return
 	}
