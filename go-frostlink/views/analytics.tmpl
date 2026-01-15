@@ -5,6 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/x-icon" href="/img/logo.ico">
   <title>FrostLink • Request Analytics</title>
   <link rel="stylesheet" href="/css/global.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
@@ -24,11 +25,11 @@
       <section class="panel stats" aria-label="Totals">
         <div class="stat">
           <div class="stat-title">Total requests</div>
-          <div class="stat-value">1,284,421</div>
+          <div class="stat-value">0</div>
         </div>
         <div class="stat">
           <div class="stat-title">Requests blocked by FrostLink</div>
-          <div class="stat-value">83,240 <span class="muted">(6.48%)</span></div>
+          <div class="stat-value">0 <span class="muted">(0.00%)</span></div>
         </div>
       </section>
 
@@ -836,70 +837,74 @@
 
       // Line chart - req by day
       const c = document.getElementById('byDayChart');
-      if (c) {
-        const data = [120, 160, 140, 200, 250, 220, 300, 280];
-        const labels = Array.from({ length: 8 }, (_, i) => `D${i + 1}`);
-        function draw() {
-          const dpr = window.devicePixelRatio || 1;
-          const displayW = c.parentElement ? c.parentElement.clientWidth : 900;
-          const displayH = 300;
-          c.style.width = '100%';
-          c.style.height = displayH + 'px';
-          c.width = Math.floor(displayW * dpr);
-          c.height = Math.floor(displayH * dpr);
-          const ctx = c.getContext('2d');
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.scale(dpr, dpr);
+      const totalRequestsEl = document.querySelector('.panel.stats .stat:nth-child(1) .stat-value');
+      const blockedRequestsEl = document.querySelector('.panel.stats .stat:nth-child(2) .stat-value');
 
-          const width = displayW;
-          const height = displayH;
-          const padding = { t: 20, r: 24, b: 28, l: 36 };
-          const areaW = width - padding.l - padding.r;
-          const areaH = height - padding.t - padding.b;
-          const max = Math.max(...data) * 1.1;
+      function formatNumber(n) {
+        if (typeof n !== 'number' || !isFinite(n)) return '0';
+        return n.toLocaleString();
+      }
 
-          ctx.clearRect(0, 0, width, height);
-          // axes
-          ctx.strokeStyle = '#1b2230';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(padding.l, height - padding.b);
-          ctx.lineTo(width - padding.r, height - padding.b);
-          ctx.moveTo(padding.l, padding.t);
-          ctx.lineTo(padding.l, height - padding.b);
-          ctx.stroke();
+      function drawByDayChart(canvas, labels, data) {
+        if (!canvas || !labels || !data || labels.length === 0 || data.length === 0) return;
 
-          // labels
-          ctx.fillStyle = '#a4acb9';
-          ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-          for (let i = 0; i < labels.length; i++) {
-            const x = padding.l + (i / (labels.length - 1)) * areaW;
-            ctx.fillText(labels[i], x - 8, height - padding.b + 18);
-          }
+        const dpr = window.devicePixelRatio || 1;
+        const displayW = canvas.parentElement ? canvas.parentElement.clientWidth : 900;
+        const displayH = 300;
+        canvas.style.width = '100%';
+        canvas.style.height = displayH + 'px';
+        canvas.width = Math.floor(displayW * dpr);
+        canvas.height = Math.floor(displayH * dpr);
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
 
-          // line
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = '#22d3ee';
-          ctx.beginPath();
-          for (let i = 0; i < labels.length; i++) {
-            const x = padding.l + (i / (labels.length - 1)) * areaW;
-            const y = padding.t + (1 - data[i] / max) * areaH;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
+        const width = displayW;
+        const height = displayH;
+        const padding = { t: 20, r: 24, b: 28, l: 36 };
+        const areaW = width - padding.l - padding.r;
+        const areaH = height - padding.t - padding.b;
+        const max = Math.max(...data, 1) * 1.1;
 
-          // fill
-          const grad = ctx.createLinearGradient(0, padding.t, 0, height - padding.b);
-          grad.addColorStop(0, 'rgba(34,211,238,.25)');
-          grad.addColorStop(1, 'rgba(34,211,238,0)');
-          ctx.lineTo(width - padding.r, height - padding.b);
-          ctx.lineTo(padding.l, height - padding.b);
-          ctx.closePath();
-          ctx.fillStyle = grad;
-          ctx.fill();
+        ctx.clearRect(0, 0, width, height);
+        // axes
+        ctx.strokeStyle = '#1b2230';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.l, height - padding.b);
+        ctx.lineTo(width - padding.r, height - padding.b);
+        ctx.moveTo(padding.l, padding.t);
+        ctx.lineTo(padding.l, height - padding.b);
+        ctx.stroke();
+
+        // labels
+        ctx.fillStyle = '#a4acb9';
+        ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+        for (let i = 0; i < labels.length; i++) {
+          const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
+          ctx.fillText(labels[i], x - 12, height - padding.b + 18);
         }
-        window.addEventListener('resize', draw);
-        draw();
+
+        // line
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#22d3ee';
+        ctx.beginPath();
+        for (let i = 0; i < labels.length; i++) {
+          const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
+          const y = padding.t + (1 - data[i] / max) * areaH;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // fill
+        const grad = ctx.createLinearGradient(0, padding.t, 0, height - padding.b);
+        grad.addColorStop(0, 'rgba(34,211,238,.25)');
+        grad.addColorStop(1, 'rgba(34,211,238,0)');
+        ctx.lineTo(width - padding.r, height - padding.b);
+        ctx.lineTo(padding.l, height - padding.b);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
       }
 
       const map = document.querySelector('.map-wrap');
@@ -927,32 +932,184 @@
         });
       }
 
-      (function () {
-        const titleEl = document.getElementById('top-countries-title');
-        if (!titleEl) return;
-        const panel = titleEl.closest('.panel');
+      const countryNameToCode = {
+        'United States': 'US',
+        'India': 'IN',
+        'United Kingdom': 'GB',
+        'Germany': 'DE',
+        'Brazil': 'BR',
+        'Australia': 'AU',
+        'France': 'FR',
+        'Canada': 'CA',
+        'Japan': 'JP',
+        'China': 'CN',
+        'Netherlands': 'NL',
+        'Spain': 'ES',
+        'Italy': 'IT',
+        'Sweden': 'SE',
+        'Norway': 'NO',
+        'Denmark': 'DK',
+        'Finland': 'FI',
+        'Poland': 'PL',
+        'Mexico': 'MX'
+      };
+
+      function codeToFlag(code) {
+        if (!code) return '🏳️';
+        return code.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+      }
+
+      function decorateCountryFlags(panel) {
         if (!panel) return;
         const rows = panel.querySelectorAll('.table tbody tr');
         if (!rows || rows.length === 0) return;
-        const nameToCode = {
-          'United States': 'US', 'India': 'IN', 'United Kingdom': 'GB', 'Germany': 'DE', 'Brazil': 'BR', 'Australia': 'AU', 'France': 'FR', 'Canada': 'CA', 'Japan': 'JP', 'China': 'CN', 'Netherlands': 'NL', 'Spain': 'ES', 'Italy': 'IT', 'Sweden': 'SE', 'Norway': 'NO', 'Denmark': 'DK', 'Finland': 'FI', 'Poland': 'PL', 'Mexico': 'MX'
-        };
-        function codeToFlag(code) {
-          if (!code) return '🏳️';
-          return code.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
-        }
         rows.forEach(tr => {
           const td = tr.querySelector('td');
           if (!td) return;
           if (td.querySelector('.flag')) return;
           const name = td.textContent.trim();
-          const flag = codeToFlag(nameToCode[name]);
+          const code = countryNameToCode[name] || name;
+          const flag = codeToFlag(code);
           const span = document.createElement('span');
           span.className = 'flag';
           span.textContent = flag + ' ';
           td.prepend(span);
         });
-      })();
+      }
+
+      function updateTopCountries(logs) {
+        const titleEl = document.getElementById('top-countries-title');
+        if (!titleEl) return;
+        const panel = titleEl.closest('.panel');
+        if (!panel) return;
+        const tbody = panel.querySelector('.table tbody');
+        if (!tbody) return;
+
+        const counts = {};
+        let total = 0;
+        (logs || []).forEach(entry => {
+          const locRaw = (entry && entry.location) ? String(entry.location).trim() : '';
+          if (!locRaw) return;
+          const key = locRaw.toUpperCase();
+          counts[key] = (counts[key] || 0) + 1;
+          total++;
+        });
+
+        const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        tbody.innerHTML = '';
+
+        entries.forEach(([countryKey, count]) => {
+          const countryLabel = countryKey;
+          const pct = total > 0 ? (count * 100) / total : 0;
+          const tr = document.createElement('tr');
+          const tdCountry = document.createElement('td');
+          const tdTotal = document.createElement('td');
+          const tdPct = document.createElement('td');
+          tdTotal.className = 'num';
+          tdPct.className = 'num';
+          tdCountry.textContent = countryLabel;
+          tdTotal.textContent = formatNumber(count);
+          tdPct.textContent = pct.toFixed(1) + '%';
+          tr.appendChild(tdCountry);
+          tr.appendChild(tdTotal);
+          tr.appendChild(tdPct);
+          tbody.appendChild(tr);
+        });
+
+        // Update map marker counts if present
+        if (map) {
+          const circles = map.querySelectorAll('svg.world .markers circle');
+          circles.forEach(circle => {
+            const countryName = circle.getAttribute('data-country');
+            if (!countryName) return;
+            const mappedCode = countryNameToCode[countryName] || countryName;
+            const keyCandidates = [
+              String(mappedCode).toUpperCase(),
+              countryName.toUpperCase()
+            ];
+            let countVal = 0;
+            for (const k of keyCandidates) {
+              if (counts[k]) {
+                countVal = counts[k];
+                break;
+              }
+            }
+            circle.setAttribute('data-count', countVal ? String(countVal) : '0');
+          });
+        }
+
+        decorateCountryFlags(panel);
+      }
+
+      async function refreshAnalytics() {
+        try {
+          const [proxysResp, logsResp] = await Promise.all([
+            fetch('/api/proxys').then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch('/api/logs').then(r => r.ok ? r.json() : { logs: [] }).catch(() => ({ logs: [] }))
+          ]);
+
+          const configs = proxysResp && Array.isArray(proxysResp.configs) ? proxysResp.configs : [];
+          const logs = Array.isArray(logsResp.logs) ? logsResp.logs : [];
+
+          // Totals
+          let totalRequests = 0;
+          configs.forEach(cfg => {
+            const v = Number(cfg.total_requests || cfg.totalRequests || 0);
+            if (!isNaN(v)) totalRequests += v;
+          });
+
+          let blockedRequests = 0;
+          logs.forEach(entry => {
+            const action = (entry && entry.action ? String(entry.action) : '').toLowerCase();
+            if (action && action !== 'allow') blockedRequests++;
+          });
+
+          if (totalRequestsEl) {
+            totalRequestsEl.textContent = formatNumber(totalRequests);
+          }
+          if (blockedRequestsEl) {
+            const pct = totalRequests > 0 ? (blockedRequests * 100) / totalRequests : 0;
+            blockedRequestsEl.innerHTML = `${formatNumber(blockedRequests)} <span class="muted">(${pct.toFixed(2)}%)</span>`;
+          }
+
+          // Requests by day chart (last 8 days)
+          if (c && logs.length > 0) {
+            const days = 8;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const dayKeys = [];
+            const labels = [];
+            for (let i = days - 1; i >= 0; i--) {
+              const d = new Date(today);
+              d.setDate(d.getDate() - i);
+              const key = d.toISOString().slice(0, 10);
+              dayKeys.push(key);
+              labels.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+            }
+
+            const countsByDay = {};
+            logs.forEach(entry => {
+              if (!entry || !entry.timestamp) return;
+              const t = String(entry.timestamp).replace(' ', 'T');
+              const d = new Date(t);
+              if (isNaN(d.getTime())) return;
+              const key = d.toISOString().slice(0, 10);
+              countsByDay[key] = (countsByDay[key] || 0) + 1;
+            });
+
+            const data = dayKeys.map(k => countsByDay[k] || 0);
+            drawByDayChart(c, labels, data);
+            window.addEventListener('resize', () => drawByDayChart(c, labels, data));
+          }
+
+          // Top countries
+          updateTopCountries(logs);
+        } catch (e) {
+          // Fail silently for now; analytics just won't update
+        }
+      }
+
+      refreshAnalytics();
     })();
   </script>
 </body>

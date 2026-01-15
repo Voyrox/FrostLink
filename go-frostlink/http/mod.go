@@ -1,18 +1,277 @@
 package http
 
 import (
-	"crypto/tls"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"net"
 	stdhttp "net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	filepkg "frostlink-go/file"
 	logger "frostlink-go/logger"
+	sslpkg "frostlink-go/ssl"
+
+	"github.com/oschwald/geoip2-golang"
 )
+
+type domainStats struct {
+	Domain        string
+	DataInTotal   int64
+	DataOutTotal  int64
+	TotalRequests int64
+	LastIP        string
+	LastCountry   string
+	LastPath      string
+}
+
+type RequestLog struct {
+	Timestamp time.Time
+	Action    string
+	IP        string
+	Country   string
+	Host      string
+	Path      string
+	Method    string
+}
+
+type DomainStats struct {
+	Domain        string `json:"domain"`
+	DataInTotal   int64  `json:"data_in_total"`
+	DataOutTotal  int64  `json:"data_out_total"`
+	TotalRequests int64  `json:"total_requests"`
+	LastIP        string `json:"last_ip"`
+	LastCountry   string `json:"last_country"`
+	LastPath      string `json:"last_path"`
+}
+
+var (
+	statsMu      sync.Mutex
+	domainStatsM = make(map[string]*domainStats)
+	geoDBOnce    sync.Once
+	geoDB        *geoip2.Reader
+
+	cidrOnce sync.Once
+	ipv4CIDR []ipRange
+	ipv6CIDR []ipRange
+
+	logsMu      sync.Mutex
+	requestLogs []RequestLog
+)
+
+type ipRange struct {
+	network *net.IPNet
+	country string
+}
+
+type loggingResponseWriter struct {
+	stdhttp.ResponseWriter
+	bytesWritten int64
+}
+
+func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
+	n, err := lrw.ResponseWriter.Write(b)
+	lrw.bytesWritten += int64(n)
+	return n, err
+}
+
+func clientIP(r *stdhttp.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func initGeoDB() {
+	path := os.Getenv("GEOIP_DB_PATH")
+	if path == "" {
+		return
+	}
+	db, err := geoip2.Open(path)
+	if err != nil {
+		logger.SystemLog("error", "geoip", fmt.Sprintf("Failed to open GeoIP DB %s: %v", path, err))
+		return
+	}
+	geoDB = db
+}
+
+func lookupCountry(ip string) string {
+	netIP := net.ParseIP(ip)
+	if netIP == nil {
+		return "UNKNOWN"
+	}
+
+	if country := lookupCountryGeoIP(netIP); country != "" {
+		return country
+	}
+	if country := lookupCountryCIDR(netIP); country != "" {
+		return country
+	}
+	return "UNKNOWN"
+}
+
+func lookupCountryGeoIP(netIP net.IP) string {
+	geoDBOnce.Do(initGeoDB)
+	if geoDB == nil {
+		return ""
+	}
+	rec, err := geoDB.Country(netIP)
+	if err != nil || rec == nil {
+		return ""
+	}
+	if rec.Country.IsoCode != "" {
+		return rec.Country.IsoCode
+	}
+	if name, ok := rec.Country.Names["en"]; ok && name != "" {
+		return name
+	}
+	return ""
+}
+
+func initCIDRDB() {
+	loadCIDRFile("./db/IPV4.CIDR.CSV", true)
+	loadCIDRFile("./db/IPV6.CIDR.CSV", false)
+}
+
+func loadCIDRFile(path string, isIPv4 bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		logger.SystemLog("error", "cidrdb", fmt.Sprintf("Failed to open CIDR DB %s: %v", path, err))
+		return
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			logger.SystemLog("error", "cidrdb", fmt.Sprintf("Error reading CIDR DB %s: %v", path, err))
+			break
+		}
+		if len(rec) < 2 {
+			continue
+		}
+		cidr := rec[0]
+		country := rec[1]
+		_, network, err := net.ParseCIDR(strings.TrimSpace(strings.Trim(cidr, "\"")))
+		if err != nil {
+			continue
+		}
+		ir := ipRange{network: network, country: strings.TrimSpace(strings.Trim(country, "\""))}
+		if isIPv4 {
+			ipv4CIDR = append(ipv4CIDR, ir)
+		} else {
+			ipv6CIDR = append(ipv6CIDR, ir)
+		}
+	}
+}
+
+func lookupCountryCIDR(netIP net.IP) string {
+	cidrOnce.Do(initCIDRDB)
+	if len(ipv4CIDR) == 0 && len(ipv6CIDR) == 0 {
+		return ""
+	}
+	isIPv4 := netIP.To4() != nil
+	if isIPv4 {
+		for _, r := range ipv4CIDR {
+			if r.network.Contains(netIP) && r.country != "" {
+				return r.country
+			}
+		}
+	} else {
+		for _, r := range ipv6CIDR {
+			if r.network.Contains(netIP) && r.country != "" {
+				return r.country
+			}
+		}
+	}
+	return ""
+}
+
+func logRequestStats(cfg filepkg.Config, r *stdhttp.Request, bytesIn, bytesOut int64) {
+	ip := clientIP(r)
+	country := lookupCountry(ip)
+	domain := cfg.Domain
+	path := r.URL.Path
+	proto := "http"
+	if r.TLS != nil {
+		proto = "https"
+	}
+
+	statsMu.Lock()
+	ds, ok := domainStatsM[domain]
+	if !ok {
+		ds = &domainStats{Domain: domain}
+		domainStatsM[domain] = ds
+	}
+	ds.DataInTotal += bytesIn
+	ds.DataOutTotal += bytesOut
+	ds.TotalRequests++
+	ds.LastIP = ip
+	ds.LastCountry = country
+	ds.LastPath = path
+	currentTotal := ds.TotalRequests
+	totalIn := ds.DataInTotal
+	totalOut := ds.DataOutTotal
+	statsMu.Unlock()
+
+	logsMu.Lock()
+	const maxRequestLogs = 1000
+	if len(requestLogs) >= maxRequestLogs {
+		requestLogs = requestLogs[1:]
+	}
+	requestLogs = append(requestLogs, RequestLog{
+		Timestamp: time.Now(),
+		Action:    "Allow",
+		IP:        ip,
+		Country:   country,
+		Host:      domain,
+		Path:      path,
+		Method:    r.Method,
+	})
+	logsMu.Unlock()
+
+	debugLog := os.Getenv("DEBUG")
+	if debugLog == "true" {
+		logger.SystemLog("info", "proxy-request",
+			fmt.Sprintf("proto=%s domain=%s ip=%s country=%s path=%s data_in=%d data_out=%d total_requests=%d total_in=%d total_out=%d",
+				proto, domain, ip, country, path, bytesIn, bytesOut, currentTotal, totalIn, totalOut))
+	}
+}
+
+func GetDomainStats() []DomainStats {
+	statsMu.Lock()
+	defer statsMu.Unlock()
+
+	res := make([]DomainStats, 0, len(domainStatsM))
+	for _, ds := range domainStatsM {
+		res = append(res, DomainStats{
+			Domain:        ds.Domain,
+			DataInTotal:   ds.DataInTotal,
+			DataOutTotal:  ds.DataOutTotal,
+			TotalRequests: ds.TotalRequests,
+			LastIP:        ds.LastIP,
+			LastCountry:   ds.LastCountry,
+			LastPath:      ds.LastPath,
+		})
+	}
+	return res
+}
 
 func StartProxy(configs []filepkg.Config) error {
 	addr := os.Getenv("PROXY_ADDR")
@@ -55,6 +314,12 @@ func StartProxy(configs []filepkg.Config) error {
 			proto = "https"
 		}
 
+		lrw := &loggingResponseWriter{ResponseWriter: w}
+		var bytesIn int64
+		if r.ContentLength > 0 {
+			bytesIn = r.ContentLength
+		}
+
 		proxy.Director = func(req *stdhttp.Request) {
 			req.URL.Scheme = targetURL.Scheme
 			req.URL.Host = targetURL.Host
@@ -66,11 +331,12 @@ func StartProxy(configs []filepkg.Config) error {
 			_, _ = w.Write([]byte("Proxy error: " + e.Error()))
 		}
 
-		proxy.ServeHTTP(w, r)
+		proxy.ServeHTTP(lrw, r)
+		logRequestStats(cfg, r, bytesIn, lrw.bytesWritten)
 	})
 
 	logger.SystemLog("info", "http-proxy", fmt.Sprintf("Listening on %s", addr))
-	go startTLSProxyIfAvailable(configs, mux)
+	go sslpkg.StartTLSProxy(configs, mux)
 	return stdhttp.ListenAndServe(addr, mux)
 }
 
@@ -87,61 +353,12 @@ func findConfigByHost(configs []filepkg.Config, host string) (filepkg.Config, bo
 	return filepkg.Config{}, false
 }
 
-func startTLSProxyIfAvailable(configs []filepkg.Config, handler stdhttp.Handler) {
-	certMap := make(map[string]*tls.Certificate)
-	for _, c := range configs {
-		if !c.AllowSSL {
-			continue
-		}
-		if c.SSLCertificate == nil || c.SSLCertificateKey == nil {
-			continue
-		}
-		pub := strings.TrimSpace(*c.SSLCertificate)
-		priv := strings.TrimSpace(*c.SSLCertificateKey)
-		if pub == "" || priv == "" {
-			continue
-		}
-		cert, err := tls.LoadX509KeyPair(pub, priv)
-		if err != nil {
-			logger.SystemLog("error", "tls-cert", fmt.Sprintf("Failed to load cert for %s: %v", c.Domain, err))
-			continue
-		}
-		certMap[c.Domain] = &cert
-	}
+// GetRequestLogs returns a snapshot of recent request logs for the API.
+func GetRequestLogs() []RequestLog {
+	logsMu.Lock()
+	defer logsMu.Unlock()
 
-	if len(certMap) == 0 {
-		return
-	}
-
-	tlsAddr := os.Getenv("PROXY_TLS_ADDR")
-	if tlsAddr == "" {
-		tlsAddr = ":8443"
-	}
-
-	getCert := func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		if chi == nil {
-			return nil, fmt.Errorf("no client hello info")
-		}
-		name := chi.ServerName
-		if cert, ok := certMap[name]; ok {
-			return cert, nil
-		}
-		return nil, fmt.Errorf("no certificate for %s", name)
-	}
-
-	tlsCfg := &tls.Config{GetCertificate: getCert}
-	ln, err := net.Listen("tcp", tlsAddr)
-	if err != nil {
-		logger.SystemLog("error", "tls-listen", fmt.Sprintf("TLS listen error on %s: %v", tlsAddr, err))
-		return
-	}
-	tlsLn := tls.NewListener(ln, tlsCfg)
-	srv := &stdhttp.Server{Handler: handler}
-
-	go func() {
-		logger.SystemLog("info", "https-proxy", fmt.Sprintf("Listening on %s", tlsAddr))
-		if err := srv.Serve(tlsLn); err != nil && err != stdhttp.ErrServerClosed {
-			logger.SystemLog("error", "https-proxy", fmt.Sprintf("Server error: %v", err))
-		}
-	}()
+	out := make([]RequestLog, len(requestLogs))
+	copy(out, requestLogs)
+	return out
 }

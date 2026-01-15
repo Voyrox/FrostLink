@@ -1,3 +1,6 @@
 curl -H "Host: dev.ewenmacculloch.com" http://localhost:8081/
+curl -vk --resolve dev.ewenmacculloch.com:8443:127.0.0.1 https://dev.ewenmacculloch.com:8443/
 
 ./.venv/bin/python test.py
+
+https://lite.ip2location.com/database-download

@@ -5,6 +5,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/x-icon" href="/img/logo.ico">
     <title>FrostLink • Request Logs</title>
     <link rel="stylesheet" href="/css/global.css" />
     <link rel="stylesheet" href="/css/sidebar.css" />
@@ -69,33 +70,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>2026-01-14 13:54:22</td>
-                                <td>Allow</td>
-                                <td>203.0.113.45</td>
-                                <td>London, UK</td>
-                                <td>api.example.com</td>
-                                <td>/v1/users</td>
-                                <td>GET</td>
-                            </tr>
-                            <tr>
-                                <td>2026-01-14 13:53:10</td>
-                                <td>Block</td>
-                                <td>198.51.100.22</td>
-                                <td>Berlin, DE</td>
-                                <td>dashboard.example.com</td>
-                                <td>/admin/login</td>
-                                <td>POST</td>
-                            </tr>
-                            <tr>
-                                <td>2026-01-14 13:52:47</td>
-                                <td>Allow</td>
-                                <td>192.0.2.13</td>
-                                <td>Toronto, CA</td>
-                                <td>files.example.com</td>
-                                <td>/assets/logo.png</td>
-                                <td>GET</td>
-                            </tr>
+                            <!-- Live logs will be populated from /api/logs -->
                         </tbody>
                     </table>
                 </div>
@@ -151,6 +126,67 @@
             function showFallback() { if (img) { img.style.display = 'none'; } if (fallback) { fallback.style.display = 'grid'; } }
             if (!img || !img.getAttribute('src')) { showFallback(); }
             else { img.addEventListener('error', showFallback); }
+        })();
+
+        // Load live request logs from /api/logs and populate the table
+        (function () {
+            const tableBody = document.querySelector('.table tbody');
+            if (!tableBody) return;
+
+            function render() {
+                fetch('/api/logs')
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        const logs = (data && data.logs) || [];
+                        tableBody.innerHTML = '';
+                        logs.forEach(entry => {
+                            const tr = document.createElement('tr');
+
+                            const tdTs = document.createElement('td');
+                            tdTs.textContent = entry.timestamp || '';
+
+                            const tdAction = document.createElement('td');
+                            tdAction.textContent = entry.action || '';
+
+                            const tdIP = document.createElement('td');
+                            tdIP.textContent = entry.ip || '';
+
+                            const tdLoc = document.createElement('td');
+                            tdLoc.textContent = entry.location || '';
+
+                            const tdHost = document.createElement('td');
+                            tdHost.textContent = entry.host || '';
+
+                            const tdPath = document.createElement('td');
+                            tdPath.textContent = entry.path || '';
+
+                            const tdMethod = document.createElement('td');
+                            tdMethod.textContent = entry.method || '';
+
+                            tr.appendChild(tdTs);
+                            tr.appendChild(tdAction);
+                            tr.appendChild(tdIP);
+                            tr.appendChild(tdLoc);
+                            tr.appendChild(tdHost);
+                            tr.appendChild(tdPath);
+                            tr.appendChild(tdMethod);
+
+                            tableBody.appendChild(tr);
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Failed to load /api/logs', err);
+                    });
+            }
+
+            render();
+
+            const refreshBtn = document.querySelector('.toolbar .btn.ghost');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function () {
+                    render();
+                });
+            }
         })();
     </script>
 </body>

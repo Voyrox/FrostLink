@@ -74,6 +74,8 @@ func main() {
 	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
 	r.Static("/css", "./public/css")
+	r.Static("/js", "./public/js")
+	r.Static("/img", "./public/img")
 	r.Static("/public", "./public")
 
 	r.GET("/", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
@@ -84,8 +86,12 @@ func main() {
 	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{}) })
 	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{}) })
 	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{}) })
+	r.NoRoute(func(c *gin.Context) {
+		c.HTML(http.StatusNotFound, "404", gin.H{})
+	})
 	r.POST("/api/login", apiLogin)
 	r.GET("/api/proxys", apiProxys)
+	r.GET("/api/logs", apiLogs)
 
 	go func() {
 		cfgs := filepkg.ReadConfigs("./domains")
@@ -131,7 +137,11 @@ func apiLogin(c *gin.Context) {
 
 func apiProxys(c *gin.Context) {
 	configs := filepkg.ReadConfigs("./domains")
-	stats := make(map[string]ProxyDomainStats)
+	statSlice := proxyhttp.GetDomainStats()
+	stats := make(map[string]proxyhttp.DomainStats)
+	for _, s := range statSlice {
+		stats[s.Domain] = s
+	}
 
 	var cfgsOut []map[string]interface{}
 	for _, cfg := range configs {
@@ -144,20 +154,38 @@ func apiProxys(c *gin.Context) {
 			"privkey": cfg.SSLCertificateKey,
 		}
 		if ps, ok := stats[cfg.Domain]; ok {
-			m["total_connections"] = ps.TotalConnections
-			m["last_active"] = ps.LastActive
-			m["total_request"] = ps.TotalRequest
-			m["total_response"] = ps.TotalResponse
-			m["log"] = ps.Log
+			m["data_in_total"] = ps.DataInTotal
+			m["data_out_total"] = ps.DataOutTotal
+			m["total_requests"] = ps.TotalRequests
+			m["last_ip"] = ps.LastIP
+			m["last_country"] = ps.LastCountry
+			m["last_path"] = ps.LastPath
 		} else {
-			m["total_connections"] = 0
-			m["total_request"] = 0
-			m["total_response"] = 0
+			m["data_in_total"] = 0
+			m["data_out_total"] = 0
+			m["total_requests"] = 0
 		}
 		cfgsOut = append(cfgsOut, m)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"configs": cfgsOut})
+}
+
+func apiLogs(c *gin.Context) {
+	logs := proxyhttp.GetRequestLogs()
+	var out []map[string]interface{}
+	for _, l := range logs {
+		out = append(out, map[string]interface{}{
+			"timestamp": l.Timestamp.Format("2006-01-02 15:04:05"),
+			"action":    l.Action,
+			"ip":        l.IP,
+			"location":  l.Country,
+			"host":      l.Host,
+			"path":      l.Path,
+			"method":    l.Method,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"logs": out})
 }
 
 func loginPost(c *gin.Context) {

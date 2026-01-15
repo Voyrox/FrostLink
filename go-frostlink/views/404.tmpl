@@ -1,0 +1,36 @@
+{{ define "404" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>FrostLink – Page not found</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/404.css" />
+</head>
+
+<body class="page-404">
+    <div class="app">
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <section class="notfound" aria-label="Page not found">
+                <div class="notfound-inner">
+                    <h1 id="page-title">Page not found</h1>
+                    <p class="subtitle">The page you were looking for doesn&#39;t exist or may have been moved.</p>
+
+                    <div class="notfound-code" aria-hidden="true">404</div>
+
+                    <div class="notfound-actions">
+                        <a class="btn primary" href="/dashboard">Back to dashboard</a>
+                        <a class="btn ghost" href="/domains">View domains</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>
+{{ end }}

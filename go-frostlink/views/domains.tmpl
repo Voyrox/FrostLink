@@ -5,6 +5,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
     <title>FrostLink • Domains</title>
     <link rel="stylesheet" href="/css/global.css" />
     <link rel="stylesheet" href="/css/sidebar.css" />
@@ -102,36 +103,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>edge1.internal</td>
-                                <td><span class="status online"></span> Online</td>
-                                <td>12.8 GB</td>
-                                <td>7.3 GB</td>
-                                <td class="actions"><button class="btn small" type="button">
-                                        <span class="icon" aria-hidden="true">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"
-                                                    stroke="currentColor" stroke-width="2" />
-                                            </svg>
-                                        </span>
-                                        <span>Edit</span>
-                                    </button></td>
-                            </tr>
-                            <tr>
-                                <td>edge2.internal</td>
-                                <td><span class="status"></span> Offline</td>
-                                <td>0 GB</td>
-                                <td>0 GB</td>
-                                <td class="actions"><button class="btn small" type="button">
-                                        <span class="icon" aria-hidden="true">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"
-                                                    stroke="currentColor" stroke-width="2" />
-                                            </svg>
-                                        </span>
-                                        <span>Edit</span>
-                                    </button></td>
-                            </tr>
+                            <!-- Rows will be populated from /api/proxys -->
                         </tbody>
                     </table>
                 </div>
@@ -193,6 +165,80 @@
             function showFallback() { if (img) { img.style.display = 'none'; } if (fallback) { fallback.style.display = 'grid'; } }
             if (!img || !img.getAttribute('src')) { showFallback(); }
             else { img.addEventListener('error', showFallback); }
+        })();
+
+        // Load live domain stats from /api/proxys and populate the table
+        (function () {
+            const tableBody = document.querySelector('.table tbody');
+            if (!tableBody) return;
+
+            function formatBytes(bytes) {
+                if (!bytes || bytes <= 0) return '0 B';
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                let i = 0;
+                let value = bytes;
+                while (value >= 1024 && i < units.length - 1) {
+                    value /= 1024;
+                    i++;
+                }
+                return value.toFixed(1) + ' ' + units[i];
+            }
+
+            function render() {
+                fetch('/api/proxys')
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        const configs = (data && data.configs) || [];
+                        tableBody.innerHTML = '';
+                        configs.forEach(cfg => {
+                            const tr = document.createElement('tr');
+
+                            const tdName = document.createElement('td');
+                            tdName.textContent = cfg.domain || cfg.host || '';
+
+                            const tdOnline = document.createElement('td');
+                            const statusSpan = document.createElement('span');
+                            const isOnline = !!cfg.HTTP || !!cfg.SSL;
+                            statusSpan.className = 'status' + (isOnline ? ' online' : '');
+                            tdOnline.appendChild(statusSpan);
+                            tdOnline.appendChild(document.createTextNode(' ' + (isOnline ? 'Online' : 'Offline')));
+
+                            const tdIn = document.createElement('td');
+                            tdIn.textContent = formatBytes(cfg.data_in_total || 0);
+
+                            const tdOut = document.createElement('td');
+                            tdOut.textContent = formatBytes(cfg.data_out_total || 0);
+
+                            const tdActions = document.createElement('td');
+                            tdActions.className = 'actions';
+                            const btn = document.createElement('button');
+                            btn.className = 'btn small';
+                            btn.type = 'button';
+                            btn.textContent = 'Details';
+                            tdActions.appendChild(btn);
+
+                            tr.appendChild(tdName);
+                            tr.appendChild(tdOnline);
+                            tr.appendChild(tdIn);
+                            tr.appendChild(tdOut);
+                            tr.appendChild(tdActions);
+
+                            tableBody.appendChild(tr);
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Failed to load /api/proxys', err);
+                    });
+            }
+
+            render();
+
+            const refreshBtn = document.querySelector('.toolbar .btn.ghost');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function () {
+                    render();
+                });
+            }
         })();
     </script>
 </body>

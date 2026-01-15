@@ -7,7 +7,11 @@ require (
 	github.com/google/uuid v1.6.0
 )
 
-require github.com/mattn/go-colorable v0.1.13 // indirect
+require (
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/oschwald/geoip2-golang v1.13.0 // indirect
+	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
+)
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect
