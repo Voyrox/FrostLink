@@ -1,0 +1,31 @@
+{{ define "firewall" }}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • Firewall</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body class="page-firewall">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Firewall</h1>
+                <p class="subtitle">Configure firewall policies and view blocked activity</p>
+            </header>
+
+            <section class="panel" aria-label="Firewall placeholder">
+                <p>This page is ready for firewall rules and metrics. You can extend it to manage IP blocks, rate limits, and other protections.</p>
+            </section>
+        </main>
+    </div>
+</body>
+</html>
+{{ end }}

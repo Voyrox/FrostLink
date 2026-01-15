@@ -1,0 +1,38 @@
+{
+  "roles": [
+    {
+      "name": "Owner",
+      "description": "Full access to all features",
+      "permissions": [
+        "view_dashboard",
+        "view_analytics",
+        "view_logs",
+        "manage_domains",
+        "manage_users",
+        "manage_roles"
+      ],
+      "is_system": true
+    },
+    {
+      "name": "Admin",
+      "description": "Administrative access",
+      "permissions": [
+        "manage_users",
+        "manage_roles",
+        "manage_domains",
+        "view_logs",
+        "view_analytics"
+      ],
+      "is_system": true
+    },
+    {
+      "name": "Member",
+      "description": "Standard user access",
+      "permissions": [
+        "view_dashboard",
+        "view_analytics"
+      ],
+      "is_system": false
+    }
+  ]
+}

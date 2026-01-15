@@ -99,6 +99,7 @@ func main() {
 	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{"ActivePage": "analytics"}) })
 	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{"ActivePage": "logs"}) })
 	r.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{"ActivePage": "users"}) })
+	r.GET("/firewall", func(c *gin.Context) { c.HTML(http.StatusOK, "firewall", gin.H{"ActivePage": "firewall"}) })
 	r.GET("/roles", func(c *gin.Context) { c.HTML(http.StatusOK, "roles", gin.H{"ActivePage": "roles"}) })
 	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
 	r.NoRoute(func(c *gin.Context) {
