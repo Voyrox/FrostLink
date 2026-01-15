@@ -24,9 +24,9 @@
 				</nav>
 			</div>
 
-			<div class="sidebar-card">
+				<div class="sidebar-card">
 				<nav class="nav-group">
-					<div class="group-title">General</div>
+					<div class="group-title">Network</div>
 					<a class="nav-item{{if eq .ActivePage "domains"}} is-active{{end}}" href="/domains">
 						<span class="icon" aria-hidden="true">
 							<svg width="16px" height="16px" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -42,6 +42,14 @@
 							</svg>
 						</span>
 						<span>Domains</span>
+					</a>
+					<a class="nav-item{{if eq .ActivePage "streams"}} is-active{{end}}" href="/streams">
+						<span class="icon" aria-hidden="true">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+								<path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							</svg>
+						</span>
+						<span>Streams</span>
 					</a>
 					<a class="nav-item{{if eq .ActivePage "analytics"}} is-active{{end}}" href="/analytics">
 						<span class="icon" aria-hidden="true">

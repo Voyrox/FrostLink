@@ -13,6 +13,7 @@ import (
 	"SparkProxy/ui"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func isHTTPS(c *gin.Context) bool {
@@ -193,6 +194,7 @@ func main() {
 		dashboard.GET("/sessions", func(c *gin.Context) { c.HTML(http.StatusOK, "sessions", gin.H{"ActivePage": "sessions"}) })
 		dashboard.GET("/audit", func(c *gin.Context) { c.HTML(http.StatusOK, "audit", gin.H{"ActivePage": "audit"}) })
 		dashboard.GET("/api-tokens", func(c *gin.Context) { c.HTML(http.StatusOK, "api-tokens", gin.H{"ActivePage": "api-tokens"}) })
+		dashboard.GET("/streams", func(c *gin.Context) { c.HTML(http.StatusOK, "streams", gin.H{"ActivePage": "streams"}) })
 		dashboard.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
 	}
 
@@ -211,18 +213,25 @@ func main() {
 		apiRead.GET("/roles", apiRolesList)
 		apiRead.GET("/sessions", apiSessionsList)
 		apiRead.GET("/audit", apiAuditList)
+		apiRead.GET("/streams", apiStreamsList)
+		apiRead.GET("/streams/stats", apiStreamsStats)
 	}
 
 	apiWrite := r.Group("/api")
 	apiWrite.Use(apiAuthRequired(), csrfMiddleware())
 	{
-		apiWrite.POST("/firewall/ban-ip", apiFirewallBanIP)
+		apiWrite.POST("/streams", apiStreamsCreate)
+		apiWrite.PUT("/streams/:id", apiStreamsUpdate)
+		apiWrite.DELETE("/streams/:id", apiStreamsDelete)
+		apiWrite.POST("/streams/:id/toggle", apiStreamsToggle)
 		apiWrite.POST("/firewall/ban-ip-upload", apiFirewallBanIPUpload)
 		apiWrite.POST("/firewall/ban-country", apiFirewallBanCountry)
 		apiWrite.DELETE("/firewall/ip/:ip", apiFirewallUnbanIP)
 		apiWrite.DELETE("/firewall/country/:code", apiFirewallUnbanCountry)
 		apiWrite.PUT("/domains/:domain/auth", apiDomainAuthUpdate)
 		apiWrite.POST("/domains", apiDomainsCreate)
+		apiWrite.PUT("/domains/:domain", apiDomainsUpdate)
+		apiWrite.DELETE("/domains/:domain", apiDomainsDelete)
 		apiWrite.POST("/users", apiUsersCreate)
 		apiWrite.DELETE("/api/users/:username", apiUsersDelete)
 		apiWrite.POST("/roles", apiRolesCreate)
@@ -569,6 +578,75 @@ func apiDomainsCreate(c *gin.Context) {
 
 	core.LogAudit("domain_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains", "success", map[string]string{"domain": domain, "target": target})
 	c.JSON(http.StatusOK, gin.H{"domain": cfg.Domain, "host": cfg.Location, "SSL": cfg.AllowSSL, "HTTP": cfg.AllowHTTP})
+}
+
+type updateDomainRequest struct {
+	Target   string `json:"target"`
+	HTTP     bool   `json:"http"`
+	SSL      bool   `json:"ssl"`
+	CertPath string `json:"cert_path"`
+	KeyPath  string `json:"key_path"`
+}
+
+func apiDomainsUpdate(c *gin.Context) {
+	domain := c.Param("domain")
+	if strings.TrimSpace(domain) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+	var req updateDomainRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if strings.TrimSpace(req.Target) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "target is required"})
+		return
+	}
+
+	err := core.UpdateDomain(domain, req.Target, req.SSL, req.HTTP, req.CertPath, req.KeyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+			return
+		}
+		core.LogAudit("domain_update_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains/"+domain, "failed", map[string]string{"reason": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	cfg, _ := core.GetDomainConfig(domain)
+	core.LogAudit("domain_update", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains/"+domain, "success", map[string]string{"domain": domain, "target": req.Target})
+	c.JSON(http.StatusOK, gin.H{
+		"domain":  cfg.Domain,
+		"host":    cfg.Location,
+		"SSL":     cfg.AllowSSL,
+		"HTTP":    cfg.AllowHTTP,
+		"pubkey":  cfg.SSLCertificate,
+		"privkey": cfg.SSLCertificateKey,
+	})
+}
+
+func apiDomainsDelete(c *gin.Context) {
+	domain := c.Param("domain")
+	if strings.TrimSpace(domain) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	err := core.DeleteDomain(domain)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+			return
+		}
+		core.LogAudit("domain_delete_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains/"+domain, "failed", map[string]string{"reason": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	core.LogAudit("domain_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains/"+domain, "success", map[string]string{"domain": domain})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func apiLogs(c *gin.Context) {
@@ -1019,4 +1097,193 @@ func apiTokensRevoke(c *gin.Context) {
 	}
 	core.LogAudit("token_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens/"+id, "success", nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type createStreamRequest struct {
+	Domain   string `json:"domain"`
+	Upstream string `json:"upstream"`
+	Port     int    `json:"port"`
+	TLSMode  string `json:"tls_mode"`
+	CertFile string `json:"cert_file,omitempty"`
+	KeyFile  string `json:"key_file,omitempty"`
+	MaxConns int    `json:"max_conns"`
+	Enabled  bool   `json:"enabled"`
+}
+
+func apiStreamsList(c *gin.Context) {
+	streams := proxy.ListStreams()
+	stats := proxy.GetStreamStats()
+	c.JSON(http.StatusOK, gin.H{"streams": streams, "stats": stats})
+}
+
+func apiStreamsStats(c *gin.Context) {
+	stats := proxy.GetStreamStats()
+	c.JSON(http.StatusOK, gin.H{"stats": stats})
+}
+
+func apiStreamsCreate(c *gin.Context) {
+	var req createStreamRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if req.Domain == "" || req.Upstream == "" || req.Port == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain, upstream, and port are required"})
+		return
+	}
+	tlsMode := strings.ToLower(strings.TrimSpace(req.TLSMode))
+	if tlsMode == "" {
+		tlsMode = "pass-through"
+	}
+	if tlsMode != "pass-through" && tlsMode != "terminate" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tls_mode must be pass-through or terminate"})
+		return
+	}
+	maxConns := req.MaxConns
+	if maxConns <= 0 {
+		maxConns = 100
+	}
+
+	streamCfg := proxy.StreamConfig{
+		ID:       uuid.New().String(),
+		Domain:   strings.ToLower(strings.TrimSpace(req.Domain)),
+		Upstream: fmt.Sprintf("%s:%d", strings.TrimSpace(req.Upstream), req.Port),
+		TLSMode:  tlsMode,
+		CertFile: strings.TrimSpace(req.CertFile),
+		KeyFile:  strings.TrimSpace(req.KeyFile),
+		Enabled:  req.Enabled,
+		MaxConns: maxConns,
+	}
+
+	if err := proxy.CreateStream(streamCfg); err != nil {
+		core.LogAudit("stream_create_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams", "failed", map[string]string{"reason": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create stream"})
+		return
+	}
+
+	core.LogAudit("stream_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams", "success", map[string]string{"domain": streamCfg.Domain})
+	c.JSON(http.StatusOK, gin.H{"stream": streamCfg})
+}
+
+func apiStreamsUpdate(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "stream id is required"})
+		return
+	}
+
+	streams := proxy.ListStreams()
+	var existing *proxy.StreamConfig
+	for i := range streams {
+		if streams[i].ID == id {
+			existing = &streams[i]
+			break
+		}
+	}
+	if existing == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		return
+	}
+
+	var req createStreamRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	tlsMode := strings.ToLower(strings.TrimSpace(req.TLSMode))
+	if tlsMode == "" {
+		tlsMode = existing.TLSMode
+	}
+	maxConns := req.MaxConns
+	if maxConns <= 0 {
+		maxConns = existing.MaxConns
+	}
+
+	streamCfg := *existing
+	streamCfg.Domain = strings.ToLower(strings.TrimSpace(req.Domain))
+	streamCfg.Upstream = fmt.Sprintf("%s:%d", strings.TrimSpace(req.Upstream), req.Port)
+	streamCfg.TLSMode = tlsMode
+	streamCfg.CertFile = strings.TrimSpace(req.CertFile)
+	streamCfg.KeyFile = strings.TrimSpace(req.KeyFile)
+	streamCfg.Enabled = req.Enabled
+	streamCfg.MaxConns = maxConns
+
+	if err := proxy.UpdateStream(id, streamCfg); err != nil {
+		core.LogAudit("stream_update_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "failed", map[string]string{"reason": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update stream"})
+		return
+	}
+
+	core.LogAudit("stream_update", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "success", map[string]string{"domain": streamCfg.Domain})
+	c.JSON(http.StatusOK, gin.H{"stream": streamCfg})
+}
+
+func apiStreamsDelete(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "stream id is required"})
+		return
+	}
+
+	streams := proxy.ListStreams()
+	var domain string
+	for _, s := range streams {
+		if s.ID == id {
+			domain = s.Domain
+			break
+		}
+	}
+
+	if err := proxy.DeleteStream(id); err != nil {
+		core.LogAudit("stream_delete_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "failed", map[string]string{"reason": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete stream"})
+		return
+	}
+
+	core.LogAudit("stream_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "success", map[string]string{"domain": domain})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type toggleStreamRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+func apiStreamsToggle(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "stream id is required"})
+		return
+	}
+
+	var req toggleStreamRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	streams := proxy.ListStreams()
+	var existing *proxy.StreamConfig
+	for i := range streams {
+		if streams[i].ID == id {
+			existing = &streams[i]
+			break
+		}
+	}
+	if existing == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		return
+	}
+
+	streamCfg := *existing
+	streamCfg.Enabled = req.Enabled
+
+	if err := proxy.UpdateStream(id, streamCfg); err != nil {
+		core.LogAudit("stream_toggle_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id+"/toggle", "failed", map[string]string{"reason": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to toggle stream"})
+		return
+	}
+
+	core.LogAudit("stream_toggle", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id+"/toggle", "success", map[string]string{"domain": streamCfg.Domain, "enabled": fmt.Sprintf("%v", req.Enabled)})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "enabled": req.Enabled})
 }
