@@ -139,3 +139,54 @@ func WriteConfig(dir string, cfg Config) error {
 
 	return ioutil.WriteFile(path, []byte(b.String()), 0644)
 }
+
+func GetDomainConfig(domain string) (Config, bool) {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return Config{}, false
+	}
+	path := filepath.Join(".", "domains", domain+".conf")
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return Config{}, false
+	}
+	d, l, ssl, httpOk, pub, priv, ok := ParseConfig(string(b))
+	if !ok {
+		return Config{}, false
+	}
+	return Config{Domain: d, Location: l, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pub, SSLCertificateKey: priv}, true
+}
+
+func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFile, keyFile string) error {
+	cfg, ok := GetDomainConfig(domain)
+	if !ok {
+		return os.ErrNotExist
+	}
+
+	cfg.Location = strings.TrimSpace(target)
+	cfg.AllowSSL = allowSSL
+	cfg.AllowHTTP = allowHTTP
+
+	if certFile != "" {
+		s := strings.TrimSpace(certFile)
+		cfg.SSLCertificate = &s
+	}
+	if keyFile != "" {
+		s := strings.TrimSpace(keyFile)
+		cfg.SSLCertificateKey = &s
+	}
+
+	return WriteConfig(".", cfg)
+}
+
+func DeleteDomain(domain string) error {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return os.ErrInvalid
+	}
+	path := filepath.Join(".", "domains", domain+".conf")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return os.ErrNotExist
+	}
+	return os.Remove(path)
+}
