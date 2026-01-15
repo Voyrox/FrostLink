@@ -60,6 +60,14 @@ type ProxyStatistics struct {
 	Proxies map[string]ProxyDomainStats `json:"proxies"`
 }
 
+type DashboardStats struct {
+	ActiveUsers        int   `json:"active_users"`
+	FirewallBlocked    int   `json:"firewall_blocked"`
+	DDOSBlocked        int   `json:"ddos_blocked"`
+	UploadBytesTotal   int64 `json:"upload_bytes_total"`
+	DownloadBytesTotal int64 `json:"download_bytes_total"`
+}
+
 var (
 	sessions   = map[string]string{}
 	sessionsMu sync.RWMutex
@@ -95,6 +103,7 @@ func main() {
 		c.HTML(http.StatusNotFound, "404", gin.H{})
 	})
 	r.POST("/api/login", apiLogin)
+	r.GET("/api/dashboard", apiDashboard)
 	r.GET("/api/proxys", apiProxys)
 	r.PUT("/api/domains/:domain/auth", apiDomainAuthUpdate)
 	r.POST("/api/domains", apiDomainsCreate)
@@ -224,6 +233,46 @@ func apiProxys(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"configs": cfgsOut})
+}
+
+func apiDashboard(c *gin.Context) {
+	domainStats := proxyhttp.GetDomainStats()
+	var uploadTotal int64
+	var downloadTotal int64
+	for _, ds := range domainStats {
+		uploadTotal += ds.DataOutTotal
+		downloadTotal += ds.DataInTotal
+	}
+
+	logs := proxyhttp.GetRequestLogs()
+	ipSet := make(map[string]struct{})
+	cutoff := time.Now().Add(-30 * time.Second)
+	var firewallBlocked int
+	var ddosBlocked int
+	for _, l := range logs {
+		if l.Timestamp.After(cutoff) {
+			if l.IP != "" {
+				ipSet[l.IP] = struct{}{}
+			}
+		}
+		action := strings.ToLower(strings.TrimSpace(l.Action))
+		if action != "" && action != "allow" {
+			firewallBlocked++
+			if strings.Contains(action, "ddos") {
+				ddosBlocked++
+			}
+		}
+	}
+
+	stats := DashboardStats{
+		ActiveUsers:        len(ipSet),
+		FirewallBlocked:    firewallBlocked,
+		DDOSBlocked:        ddosBlocked,
+		UploadBytesTotal:   uploadTotal,
+		DownloadBytesTotal: downloadTotal,
+	}
+
+	c.JSON(http.StatusOK, stats)
 }
 
 func apiDomainsCreate(c *gin.Context) {

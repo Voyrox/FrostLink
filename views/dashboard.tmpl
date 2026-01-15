@@ -13,6 +13,7 @@
 	<body>
 		<div class="app">
 			{{ template "sidebar" . }}
+			{{ template "notifications" . }}
 
 			<script>
 			(function(){
@@ -40,23 +41,23 @@
 						<div class="stat-header">
 							<div class="stat-title" id="fw-title">Firewall blocked</div>
 						</div>
-						<div class="stat-value">1,024</div>
-						<div class="stat-meta">last 24h</div>
+						<div class="stat-value" id="stat-fw-blocked">0</div>
+						<div class="stat-meta">since startup</div>
 					</article>
 
 					<article class="stat" aria-labelledby="ddos-title">
 						<div class="stat-header">
 							<div class="stat-title" id="ddos-title">DDoS attacks</div>
 						</div>
-						<div class="stat-value">7</div>
-						<div class="stat-meta">mitigated this week</div>
+						<div class="stat-value" id="stat-ddos-blocked">0</div>
+						<div class="stat-meta">since startup</div>
 					</article>
 
 					<article class="stat" aria-labelledby="users-title">
 						<div class="stat-header">
 							<div class="stat-title" id="users-title">Active users</div>
 						</div>
-						<div class="stat-value">238</div>
+						<div class="stat-value" id="stat-active-users">0</div>
 						<div class="stat-meta">currently online</div>
 					</article>
 
@@ -67,18 +68,64 @@
 						<div class="dual">
 							<div>
 								<div class="dual-label">Sent</div>
-								<div class="dual-value">32.4 GB</div>
+								<div class="dual-value" id="stat-data-sent">0 B</div>
 							</div>
 							<div>
 								<div class="dual-label">Retrieved</div>
-								<div class="dual-value">18.7 GB</div>
+								<div class="dual-value" id="stat-data-retrieved">0 B</div>
 							</div>
 						</div>
-						<div class="stat-meta">rolling 30 days</div>
+						<div class="stat-meta">since startup</div>
 					</article>
 				</section>
 			</main>
 		</div>
+		<script>
+		(function(){
+			function formatBytes(bytes) {
+				if (!bytes || bytes <= 0) return '0 B';
+				const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+				let i = 0;
+				let value = bytes;
+				while (value >= 1024 && i < units.length - 1) {
+					value /= 1024;
+					i++;
+				}
+				return value.toFixed(1) + ' ' + units[i];
+			}
+
+			function formatNumber(n) {
+				if (typeof n !== 'number' || !isFinite(n)) return '0';
+				return n.toLocaleString();
+			}
+
+			function refreshDashboardStats(){
+				fetch('/api/dashboard')
+					.then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+					.then(function(data){
+						var fwEl = document.getElementById('stat-fw-blocked');
+						var ddosEl = document.getElementById('stat-ddos-blocked');
+						var usersEl = document.getElementById('stat-active-users');
+						var sentEl = document.getElementById('stat-data-sent');
+						var recvEl = document.getElementById('stat-data-retrieved');
+						if (fwEl) fwEl.textContent = formatNumber(data.firewall_blocked || 0);
+						if (ddosEl) ddosEl.textContent = formatNumber(data.ddos_blocked || 0);
+						if (usersEl) usersEl.textContent = formatNumber(data.active_users || 0);
+						if (sentEl) sentEl.textContent = formatBytes(data.upload_bytes_total || 0);
+						if (recvEl) recvEl.textContent = formatBytes(data.download_bytes_total || 0);
+					})
+					.catch(function(err){
+						console.error('Failed to load /api/dashboard', err);
+						if (typeof showToast === 'function') {
+							showToast('Failed to load dashboard stats');
+						}
+					});
+			}
+
+			refreshDashboardStats();
+			setInterval(refreshDashboardStats, 15000);
+		})();
+		</script>
 	</body>
 </html>
 {{ end }}
