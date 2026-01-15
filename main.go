@@ -1408,6 +1408,10 @@ func apiCertsRequest(c *gin.Context) {
 		return
 	}
 
+	if err := core.UpdateDomainCertPaths(req.Domain, cert.CertPath, cert.KeyPath); err != nil {
+		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to update domain config for %s: %v", req.Domain, err))
+	}
+
 	if err := proxy.ReloadCertificate(req.Domain); err != nil {
 		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to reload certificate for %s: %v", req.Domain, err))
 	}
@@ -1457,6 +1461,10 @@ func apiCertsRenew(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to renew certificate: %v", err)})
 		return
+	}
+
+	if err := core.UpdateDomainCertPaths(domain, cert.CertPath, cert.KeyPath); err != nil {
+		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to update domain config for %s: %v", domain, err))
 	}
 
 	if err := proxy.ReloadCertificate(domain); err != nil {

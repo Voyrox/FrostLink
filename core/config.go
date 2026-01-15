@@ -179,6 +179,24 @@ func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFi
 	return WriteConfig(".", cfg)
 }
 
+func UpdateDomainCertPaths(domain string, certFile, keyFile string) error {
+	cfg, ok := GetDomainConfig(domain)
+	if !ok {
+		return os.ErrNotExist
+	}
+
+	if certFile != "" {
+		s := strings.TrimSpace(certFile)
+		cfg.SSLCertificate = &s
+	}
+	if keyFile != "" {
+		s := strings.TrimSpace(keyFile)
+		cfg.SSLCertificateKey = &s
+	}
+
+	return WriteConfig(".", cfg)
+}
+
 func DeleteDomain(domain string) error {
 	domain = strings.TrimSpace(domain)
 	if domain == "" {

@@ -211,7 +211,7 @@ func (c *ACMEClient) RenewCertificate(domain string) (*ACMECertificate, error) {
 		return nil, fmt.Errorf("failed to save renewed certificate: %w", err)
 	}
 
-	x509Cert, err := x509.ParseCertificate(certs.Certificate)
+	x509Cert, err := parseCertFromPEMOrDER(certs.Certificate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse renewed certificate: %w", err)
 	}
