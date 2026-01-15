@@ -90,14 +90,48 @@
 }
 
 .page-roles .role-form .permissions-checkboxes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
     margin-top: 8px;
-    padding: 10px;
+    padding: 12px;
     background: #0a0e16;
     border-radius: 8px;
     width: 100%;
+}
+
+.page-roles .role-form .permission-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: .85rem;
+    color: var(--text);
+    padding: 10px 12px;
+    background: #141b28;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all .15s ease;
+    min-height: 42px;
+    box-sizing: border-box;
+}
+
+.page-roles .role-form .permission-checkbox:hover {
+    background: #1a2332;
+    border-color: rgba(148, 163, 184, .3);
+}
+
+.page-roles .role-form .permission-checkbox:focus-within {
+    border-color: rgba(34, 211, 238, .5);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, .1);
+}
+
+.page-roles .role-form .permission-checkbox input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
 .page-roles .role-form .permission-checkbox {

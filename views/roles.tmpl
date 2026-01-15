@@ -209,11 +209,14 @@
                     cb.type = 'checkbox';
                     cb.name = 'permissions';
                     cb.value = p.value;
+                    cb.id = 'perm-' + p.value;
                     if (existingPerms) {
                         cb.checked = existingPerms.indexOf(p.value) !== -1;
                     }
+                    const text = document.createElement('span');
+                    text.textContent = p.label;
                     label.appendChild(cb);
-                    label.appendChild(document.createTextNode(' ' + p.label));
+                    label.appendChild(text);
                     permissionsContainer.appendChild(label);
                 });
             }
