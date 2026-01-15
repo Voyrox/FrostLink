@@ -309,6 +309,7 @@ func main() {
 		apiWrite.PUT("/streams/:id", apiStreamsUpdate)
 		apiWrite.DELETE("/streams/:id", apiStreamsDelete)
 		apiWrite.POST("/streams/:id/toggle", apiStreamsToggle)
+		apiWrite.POST("/firewall/ban-ip", apiFirewallBanIP)
 		apiWrite.POST("/firewall/ban-ip-upload", apiFirewallBanIPUpload)
 		apiWrite.POST("/firewall/ban-country", apiFirewallBanCountry)
 		apiWrite.DELETE("/firewall/ip/:ip", apiFirewallUnbanIP)
