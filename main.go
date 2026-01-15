@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	filepkg "frostlink-go/file"
-	proxyhttp "frostlink-go/http"
-	logger "frostlink-go/logger"
+	filepkg "SparkProxy/file"
+	proxyhttp "SparkProxy/http"
+	logger "SparkProxy/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

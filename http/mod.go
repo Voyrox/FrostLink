@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	filepkg "frostlink-go/file"
-	logger "frostlink-go/logger"
-	sslpkg "frostlink-go/ssl"
+	filepkg "SparkProxy/file"
+	logger "SparkProxy/logger"
+	sslpkg "SparkProxy/ssl"
 
 	"github.com/oschwald/geoip2-golang"
 )

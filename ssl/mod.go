@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	filepkg "frostlink-go/file"
-	logger "frostlink-go/logger"
+	filepkg "SparkProxy/file"
+	logger "SparkProxy/logger"
 )
 
 func loadCertAndKey(certPath, keyPath string) (*tls.Certificate, error) {

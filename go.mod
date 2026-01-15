@@ -1,4 +1,4 @@
-module frostlink-go
+module SparkProxy
 
 go 1.21
 
