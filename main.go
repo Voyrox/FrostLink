@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	filepkg "SparkProxy/file"
 	proxyhttp "SparkProxy/http"
@@ -62,6 +63,8 @@ type ProxyStatistics struct {
 var (
 	sessions   = map[string]string{}
 	sessionsMu sync.RWMutex
+
+	healthClient = &http.Client{Timeout: 1500 * time.Millisecond}
 )
 
 func main() {
@@ -94,6 +97,7 @@ func main() {
 	r.POST("/api/login", apiLogin)
 	r.GET("/api/proxys", apiProxys)
 	r.PUT("/api/domains/:domain/auth", apiDomainAuthUpdate)
+	r.POST("/api/domains", apiDomainsCreate)
 	r.GET("/api/logs", apiLogs)
 	r.GET("/api/users", apiUsersList)
 	r.POST("/api/users", apiUsersCreate)
@@ -126,6 +130,16 @@ type createUserRequest struct {
 	Role       string   `json:"role"`
 	AccessType string   `json:"access_type"`
 	Domains    []string `json:"domains"`
+}
+
+type createDomainRequest struct {
+	Domain   string `json:"domain"`
+	Target   string `json:"target"`
+	SSL      bool   `json:"ssl"`
+	HTTP     bool   `json:"http"`
+	CertMode string `json:"cert_mode"`
+	CertPath string `json:"cert_path"`
+	KeyPath  string `json:"key_path"`
 }
 
 func apiLogin(c *gin.Context) {
@@ -180,6 +194,19 @@ func apiProxys(c *gin.Context) {
 			"privkey": cfg.SSLCertificateKey,
 		}
 
+		online := false
+		if strings.TrimSpace(cfg.Location) != "" && cfg.AllowHTTP {
+			if req, err := http.NewRequest("GET", "http"+"://"+strings.TrimSpace(cfg.Location), nil); err == nil {
+				if resp, err := healthClient.Do(req); err == nil {
+					_ = resp.Body.Close()
+					if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+						online = true
+					}
+				}
+			}
+		}
+		m["online"] = online
+
 		m["require_auth"] = proxyhttp.GetDomainAuth(cfg.Domain)
 		if ps, ok := stats[cfg.Domain]; ok {
 			m["data_in_total"] = ps.DataInTotal
@@ -197,6 +224,67 @@ func apiProxys(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"configs": cfgsOut})
+}
+
+func apiDomainsCreate(c *gin.Context) {
+	var req createDomainRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	domain := strings.TrimSpace(req.Domain)
+	target := strings.TrimSpace(req.Target)
+	if domain == "" || target == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain and target are required"})
+		return
+	}
+
+	allowSSL := req.SSL
+	allowHTTP := req.HTTP
+	if !allowSSL && !allowHTTP {
+		allowHTTP = true
+	}
+
+	var certPathPtr *string
+	var keyPathPtr *string
+	if allowSSL {
+		mode := strings.ToLower(strings.TrimSpace(req.CertMode))
+		if mode == "" {
+			mode = "generate"
+		}
+		if mode == "custom" {
+			cp := strings.TrimSpace(req.CertPath)
+			kp := strings.TrimSpace(req.KeyPath)
+			if cp == "" || kp == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "certificate and key paths are required for custom SSL"})
+				return
+			}
+			certPathPtr = &cp
+			keyPathPtr = &kp
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "automatic certificate generation is not implemented; please use Custom and provide certificate paths"})
+			return
+		}
+	}
+
+	cfg := filepkg.Config{
+		Domain:            domain,
+		Location:          target,
+		AllowSSL:          allowSSL,
+		AllowHTTP:         allowHTTP,
+		SSLCertificate:    certPathPtr,
+		SSLCertificateKey: keyPathPtr,
+	}
+
+	if err := filepkg.WriteConfig("./domains", cfg); err != nil {
+		logger.SystemLog("error", "api_domains_create", fmt.Sprintf("failed to write config for '%s': %v", domain, err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write domain config"})
+		return
+	}
+
+	logger.SystemLog("success", "api_domains_create", fmt.Sprintf("created domain '%s' -> %s", domain, target))
+	c.JSON(http.StatusOK, gin.H{"domain": cfg.Domain, "host": cfg.Location, "SSL": cfg.AllowSSL, "HTTP": cfg.AllowHTTP})
 }
 
 func apiLogs(c *gin.Context) {

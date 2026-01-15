@@ -2,11 +2,11 @@ package file
 
 import (
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 )
 
-// Config mirrors the configuration file structure
 type Config struct {
 	Domain            string  `json:"domain"`
 	Location          string  `json:"host"`
@@ -16,7 +16,6 @@ type Config struct {
 	SSLCertificateKey *string `json:"privkey"`
 }
 
-// ReadConfigs reads all .conf files in dir and returns parsed configs
 func ReadConfigs(dir string) []Config {
 	entries, err := ioutil.ReadDir(dir)
 	if err != nil {
@@ -43,7 +42,6 @@ func ReadConfigs(dir string) []Config {
 	return cfgs
 }
 
-// ParseConfig parses a single config file content
 func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP bool, pub, priv *string, ok bool) {
 	lines := strings.Split(content, "\n")
 	var d, l string
@@ -82,9 +80,62 @@ func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP b
 	if httpPtr != nil {
 		httpOk = *httpPtr
 	}
-	// If SSL requested, ensure certs present
 	if ssl && (pubStr == nil || privStr == nil) {
 		return "", "", false, true, nil, nil, false
 	}
 	return d, l, ssl, httpOk, pubStr, privStr, true
+}
+
+func WriteConfig(dir string, cfg Config) error {
+	if dir == "" {
+		dir = "."
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	fileName := strings.TrimSpace(cfg.Domain)
+	if fileName == "" {
+		fileName = "domain"
+	}
+	path := filepath.Join(dir, fileName+".conf")
+
+	var b strings.Builder
+	b.WriteString("server: {\n")
+	b.WriteString("    domain: " + cfg.Domain + "\n")
+	b.WriteString("    location: " + cfg.Location + "\n\n")
+	b.WriteString("    connection: {\n")
+	if cfg.AllowSSL {
+		b.WriteString("        AllowSSL: true\n")
+	} else {
+		b.WriteString("        AllowSSL: false\n")
+	}
+	if cfg.AllowHTTP {
+		b.WriteString("        AllowHTTP: true\n")
+	} else {
+		b.WriteString("        AllowHTTP: false\n")
+	}
+	b.WriteString("    }\n")
+	b.WriteString("}\n\n")
+
+	pub := ""
+	if cfg.SSLCertificate != nil {
+		pub = strings.TrimSpace(*cfg.SSLCertificate)
+	}
+	priv := ""
+	if cfg.SSLCertificateKey != nil {
+		priv = strings.TrimSpace(*cfg.SSLCertificateKey)
+	}
+	if pub != "" || priv != "" {
+		b.WriteString("SSLCert: {\n")
+		if pub != "" {
+			b.WriteString("    ssl_certificate: " + pub + "\n")
+		}
+		if priv != "" {
+			b.WriteString("    ssl_certificate_key: " + priv + "\n")
+		}
+		b.WriteString("}\n")
+	}
+
+	return ioutil.WriteFile(path, []byte(b.String()), 0644)
 }
