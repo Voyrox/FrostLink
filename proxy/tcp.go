@@ -284,16 +284,16 @@ func (pl *portListener) handleConnection(conn net.Conn) {
 
 	var sni string
 	var isTLS bool
+	var initialData []byte
 
 	buf := make([]byte, 512)
 	n, err := conn.Read(buf)
-	if err != nil {
-		return
-	}
-	if n > 0 {
+	if err == nil && n > 0 {
+		initialData = make([]byte, n)
+		copy(initialData, buf[:n])
 		if buf[0] == 0x16 {
 			isTLS = true
-			sni = extractSNIFromClientHello(buf[:n])
+			sni = extractSNIFromClientHello(initialData)
 		}
 	}
 
@@ -342,7 +342,7 @@ func (pl *portListener) handleConnection(conn net.Conn) {
 	streamsMu.Unlock()
 
 	if isTLS && streamConfig.TLSMode == "pass-through" && streamConfig.Domain != "" {
-		copyBidirectional(conn, upConn, streamConfig.ID)
+		copyBidirectional(conn, upConn, streamConfig.ID, initialData)
 	} else if streamConfig.Domain != "" && streamConfig.TLSMode == "terminate" {
 		tlsConfig := &tls.Config{}
 		if streamConfig.CertFile != "" && streamConfig.KeyFile != "" {
@@ -355,9 +355,9 @@ func (pl *portListener) handleConnection(conn net.Conn) {
 		if err := tlsConn.Handshake(); err != nil {
 			return
 		}
-		copyBidirectional(tlsConn, upConn, streamConfig.ID)
+		copyBidirectional(tlsConn, upConn, streamConfig.ID, initialData)
 	} else {
-		copyBidirectional(conn, upConn, streamConfig.ID)
+		copyBidirectional(conn, upConn, streamConfig.ID, initialData)
 	}
 }
 
@@ -429,8 +429,18 @@ func extractSNIFromClientHello(data []byte) string {
 	return ""
 }
 
-func copyBidirectional(conn1, conn2 net.Conn, streamID string) {
+func copyBidirectional(conn1, conn2 net.Conn, streamID string, initialData []byte) {
 	var wg sync.WaitGroup
+
+	if len(initialData) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			n, _ := conn2.Write(initialData)
+			updateStreamStats(streamID, 0, int64(n))
+		}()
+	}
+
 	wg.Add(2)
 
 	go func() {
