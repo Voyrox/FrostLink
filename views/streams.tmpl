@@ -285,7 +285,7 @@
             function updateEditTLSDetails() {
                 const domainInput = editStreamForm.querySelector('input[id="edit-domain"]');
                 const hasDomain = domainInput && domainInput.value.trim() !== '';
-                editTLSOptions.forEach(el => el.hidden = !hasDomain);
+                tlsOptions.forEach(el => el.hidden = !hasDomain);
                 if (editTLSPaths) editTLSPaths.hidden = !hasDomain;
             }
 
