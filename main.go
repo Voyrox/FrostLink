@@ -12,6 +12,7 @@ import (
 	filepkg "SparkProxy/file"
 	proxyhttp "SparkProxy/http"
 	logger "SparkProxy/logger"
+	rolepkg "SparkProxy/role"
 	userpkg "SparkProxy/user"
 
 	"github.com/gin-gonic/gin"
@@ -98,6 +99,7 @@ func main() {
 	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{"ActivePage": "analytics"}) })
 	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{"ActivePage": "logs"}) })
 	r.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{"ActivePage": "users"}) })
+	r.GET("/roles", func(c *gin.Context) { c.HTML(http.StatusOK, "roles", gin.H{"ActivePage": "roles"}) })
 	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
 	r.NoRoute(func(c *gin.Context) {
 		c.HTML(http.StatusNotFound, "404", gin.H{})
@@ -111,6 +113,10 @@ func main() {
 	r.GET("/api/users", apiUsersList)
 	r.POST("/api/users", apiUsersCreate)
 	r.DELETE("/api/users/:username", apiUsersDelete)
+	r.GET("/api/roles", apiRolesList)
+	r.POST("/api/roles", apiRolesCreate)
+	r.PUT("/api/roles/:name", apiRolesUpdate)
+	r.DELETE("/api/roles/:name", apiRolesDelete)
 
 	go func() {
 		cfgs := filepkg.ReadConfigs("./domains")
@@ -404,6 +410,78 @@ func apiUsersDelete(c *gin.Context) {
 		return
 	}
 	logger.SystemLog("success", "api_users_delete", fmt.Sprintf("deleted user '%s'", username))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type createRoleRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
+func apiRolesList(c *gin.Context) {
+	rList := rolepkg.List()
+	c.JSON(http.StatusOK, gin.H{"roles": rList})
+}
+
+func apiRolesCreate(c *gin.Context) {
+	var req createRoleRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role name is required"})
+		return
+	}
+	var perms []rolepkg.Permission
+	for _, p := range req.Permissions {
+		perms = append(perms, rolepkg.Permission(p))
+	}
+	r, err := rolepkg.Create(req.Name, req.Description, perms)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.SystemLog("success", "api_roles_create", fmt.Sprintf("created role '%s'", r.Name))
+	c.JSON(http.StatusOK, gin.H{"role": r})
+}
+
+func apiRolesUpdate(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role name is required"})
+		return
+	}
+	var req createRoleRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	var perms []rolepkg.Permission
+	for _, p := range req.Permissions {
+		perms = append(perms, rolepkg.Permission(p))
+	}
+	r, err := rolepkg.Update(name, req.Description, perms)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.SystemLog("success", "api_roles_update", fmt.Sprintf("updated role '%s'", r.Name))
+	c.JSON(http.StatusOK, gin.H{"role": r})
+}
+
+func apiRolesDelete(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role name is required"})
+		return
+	}
+	if err := rolepkg.Delete(name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.SystemLog("success", "api_roles_delete", fmt.Sprintf("deleted role '%s'", name))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

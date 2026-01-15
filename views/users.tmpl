@@ -136,11 +136,7 @@
                     <div class="field-row">
                         <label>
                             <span>Role</span>
-                            <select name="role">
-                                <option value="Owner">Owner</option>
-                                <option value="Admin">Admin</option>
-                                <option value="Member" selected>Member</option>
-                            </select>
+                            <select name="role" id="user-role"></select>
                         </label>
                         <label>
                             <span>Access</span>
@@ -285,6 +281,40 @@
                     .catch(function (err) { console.error('Failed to load /api/proxys', err); });
             }
 
+            function loadRoles() {
+                const roleSelect = document.getElementById('user-role');
+                if (!roleSelect) return;
+                fetch('/api/roles')
+                    .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+                    .then(function (data) {
+                        const roles = (data && data.roles) || [];
+                        roleSelect.innerHTML = '';
+                        roles.forEach(function (r) {
+                            const opt = document.createElement('option');
+                            opt.value = r.name;
+                            opt.textContent = r.name;
+                            roleSelect.appendChild(opt);
+                        });
+                        if (roleSelect.options.length > 0) {
+                            var hasMember = false;
+                            for (var i = 0; i < roleSelect.options.length; i++) {
+                                if (roleSelect.options[i].value === 'Member') {
+                                    roleSelect.selectedIndex = i;
+                                    hasMember = true;
+                                    break;
+                                }
+                            }
+                            if (!hasMember && roleSelect.options.length > 0) {
+                                roleSelect.selectedIndex = 0;
+                            }
+                        }
+                    })
+                    .catch(function (err) {
+                        console.error('Failed to load /api/roles', err);
+                        roleSelect.innerHTML = '<option value="Member">Member</option>';
+                    });
+            }
+
             if (accessSel) {
                 accessSel.addEventListener('change', updateDomainsVisibility);
                 updateDomainsVisibility();
@@ -391,6 +421,7 @@
 
                     loadUsers();
                     loadDomains();
+                    loadRoles();
                 })();
     </script>
 </body>
