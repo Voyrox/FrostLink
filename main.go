@@ -1388,7 +1388,10 @@ func apiCertsRequest(c *gin.Context) {
 
 	cert, err := acmeClient.ObtainCertificate(req.Domain)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to obtain certificate: %v", err)})
+		ui.SystemLog("error", "certs", fmt.Sprintf("Failed to obtain certificate for %s: %v", req.Domain, err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to obtain certificate: %v", err),
+			"hint":  "Check that your Cloudflare API token has DNS:Edit permission for this zone and the domain is in your Cloudflare account"})
 		return
 	}
 
