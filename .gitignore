@@ -14,3 +14,4 @@ Cargo.lock
 *.pdb
 .env
 *.CSV
+db/domain_auth.json

@@ -82,17 +82,18 @@ func main() {
 	r.GET("/", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
 	r.GET("/login", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
 	r.POST("/login", loginPost)
-	r.GET("/dashboard", func(c *gin.Context) { c.HTML(http.StatusOK, "dashboard", gin.H{}) })
-	r.GET("/domains", func(c *gin.Context) { c.HTML(http.StatusOK, "domains", gin.H{}) })
-	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{}) })
-	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{}) })
-	r.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{}) })
-	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{}) })
+	r.GET("/dashboard", func(c *gin.Context) { c.HTML(http.StatusOK, "dashboard", gin.H{"ActivePage": "dashboard"}) })
+	r.GET("/domains", func(c *gin.Context) { c.HTML(http.StatusOK, "domains", gin.H{"ActivePage": "domains"}) })
+	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{"ActivePage": "analytics"}) })
+	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{"ActivePage": "logs"}) })
+	r.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{"ActivePage": "users"}) })
+	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
 	r.NoRoute(func(c *gin.Context) {
 		c.HTML(http.StatusNotFound, "404", gin.H{})
 	})
 	r.POST("/api/login", apiLogin)
 	r.GET("/api/proxys", apiProxys)
+	r.PUT("/api/domains/:domain/auth", apiDomainAuthUpdate)
 	r.GET("/api/logs", apiLogs)
 	r.GET("/api/users", apiUsersList)
 	r.POST("/api/users", apiUsersCreate)
@@ -178,6 +179,8 @@ func apiProxys(c *gin.Context) {
 			"pubkey":  cfg.SSLCertificate,
 			"privkey": cfg.SSLCertificateKey,
 		}
+
+		m["require_auth"] = proxyhttp.GetDomainAuth(cfg.Domain)
 		if ps, ok := stats[cfg.Domain]; ok {
 			m["data_in_total"] = ps.DataInTotal
 			m["data_out_total"] = ps.DataOutTotal
@@ -265,6 +268,30 @@ func apiUsersDelete(c *gin.Context) {
 	}
 	logger.SystemLog("success", "api_users_delete", fmt.Sprintf("deleted user '%s'", username))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type domainAuthRequest struct {
+	RequireAuth bool `json:"require_auth"`
+}
+
+func apiDomainAuthUpdate(c *gin.Context) {
+	domain := c.Param("domain")
+	if strings.TrimSpace(domain) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+	var req domainAuthRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if err := proxyhttp.SetDomainAuth(domain, req.RequireAuth); err != nil {
+		logger.SystemLog("error", "api_domain_auth", fmt.Sprintf("failed to update auth for %s: %v", domain, err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update auth"})
+		return
+	}
+	logger.SystemLog("info", "api_domain_auth", fmt.Sprintf("domain %s auth set to %v", domain, req.RequireAuth))
+	c.JSON(http.StatusOK, gin.H{"domain": domain, "require_auth": req.RequireAuth})
 }
 
 func loginPost(c *gin.Context) {

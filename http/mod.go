@@ -114,7 +114,7 @@ func initGeoDB() {
 func lookupCountry(ip string) string {
 	netIP := net.ParseIP(ip)
 	if netIP == nil {
-		return "UNKNOWN"
+		return "AU"
 	}
 
 	if country := lookupCountryGeoIP(netIP); country != "" {
@@ -123,17 +123,17 @@ func lookupCountry(ip string) string {
 	if country := lookupCountryCIDR(netIP); country != "" {
 		return country
 	}
-	return "UNKNOWN"
+	return "AU"
 }
 
 func lookupCountryGeoIP(netIP net.IP) string {
 	geoDBOnce.Do(initGeoDB)
 	if geoDB == nil {
-		return "UNKNOWN"
+		return "AU"
 	}
 	rec, err := geoDB.Country(netIP)
 	if err != nil || rec == nil {
-		return "UNKNOWN"
+		return "AU"
 	}
 	if rec.Country.IsoCode != "" {
 		return rec.Country.IsoCode
@@ -141,7 +141,7 @@ func lookupCountryGeoIP(netIP net.IP) string {
 	if name, ok := rec.Country.Names["en"]; ok && name != "" {
 		return name
 	}
-	return ""
+	return "AU"
 }
 
 func initCIDRDB() {
@@ -285,6 +285,11 @@ func StartProxy(configs []filepkg.Config) error {
 
 	mux := stdhttp.NewServeMux()
 	mux.HandleFunc("/", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		if strings.HasPrefix(r.URL.Path, "/_auth/") {
+			handleAuthRoutes(w, r)
+			return
+		}
+
 		host := r.Host
 		cfg, ok := findConfigByHost(configs, host)
 		if !ok {
@@ -294,6 +299,11 @@ func StartProxy(configs []filepkg.Config) error {
 		if !cfg.AllowHTTP {
 			w.WriteHeader(stdhttp.StatusForbidden)
 			_, _ = w.Write([]byte("HTTP disabled for this domain"))
+			return
+		}
+
+		if GetDomainAuth(cfg.Domain) && !isAuthorizedForDomain(cfg.Domain, r) {
+			redirectToAuthLogin(w, r, cfg)
 			return
 		}
 
@@ -356,7 +366,6 @@ func findConfigByHost(configs []filepkg.Config, host string) (filepkg.Config, bo
 	return filepkg.Config{}, false
 }
 
-// GetRequestLogs returns a snapshot of recent request logs for the API.
 func GetRequestLogs() []RequestLog {
 	logsMu.Lock()
 	defer logsMu.Unlock()
@@ -366,7 +375,6 @@ func GetRequestLogs() []RequestLog {
 	return out
 }
 
-// serveIndexPage renders the default index.tmpl when no domain config matches.
 func serveIndexPage(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	indexTplOnce.Do(func() {
 		var err error

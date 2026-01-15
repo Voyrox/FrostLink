@@ -51,7 +51,8 @@
             <div class="tooltip" role="tooltip" hidden></div>
           </div>
         </div>
-        <div class="panel" aria-labelledby="top-countries-title">
+
+        <div class="panel" aria-labelledby="top-countries-title" style="margin-top: 0 !important;">
           <div class="panel-header">
             <h2 id="top-countries-title">Top countries</h2>
           </div>
@@ -99,6 +100,13 @@
         return n.toLocaleString();
       }
 
+      function formatDateKey(d) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+      }
+
       function drawByDayChart(canvas, labels, data) {
         if (!canvas || !labels || !data || labels.length === 0 || data.length === 0) return;
 
@@ -118,10 +126,28 @@
         const padding = { t: 20, r: 24, b: 28, l: 36 };
         const areaW = width - padding.l - padding.r;
         const areaH = height - padding.t - padding.b;
-        const max = Math.max(...data, 1) * 1.1;
+
+        let rawMax = Math.max.apply(null, data);
+        if (!isFinite(rawMax)) {
+          return;
+        }
+
+        const sum = data.reduce((acc, val) => acc + (Number(val) || 0), 0);
+        if (sum > rawMax) {
+          rawMax = sum;
+        }
+
+        // If all values are 0, still draw axes with a minimal scale.
+        if (rawMax <= 0) {
+          rawMax = 1;
+        }
+        const maxTicks = 5;
+        const tickCount = Math.min(maxTicks, Math.max(1, Math.round(rawMax)));
+        const step = Math.max(1, Math.ceil(rawMax / tickCount));
+        const max = step * tickCount;
 
         ctx.clearRect(0, 0, width, height);
-        // axes
+        // axes + grid
         ctx.strokeStyle = '#1b2230';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -134,9 +160,28 @@
         // labels
         ctx.fillStyle = '#a4acb9';
         ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+
+        // x-axis labels (days)
         for (let i = 0; i < labels.length; i++) {
           const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
           ctx.fillText(labels[i], x - 12, height - padding.b + 18);
+        }
+
+        // y-axis labels (connections / requests)
+        const yTicks = tickCount;
+        for (let i = 0; i <= yTicks; i++) {
+          const value = step * i;
+          const y = padding.t + (1 - value / max) * areaH;
+          // grid line
+          ctx.strokeStyle = i === 0 ? '#1b2230' : 'rgba(148, 163, 184, 0.25)';
+          ctx.beginPath();
+          ctx.moveTo(padding.l, y);
+          ctx.lineTo(width - padding.r, y);
+          ctx.stroke();
+          // label
+          const labelText = value === 0 ? '0' : value.toFixed(0);
+          ctx.fillStyle = '#a4acb9';
+          ctx.fillText(labelText, 4, y + 4);
         }
 
         // line
@@ -395,7 +440,7 @@
             for (let i = days - 1; i >= 0; i--) {
               const d = new Date(today);
               d.setDate(d.getDate() - i);
-              const key = d.toISOString().slice(0, 10);
+              const key = formatDateKey(d);
               dayKeys.push(key);
               labels.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
             }
@@ -406,7 +451,7 @@
               const t = String(entry.timestamp).replace(' ', 'T');
               const d = new Date(t);
               if (isNaN(d.getTime())) return;
-              const key = d.toISOString().slice(0, 10);
+              const key = formatDateKey(d);
               countsByDay[key] = (countsByDay[key] || 0) + 1;
             });
 

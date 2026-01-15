@@ -13,7 +13,7 @@ import (
 type User struct {
 	Username          string   `json:"username"`
 	Email             string   `json:"email"`
-	PasswordHash      string   `json:"-"`
+	PasswordHash      string   `json:"password_hash"`
 	IdentityProvider  string   `json:"identity_provider"`
 	Role              string   `json:"role"`
 	AccessType        string   `json:"access_type"`

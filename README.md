@@ -49,9 +49,9 @@ SSLCert: {
 SparkProxy includes a user-friendly dashboard for easy monitoring and management. Here's a glimpse of what the dashboard looks like:
 
 <p align="center">
-    <img src="./images/dashboard.png">
-    <img src="./images/tunnels.png">
-    <img src="./images/logs.png">
+    <img src="./images/sites.png">
+    <img src="./images/analytics.png">
+    <img src="./images/auth.png">
 </p>
 
 ### Contributing
