@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"SparkProxy/core"
 )
 
 const certsPath = "db/certs"
@@ -130,18 +132,67 @@ func GetCertificateInfoForDomain(domain string, customCertPath, customKeyPath *s
 	}
 }
 
+func GetCustomCertificateInfo(domain, certPath, keyPath string) (*CertificateInfo, error) {
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return nil, os.ErrNotExist
+	}
+
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var expiresAt time.Time
+	if len(cert.Certificate) > 0 {
+		if parsed, err := x509.ParseCertificate(cert.Certificate[0]); err == nil {
+			expiresAt = parsed.NotAfter
+		}
+	}
+
+	return &CertificateInfo{
+		Domain:      domain,
+		CertPath:    certPath,
+		KeyPath:     keyPath,
+		IssuerPath:  "",
+		ExpiresAt:   expiresAt,
+		DaysLeft:    int(time.Until(expiresAt).Hours() / 24),
+		AutoManaged: false,
+	}, nil
+}
+
 func ListCertificates() []CertificateInfo {
 	livePath := filepath.Join(certsPath, "live")
 	entries, _ := os.ReadDir(livePath)
 
-	var certs []CertificateInfo
+	certMap := make(map[string]CertificateInfo)
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		if info, err := GetCertificateInfo(entry.Name()); err == nil {
-			certs = append(certs, *info)
+			certMap[info.Domain] = *info
 		}
+	}
+
+	domainCfgs := core.ReadConfigs("./domains")
+	for _, cfg := range domainCfgs {
+		if cfg.SSLCertificate != nil && cfg.SSLCertificateKey != nil {
+			certPath := *cfg.SSLCertificate
+			keyPath := *cfg.SSLCertificateKey
+			if certPath != "" && keyPath != "" {
+				if info, err := GetCustomCertificateInfo(cfg.Domain, certPath, keyPath); err == nil {
+					if _, exists := certMap[info.Domain]; !exists {
+						certMap[info.Domain] = *info
+					}
+				}
+			}
+		}
+	}
+
+	var certs []CertificateInfo
+	for _, cert := range certMap {
+		certs = append(certs, cert)
 	}
 	return certs
 }
