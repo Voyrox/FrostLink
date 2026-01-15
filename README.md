@@ -1,6 +1,6 @@
-# FrostLink
+# SparkProxy
 
-FrostLink is a powerful and flexible reverse proxy tool developed in Rust. It's designed to route requests efficiently from public domains to local servers, supporting both HTTP and HTTPS traffic. ArcticArch is particularly useful for exposing local development servers to the internet or for setting up a custom routing scheme in a microservices architecture.
+SparkProxy is a powerful and flexible reverse proxy tool developed in Rust. It's designed to route requests efficiently from public domains to local servers, supporting both HTTP and HTTPS traffic. ArcticArch is particularly useful for exposing local development servers to the internet or for setting up a custom routing scheme in a microservices architecture.
 
 
 # 🚀 Features
@@ -16,12 +16,12 @@ FrostLink is a powerful and flexible reverse proxy tool developed in Rust. It's 
 
 ### Configuration
 
-FrostLink requires domain configuration files to be placed in the `./domains` directory. Each file should have the `.conf` extension and follow this structure:
+SparkProxy requires domain configuration files to be placed in the `./domains` directory. Each file should have the `.conf` extension and follow this structure:
 
 ### Running the Proxy
 
 1. **Set Up Configuration Files:** Create `.conf` files for each domain in the `./domains` directory.
-2. **Start FrostLink:** Execute the main program. By default, it listens on ports 80 (HTTP) and 443 (HTTPS).
+2. **Start SparkProxy:** Execute the main program. By default, it listens on ports 80 (HTTP) and 443 (HTTPS).
 3. **Monitor Activity:** Observe the console output for logs detailing requests and server activity.
 
 ### Example Configuration File
@@ -46,7 +46,7 @@ SSLCert: {
 
 ### Dashboard
 
-FrostLink includes a user-friendly dashboard for easy monitoring and management. Here's a glimpse of what the dashboard looks like:
+SparkProxy includes a user-friendly dashboard for easy monitoring and management. Here's a glimpse of what the dashboard looks like:
 
 <p align="center">
     <img src="./images/dashboard.png">
@@ -58,4 +58,4 @@ FrostLink includes a user-friendly dashboard for easy monitoring and management.
 Feel free to open issues or submit pull requests if you have ideas or encounter issues. Contributions are always welcome!
 
 ### License
-FrostLink is open-source software, and its license information can be found in the LICENSE file in the repository.
+SparkProxy is open-source software, and its license information can be found in the LICENSE file in the repository.

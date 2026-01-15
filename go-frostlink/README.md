@@ -1,6 +1,6 @@
-# FrostLink-Go (Gin)
+# SparkProxy-Go (Gin)
 
-A minimal Go/Gin implementation mirroring the FrostLink dashboard and APIs. This scaffolds:
+A minimal Go/Gin implementation mirroring the SparkProxy dashboard and APIs. This scaffolds:
 
 - `GET /`, `/login` → serves `default/login.html`
 - Protected pages: `/dashboard`, `/dashboard/logs`, `/dashboard/tunnels`, `/sidebar`
@@ -16,7 +16,7 @@ This focuses on the dashboard. The reverse proxy on ports 80/443 can be added us
 
 ## Run
 ```bash
-cd go-frostlink
+cd go-SparkProxy
 GO111MODULE=on go mod tidy
 go run .
 ```

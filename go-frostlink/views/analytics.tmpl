@@ -6,7 +6,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/x-icon" href="/img/logo.ico">
-  <title>FrostLink • Request Analytics</title>
+  <title>SparkProxy • Request Analytics</title>
   <link rel="stylesheet" href="/css/global.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/analytics.css" />
@@ -29,7 +29,7 @@
           <div class="stat-value">0</div>
         </div>
         <div class="stat">
-          <div class="stat-title">Requests blocked by FrostLink</div>
+          <div class="stat-title">Requests blocked by SparkProxy</div>
           <div class="stat-value">0 <span class="muted">(0.00%)</span></div>
         </div>
       </section>
@@ -191,10 +191,17 @@
                 fill: '#323236',
                 stroke: '#18181b',
                 'stroke-width': 0.5
-              },
-              hover: {
-                fill: '#3f3f46'
               }
+            },
+            series: {
+              regions: [
+                {
+                  attribute: 'fill',
+                  scale: ['#323236', '#00dd56b8'],
+                  normalizeFunction: 'linear',
+                  values: {}
+                }
+              ]
             },
             onRegionTooltipShow: function (event) {
               if (event && typeof event.preventDefault === 'function') {
@@ -218,8 +225,8 @@
               }
 
               const code = regionCode.toUpperCase();
-              const data = worldMapInstance && worldMapInstance.__data;
-              const countVal = data && data[code] ? data[code] : 0;
+              const dataCounts = worldMapInstance && worldMapInstance.__dataCounts;
+              const countVal = dataCounts && dataCounts[code] ? dataCounts[code] : 0;
 
               worldMapTooltip.hidden = false;
               worldMapTooltip.textContent = codeToFlag(code) + ' ' + code + ': ' + formatNumber(countVal);
@@ -266,18 +273,41 @@
         const vm = ensureWorldMap();
         if (!vm || !counts) return;
 
-        const mapData = {};
+        const valueMap = {};
+        const rawCountsMap = {};
+        let total = 0;
+
         for (const key in counts) {
           if (!Object.prototype.hasOwnProperty.call(counts, key)) continue;
-          const value = counts[key];
-          const code = String(key).toUpperCase();
-          mapData[code] = (mapData[code] || 0) + value;
+          const value = Number(counts[key]) || 0;
+          if (value <= 0) continue;
+          const upperCode = String(key).toUpperCase();
+          rawCountsMap[upperCode] = (rawCountsMap[upperCode] || 0) + value;
+          total += value;
         }
 
-        if (typeof vm.setValues === 'function') {
-          vm.setValues(mapData);
+        if (!total) {
+          if (vm.series && vm.series.regions && vm.series.regions[0] && typeof vm.series.regions[0].clear === 'function') {
+            vm.series.regions[0].clear();
+          }
+          vm.__dataCounts = {};
+          return;
         }
-        vm.__data = mapData;
+
+        for (const code in rawCountsMap) {
+          if (!Object.prototype.hasOwnProperty.call(rawCountsMap, code)) continue;
+          const count = rawCountsMap[code];
+          const pct = count / total; // 0-1
+          const regionKey = code; // jsVectorMap uses ISO2 region codes like "AU"
+          valueMap[regionKey] = pct;
+        }
+
+        if (vm.series && vm.series.regions && vm.series.regions[0] && typeof vm.series.regions[0].setValues === 'function') {
+          vm.series.regions[0].setValues(valueMap);
+        } else if (typeof vm.setValues === 'function') {
+          vm.setValues(valueMap);
+        }
+        vm.__dataCounts = rawCountsMap;
       }
 
       function updateTopCountries(logs) {

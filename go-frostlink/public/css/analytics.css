@@ -102,13 +102,11 @@
 }
 
 .page-analytics .world .land path {
-    fill: #242b39;
     stroke: #141b28;
     stroke-width: 1
 }
 
 .page-analytics .world path {
-    fill: #323236;
     stroke: #18181b;
     stroke-width: 0.8;
     transition: fill .2s, stroke .2s;

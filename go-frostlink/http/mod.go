@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/csv"
 	"fmt"
+	"html/template"
 	"io"
 	"net"
 	stdhttp "net/http"
@@ -62,6 +63,9 @@ var (
 
 	logsMu      sync.Mutex
 	requestLogs []RequestLog
+
+	indexTplOnce sync.Once
+	indexTpl     *template.Template
 )
 
 type ipRange struct {
@@ -125,7 +129,7 @@ func lookupCountry(ip string) string {
 func lookupCountryGeoIP(netIP net.IP) string {
 	geoDBOnce.Do(initGeoDB)
 	if geoDB == nil {
-		return "AU"
+		return "UNKNOWN"
 	}
 	rec, err := geoDB.Country(netIP)
 	if err != nil || rec == nil {
@@ -284,8 +288,7 @@ func StartProxy(configs []filepkg.Config) error {
 		host := r.Host
 		cfg, ok := findConfigByHost(configs, host)
 		if !ok {
-			w.WriteHeader(stdhttp.StatusNotFound)
-			_, _ = w.Write([]byte("<html><body><h1>404 Not Found</h1></body></html>"))
+			serveIndexPage(w, r)
 			return
 		}
 		if !cfg.AllowHTTP {
@@ -361,4 +364,26 @@ func GetRequestLogs() []RequestLog {
 	out := make([]RequestLog, len(requestLogs))
 	copy(out, requestLogs)
 	return out
+}
+
+// serveIndexPage renders the default index.tmpl when no domain config matches.
+func serveIndexPage(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	indexTplOnce.Do(func() {
+		var err error
+		indexTpl, err = template.ParseFiles("./views/index.tmpl")
+		if err != nil {
+			logger.SystemLog("error", "http-index", fmt.Sprintf("Failed to parse index.tmpl: %v", err))
+		}
+	})
+
+	if indexTpl == nil {
+		w.WriteHeader(stdhttp.StatusNotFound)
+		_, _ = w.Write([]byte("<html><body><h1>404 Not Found</h1></body></html>"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := indexTpl.ExecuteTemplate(w, "index", nil); err != nil {
+		logger.SystemLog("error", "http-index", fmt.Sprintf("Failed to execute index.tmpl: %v", err))
+	}
 }
