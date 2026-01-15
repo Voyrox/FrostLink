@@ -1184,6 +1184,11 @@ func apiStreamsCreate(c *gin.Context) {
 		return
 	}
 
+	proxy.StopStreamServer()
+	if err := proxy.StartStreamServer(); err != nil {
+		ui.SystemLog("error", "stream-server", fmt.Sprintf("Failed to restart stream server: %v", err))
+	}
+
 	core.LogAudit("stream_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams", "success", map[string]string{"domain": streamCfg.Domain})
 	c.JSON(http.StatusOK, gin.H{"stream": streamCfg})
 }
@@ -1243,6 +1248,11 @@ func apiStreamsUpdate(c *gin.Context) {
 		return
 	}
 
+	proxy.StopStreamServer()
+	if err := proxy.StartStreamServer(); err != nil {
+		ui.SystemLog("error", "stream-server", fmt.Sprintf("Failed to restart stream server: %v", err))
+	}
+
 	core.LogAudit("stream_update", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "success", map[string]string{"domain": streamCfg.Domain})
 	c.JSON(http.StatusOK, gin.H{"stream": streamCfg})
 }
@@ -1267,6 +1277,11 @@ func apiStreamsDelete(c *gin.Context) {
 		core.LogAudit("stream_delete_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "failed", map[string]string{"reason": err.Error()})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete stream"})
 		return
+	}
+
+	proxy.StopStreamServer()
+	if err := proxy.StartStreamServer(); err != nil {
+		ui.SystemLog("error", "stream-server", fmt.Sprintf("Failed to restart stream server: %v", err))
 	}
 
 	core.LogAudit("stream_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id, "success", map[string]string{"domain": domain})
@@ -1310,6 +1325,11 @@ func apiStreamsToggle(c *gin.Context) {
 		core.LogAudit("stream_toggle_failed", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id+"/toggle", "failed", map[string]string{"reason": err.Error()})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to toggle stream"})
 		return
+	}
+
+	proxy.StopStreamServer()
+	if err := proxy.StartStreamServer(); err != nil {
+		ui.SystemLog("error", "stream-server", fmt.Sprintf("Failed to restart stream server: %v", err))
 	}
 
 	core.LogAudit("stream_toggle", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id+"/toggle", "success", map[string]string{"domain": streamCfg.Domain, "enabled": fmt.Sprintf("%v", req.Enabled)})
