@@ -94,7 +94,39 @@
                 </div>
 
                 <div class="pager">
-                    <div class="page-info" id="page-info">Showing all entries</div>
+                    <div class="page-info" id="page-info-text">Showing all entries</div>
+                    <div class="page-controls" id="page-controls" style="display: none;">
+                        <button class="btn small ghost" id="first-page-btn" aria-label="First page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                    <path d="M12 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" id="prev-page-btn" aria-label="Previous page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" id="next-page-btn" aria-label="Next page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" id="last-page-btn" aria-label="Last page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M6 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                    <path d="M12 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
                 </div>
             </section>
         </main>
@@ -110,6 +142,17 @@
             const totalLogsEl = document.getElementById('total-logs');
             const last24hEl = document.getElementById('last-24h');
 
+            const firstPageBtn = document.getElementById('first-page-btn');
+            const prevPageBtn = document.getElementById('prev-page-btn');
+            const nextPageBtn = document.getElementById('next-page-btn');
+            const lastPageBtn = document.getElementById('last-page-btn');
+            const pageInfoText = document.getElementById('page-info-text');
+            const pageControls = document.getElementById('page-controls');
+
+            let currentPage = 1;
+            let itemsPerPage = 50;
+            let totalPages = 1;
+            let totalItems = 0;
             let allLogs = [];
 
             function formatAction(action) {
@@ -123,77 +166,79 @@
                 return date.toLocaleString();
             }
 
-            function renderLogs() {
-                if (!tableBody) return;
-                const action = actionFilter ? actionFilter.value : '';
-                const actor = actorFilter ? actorFilter.value.toLowerCase() : '';
-
-                let filtered = allLogs;
-                if (action) {
-                    filtered = filtered.filter(function(log) {
-                        return log.action === action;
-                    });
+            function updatePager() {
+                if (pageInfoText) {
+                    pageInfoText.textContent = 'Page ' + currentPage + ' of ' + (totalPages || 1) + ' (' + totalItems + ' entries)';
                 }
-                if (actor) {
-                    filtered = filtered.filter(function(log) {
-                        return (log.actor || '').toLowerCase().includes(actor);
-                    });
+                if (pageControls) {
+                    pageControls.style.display = totalPages > 1 ? 'flex' : 'none';
                 }
-
-                tableBody.innerHTML = '';
-                if (filtered.length === 0) {
-                    const tr = document.createElement('tr');
-                    const td = document.createElement('td');
-                    td.colSpan = 6;
-                    td.textContent = 'No audit logs found';
-                    td.className = 'muted';
-                    tr.appendChild(td);
-                    tableBody.appendChild(tr);
-                    return;
-                }
-
-                filtered.slice().reverse().forEach(function(log) {
-                    const tr = document.createElement('tr');
-
-                    const tdTs = document.createElement('td');
-                    tdTs.textContent = formatTimestamp(log.timestamp);
-
-                    const tdActor = document.createElement('td');
-                    tdActor.textContent = log.actor || '-';
-
-                    const tdAction = document.createElement('td');
-                    tdAction.textContent = formatAction(log.action);
-                    tdAction.className = 'action-cell';
-
-                    const tdIP = document.createElement('td');
-                    tdIP.textContent = log.ip || '-';
-
-                    const tdResource = document.createElement('td');
-                    tdResource.textContent = log.resource || '-';
-
-                    const tdStatus = document.createElement('td');
-                    tdStatus.textContent = log.status || '-';
-                    tdStatus.className = 'status-cell status-' + (log.status || 'unknown');
-
-                    tr.appendChild(tdTs);
-                    tr.appendChild(tdActor);
-                    tr.appendChild(tdAction);
-                    tr.appendChild(tdIP);
-                    tr.appendChild(tdResource);
-                    tr.appendChild(tdStatus);
-
-                    tableBody.appendChild(tr);
-                });
+                if (firstPageBtn) firstPageBtn.disabled = currentPage <= 1;
+                if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+                if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
+                if (lastPageBtn) lastPageBtn.disabled = currentPage >= totalPages;
             }
 
             function loadLogs() {
-                fetch('/api/audit')
+                const action = actionFilter ? actionFilter.value : '';
+                const actor = actorFilter ? actorFilter.value : '';
+
+                fetch('/api/audit?action=' + encodeURIComponent(action) + '&actor=' + encodeURIComponent(actor) + '&page=' + currentPage + '&limit=' + itemsPerPage)
                     .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
                     .then(function(data) {
-                        allLogs = (data && data.logs) || [];
-                        renderLogs();
+                        const pagination = data.pagination || {};
+                        currentPage = pagination.page || 1;
+                        totalPages = pagination.total_pages || 1;
+                        totalItems = pagination.total || 0;
+
+                        const logs = (data && data.logs) || [];
+                        tableBody.innerHTML = '';
+                        if (logs.length === 0) {
+                            const tr = document.createElement('tr');
+                            const td = document.createElement('td');
+                            td.colSpan = 6;
+                            td.textContent = 'No audit logs found';
+                            td.className = 'muted';
+                            tr.appendChild(td);
+                            tableBody.appendChild(tr);
+                        } else {
+                            logs.forEach(function(log) {
+                                const tr = document.createElement('tr');
+
+                                const tdTs = document.createElement('td');
+                                tdTs.textContent = formatTimestamp(log.timestamp);
+
+                                const tdActor = document.createElement('td');
+                                tdActor.textContent = log.actor || '-';
+
+                                const tdAction = document.createElement('td');
+                                tdAction.textContent = formatAction(log.action);
+                                tdAction.className = 'action-cell';
+
+                                const tdIP = document.createElement('td');
+                                tdIP.textContent = log.ip || '-';
+
+                                const tdResource = document.createElement('td');
+                                tdResource.textContent = log.resource || '-';
+
+                                const tdStatus = document.createElement('td');
+                                tdStatus.textContent = log.status || '-';
+                                tdStatus.className = 'status-cell status-' + (log.status || 'unknown');
+
+                                tr.appendChild(tdTs);
+                                tr.appendChild(tdActor);
+                                tr.appendChild(tdAction);
+                                tr.appendChild(tdIP);
+                                tr.appendChild(tdResource);
+                                tr.appendChild(tdStatus);
+
+                                tableBody.appendChild(tr);
+                            });
+                        }
+
                         if (totalLogsEl) totalLogsEl.textContent = data && data.total || 0;
                         if (last24hEl) last24hEl.textContent = data && data.last_24h || 0;
+                        updatePager();
                     })
                     .catch(function(err) {
                         console.error('Failed to load audit logs', err);
@@ -201,27 +246,77 @@
             }
 
             function exportLogs() {
-                const data = JSON.stringify({ logs: allLogs }, null, 2);
-                const blob = new Blob([data], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'audit-logs-' + new Date().toISOString().split('T')[0] + '.json';
-                a.click();
-                URL.revokeObjectURL(url);
+                const action = actionFilter ? actionFilter.value : '';
+                const actor = actorFilter ? actorFilter.value : '';
+
+                fetch('/api/audit?action=' + encodeURIComponent(action) + '&actor=' + encodeURIComponent(actor) + '&limit=10000')
+                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                    .then(function(data) {
+                        const logs = (data && data.logs) || [];
+                        const exportData = { logs: logs };
+                        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'audit-logs-' + new Date().toISOString().split('T')[0] + '.json';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    })
+                    .catch(function(err) {
+                        console.error('Failed to export audit logs', err);
+                    });
             }
 
             if (actionFilter) {
-                actionFilter.addEventListener('change', renderLogs);
+                actionFilter.addEventListener('change', function() {
+                    currentPage = 1;
+                    loadLogs();
+                });
             }
             if (actorFilter) {
-                actorFilter.addEventListener('input', renderLogs);
+                actorFilter.addEventListener('input', function() {
+                    currentPage = 1;
+                    loadLogs();
+                });
             }
             if (refreshBtn) {
                 refreshBtn.addEventListener('click', loadLogs);
             }
             if (exportBtn) {
                 exportBtn.addEventListener('click', exportLogs);
+            }
+
+            if (firstPageBtn) {
+                firstPageBtn.addEventListener('click', function() {
+                    if (currentPage > 1) {
+                        currentPage = 1;
+                        loadLogs();
+                    }
+                });
+            }
+            if (prevPageBtn) {
+                prevPageBtn.addEventListener('click', function() {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        loadLogs();
+                    }
+                });
+            }
+            if (nextPageBtn) {
+                nextPageBtn.addEventListener('click', function() {
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        loadLogs();
+                    }
+                });
+            }
+            if (lastPageBtn) {
+                lastPageBtn.addEventListener('click', function() {
+                    if (currentPage < totalPages) {
+                        currentPage = totalPages;
+                        loadLogs();
+                    }
+                });
             }
 
             loadLogs();

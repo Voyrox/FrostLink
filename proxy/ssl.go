@@ -1,4 +1,4 @@
-package ssl
+package proxy
 
 import (
 	"crypto/tls"
@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	filepkg "SparkProxy/file"
-	logger "SparkProxy/logger"
+	"SparkProxy/core"
+	"SparkProxy/ui"
 )
 
 func loadCertAndKey(certPath, keyPath string) (*tls.Certificate, error) {
@@ -20,9 +20,7 @@ func loadCertAndKey(certPath, keyPath string) (*tls.Certificate, error) {
 	return &cert, nil
 }
 
-// StartTLSProxy starts a TLS/SSL reverse proxy on PROXY_TLS_ADDR (default :8443)
-// using SNI to select certificates per domain based on the provided configs.
-func StartTLSProxy(configs []filepkg.Config, handler stdhttp.Handler) {
+func StartTLSProxy(configs []core.Config, handler stdhttp.Handler) {
 	certMap := make(map[string]*tls.Certificate)
 	for _, c := range configs {
 		if !c.AllowSSL {
@@ -38,7 +36,7 @@ func StartTLSProxy(configs []filepkg.Config, handler stdhttp.Handler) {
 		}
 		cert, err := loadCertAndKey(pub, priv)
 		if err != nil {
-			logger.SystemLog("error", "tls-cert", fmt.Sprintf("Failed to load cert for %s: %v", c.Domain, err))
+			ui.SystemLog("error", "tls-cert", fmt.Sprintf("Failed to load cert for %s: %v", c.Domain, err))
 			continue
 		}
 		certMap[c.Domain] = cert
@@ -67,16 +65,16 @@ func StartTLSProxy(configs []filepkg.Config, handler stdhttp.Handler) {
 	tlsCfg := &tls.Config{GetCertificate: getCert}
 	ln, err := net.Listen("tcp", tlsAddr)
 	if err != nil {
-		logger.SystemLog("error", "tls-listen", fmt.Sprintf("TLS listen error on %s: %v", tlsAddr, err))
+		ui.SystemLog("error", "tls-listen", fmt.Sprintf("TLS listen error on %s: %v", tlsAddr, err))
 		return
 	}
 	tlsLn := tls.NewListener(ln, tlsCfg)
 	srv := &stdhttp.Server{Handler: handler}
 
 	go func() {
-		logger.SystemLog("info", "https-proxy", fmt.Sprintf("Listening on %s", tlsAddr))
+		ui.SystemLog("info", "https-proxy", fmt.Sprintf("Listening on %s", tlsAddr))
 		if err := srv.Serve(tlsLn); err != nil && err != stdhttp.ErrServerClosed {
-			logger.SystemLog("error", "https-proxy", fmt.Sprintf("Server error: %v", err))
+			ui.SystemLog("error", "https-proxy", fmt.Sprintf("Server error: %v", err))
 		}
 	}()
 }

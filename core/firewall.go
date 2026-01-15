@@ -1,4 +1,4 @@
-package firewall
+package core
 
 import (
 	"encoding/json"
@@ -11,62 +11,61 @@ import (
 	"sync"
 )
 
-type Rules struct {
+type FirewallRules struct {
 	BannedIPs       []string `json:"banned_ips"`
 	BannedCountries []string `json:"banned_countries"`
 }
 
 var (
-	rulesMu     sync.RWMutex
-	rulesLoaded bool
-	rules       Rules
-	rulesPath   = filepath.Join(".", "db", "firewall.json")
+	firewallMu     sync.RWMutex
+	firewallLoaded bool
+	firewallRules  FirewallRules
+	firewallPath   = filepath.Join(".", "db", "firewall.json")
 )
 
-func load() {
-	if rulesLoaded {
+func loadFirewall() {
+	if firewallLoaded {
 		return
 	}
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
-	if rulesLoaded {
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
+	if firewallLoaded {
 		return
 	}
-	b, err := os.ReadFile(rulesPath)
+	b, err := os.ReadFile(firewallPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			rules = Rules{}
-			rulesLoaded = true
+			firewallRules = FirewallRules{}
+			firewallLoaded = true
 			return
 		}
-		rules = Rules{}
-		rulesLoaded = true
+		firewallRules = FirewallRules{}
+		firewallLoaded = true
 		return
 	}
-	var r Rules
+	var r FirewallRules
 	if err := json.Unmarshal(b, &r); err != nil {
-		rules = Rules{}
-		rulesLoaded = true
+		firewallRules = FirewallRules{}
+		firewallLoaded = true
 		return
 	}
-	dedupeAndSort(&r)
-	rules = r
-	rulesLoaded = true
+	dedupeAndSortFirewall(&r)
+	firewallRules = r
+	firewallLoaded = true
 }
 
-func saveLocked() error {
-	// callers must hold rulesMu (write)
-	data, err := json.MarshalIndent(rules, "", "  ")
+func saveFirewallLocked() error {
+	data, err := json.MarshalIndent(firewallRules, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(rulesPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(firewallPath), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(rulesPath, data, 0o600)
+	return os.WriteFile(firewallPath, data, 0600)
 }
 
-func dedupeAndSort(r *Rules) {
+func dedupeAndSortFirewall(r *FirewallRules) {
 	ipSet := make(map[string]struct{})
 	for _, ip := range r.BannedIPs {
 		ip = strings.TrimSpace(ip)
@@ -96,14 +95,13 @@ func dedupeAndSort(r *Rules) {
 	sort.Strings(r.BannedCountries)
 }
 
-// List returns a copy of the current firewall rules.
-func List() Rules {
-	load()
-	rulesMu.RLock()
-	defer rulesMu.RUnlock()
-	out := rules
-	out.BannedIPs = append([]string(nil), rules.BannedIPs...)
-	out.BannedCountries = append([]string(nil), rules.BannedCountries...)
+func ListFirewallRules() FirewallRules {
+	loadFirewall()
+	firewallMu.RLock()
+	defer firewallMu.RUnlock()
+	out := firewallRules
+	out.BannedIPs = append([]string(nil), firewallRules.BannedIPs...)
+	out.BannedCountries = append([]string(nil), firewallRules.BannedCountries...)
 	return out
 }
 
@@ -119,33 +117,31 @@ func normalizeIP(ip string) (string, error) {
 	return parsed.String(), nil
 }
 
-// BanIP adds a single IP (IPv4 or IPv6) to the banned list.
 func BanIP(ip string) error {
-	load()
+	loadFirewall()
 	norm, err := normalizeIP(ip)
 	if err != nil {
 		return err
 	}
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
-	for _, existing := range rules.BannedIPs {
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
+	for _, existing := range firewallRules.BannedIPs {
 		if existing == norm {
 			return nil
 		}
 	}
-	rules.BannedIPs = append(rules.BannedIPs, norm)
-	dedupeAndSort(&rules)
-	return saveLocked()
+	firewallRules.BannedIPs = append(firewallRules.BannedIPs, norm)
+	dedupeAndSortFirewall(&firewallRules)
+	return saveFirewallLocked()
 }
 
-// BanIPs adds many IPs at once, ignoring invalid entries.
 func BanIPs(ips []string) (int, error) {
 	if len(ips) == 0 {
 		return 0, errors.New("no ips provided")
 	}
-	load()
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
+	loadFirewall()
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
 
 	added := 0
 	for _, ip := range ips {
@@ -154,7 +150,7 @@ func BanIPs(ips []string) (int, error) {
 			continue
 		}
 		exists := false
-		for _, existing := range rules.BannedIPs {
+		for _, existing := range firewallRules.BannedIPs {
 			if existing == norm {
 				exists = true
 				break
@@ -163,46 +159,44 @@ func BanIPs(ips []string) (int, error) {
 		if exists {
 			continue
 		}
-		rules.BannedIPs = append(rules.BannedIPs, norm)
+		firewallRules.BannedIPs = append(firewallRules.BannedIPs, norm)
 		added++
 	}
 	if added == 0 {
 		return 0, errors.New("no valid ips to add")
 	}
-	dedupeAndSort(&rules)
-	if err := saveLocked(); err != nil {
+	dedupeAndSortFirewall(&firewallRules)
+	if err := saveFirewallLocked(); err != nil {
 		return 0, err
 	}
 	return added, nil
 }
 
-// BanCountry adds a 2-letter country code to the banned list.
 func BanCountry(code string) error {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return errors.New("country code is empty")
 	}
-	load()
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
-	for _, existing := range rules.BannedCountries {
+	loadFirewall()
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
+	for _, existing := range firewallRules.BannedCountries {
 		if existing == code {
 			return nil
 		}
 	}
-	rules.BannedCountries = append(rules.BannedCountries, code)
-	dedupeAndSort(&rules)
-	return saveLocked()
+	firewallRules.BannedCountries = append(firewallRules.BannedCountries, code)
+	dedupeAndSortFirewall(&firewallRules)
+	return saveFirewallLocked()
 }
 
-// BanCountries adds multiple country codes at once.
 func BanCountries(codes []string) (int, error) {
 	if len(codes) == 0 {
 		return 0, errors.New("no country codes provided")
 	}
-	load()
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
+	loadFirewall()
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
 
 	added := 0
 	for _, c := range codes {
@@ -211,7 +205,7 @@ func BanCountries(codes []string) (int, error) {
 			continue
 		}
 		exists := false
-		for _, existing := range rules.BannedCountries {
+		for _, existing := range firewallRules.BannedCountries {
 			if existing == c {
 				exists = true
 				break
@@ -220,28 +214,27 @@ func BanCountries(codes []string) (int, error) {
 		if exists {
 			continue
 		}
-		rules.BannedCountries = append(rules.BannedCountries, c)
+		firewallRules.BannedCountries = append(firewallRules.BannedCountries, c)
 		added++
 	}
 	if added == 0 {
 		return 0, errors.New("no valid country codes to add")
 	}
-	dedupeAndSort(&rules)
-	if err := saveLocked(); err != nil {
+	dedupeAndSortFirewall(&firewallRules)
+	if err := saveFirewallLocked(); err != nil {
 		return 0, err
 	}
 	return added, nil
 }
 
-// IsBlocked reports whether the given IP or country is blocked.
 func IsBlocked(ip, country string) bool {
-	load()
-	rulesMu.RLock()
-	defer rulesMu.RUnlock()
+	loadFirewall()
+	firewallMu.RLock()
+	defer firewallMu.RUnlock()
 
 	if ip != "" {
 		if norm, err := normalizeIP(ip); err == nil {
-			for _, b := range rules.BannedIPs {
+			for _, b := range firewallRules.BannedIPs {
 				if b == norm {
 					return true
 				}
@@ -251,7 +244,7 @@ func IsBlocked(ip, country string) bool {
 
 	if country != "" {
 		c := strings.ToUpper(strings.TrimSpace(country))
-		for _, b := range rules.BannedCountries {
+		for _, b := range firewallRules.BannedCountries {
 			if b == c {
 				return true
 			}
@@ -261,52 +254,49 @@ func IsBlocked(ip, country string) bool {
 	return false
 }
 
-// UnbanIP removes a single IP from the banned list.
 func UnbanIP(ip string) error {
-	load()
+	loadFirewall()
 	norm, err := normalizeIP(ip)
 	if err != nil {
 		return err
 	}
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
 
-	filtered := make([]string, 0, len(rules.BannedIPs))
-	for _, existing := range rules.BannedIPs {
+	filtered := make([]string, 0, len(firewallRules.BannedIPs))
+	for _, existing := range firewallRules.BannedIPs {
 		if existing != norm {
 			filtered = append(filtered, existing)
 		}
 	}
-	rules.BannedIPs = filtered
-	dedupeAndSort(&rules)
-	return saveLocked()
+	firewallRules.BannedIPs = filtered
+	dedupeAndSortFirewall(&firewallRules)
+	return saveFirewallLocked()
 }
 
-// UnbanCountry removes a country code from the banned list.
 func UnbanCountry(code string) error {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return errors.New("country code is empty")
 	}
-	load()
-	rulesMu.Lock()
-	defer rulesMu.Unlock()
+	loadFirewall()
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
 
-	filtered := make([]string, 0, len(rules.BannedCountries))
-	for _, existing := range rules.BannedCountries {
+	filtered := make([]string, 0, len(firewallRules.BannedCountries))
+	for _, existing := range firewallRules.BannedCountries {
 		if existing != code {
 			filtered = append(filtered, existing)
 		}
 	}
-	rules.BannedCountries = filtered
-	dedupeAndSort(&rules)
-	return saveLocked()
+	firewallRules.BannedCountries = filtered
+	dedupeAndSortFirewall(&firewallRules)
+	return saveFirewallLocked()
 }
 
-// GetStats returns statistics about the firewall.
-func GetStats() (ipCount, countryCount int) {
-	load()
-	rulesMu.RLock()
-	defer rulesMu.RUnlock()
-	return len(rules.BannedIPs), len(rules.BannedCountries)
+func GetFirewallStats() (ipCount, countryCount int) {
+	loadFirewall()
+	firewallMu.RLock()
+	defer firewallMu.RUnlock()
+	return len(firewallRules.BannedIPs), len(firewallRules.BannedCountries)
 }

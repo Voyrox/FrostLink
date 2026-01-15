@@ -1,0 +1,991 @@
+package core
+
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+)
+
+const usersPath = "db/users.json"
+const sessionsPath = "db/sessions.json"
+const csrfPath = "db/csrf.json"
+const tokensPath = "db/api_tokens.json"
+const rolesPath = "db/roles.json"
+
+type User struct {
+	Username          string   `json:"username"`
+	Email             string   `json:"email"`
+	PasswordHash      string   `json:"password_hash"`
+	IdentityProvider  string   `json:"identity_provider"`
+	Role              string   `json:"role"`
+	AccessType        string   `json:"access_type"`
+	AllowedDomainList []string `json:"domains"`
+}
+
+type userFile struct {
+	Users []User `json:"users"`
+}
+
+var (
+	usersMu     sync.RWMutex
+	users       []User
+	usersLoaded bool
+)
+
+func loadUsers() {
+	if usersLoaded {
+		return
+	}
+	usersMu.Lock()
+	defer usersMu.Unlock()
+	if usersLoaded {
+		return
+	}
+	b, err := os.ReadFile(usersPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			users = []User{}
+			usersLoaded = true
+			return
+		}
+		users = []User{}
+		usersLoaded = true
+		return
+	}
+	var uf userFile
+	if err := json.Unmarshal(b, &uf); err != nil {
+		users = []User{}
+		usersLoaded = true
+		return
+	}
+	users = uf.Users
+	usersLoaded = true
+}
+
+func saveUsers() error {
+	data, err := json.MarshalIndent(userFile{Users: users}, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(usersPath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(usersPath, data, 0600)
+}
+
+func ListUsers() []User {
+	loadUsers()
+	usersMu.RLock()
+	defer usersMu.RUnlock()
+	out := make([]User, len(users))
+	for i, u := range users {
+		out[i] = u
+		out[i].PasswordHash = ""
+	}
+	return out
+}
+
+func CreateUser(username, email, password, roleName, accessType string, domains []string) (User, error) {
+	if username == "" || password == "" {
+		return User{}, errors.New("username and password are required")
+	}
+	if roleName == "" {
+		roleName = "Member"
+	}
+	if _, ok := GetRole(roleName); !ok {
+		return User{}, errors.New("role does not exist")
+	}
+	if accessType != "all" && accessType != "custom" {
+		accessType = "all"
+	}
+	loadUsers()
+	usersMu.Lock()
+	defer usersMu.Unlock()
+	for _, u := range users {
+		if u.Username == username {
+			return User{}, errors.New("user already exists")
+		}
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, err
+	}
+	var allowed []string
+	if accessType == "custom" {
+		allowed = append(allowed, domains...)
+	}
+	u := User{
+		Username:          username,
+		Email:             email,
+		PasswordHash:      string(hash),
+		IdentityProvider:  "Local",
+		Role:              roleName,
+		AccessType:        accessType,
+		AllowedDomainList: allowed,
+	}
+	users = append(users, u)
+	if err := saveUsers(); err != nil {
+		return User{}, err
+	}
+	u.PasswordHash = ""
+	return u, nil
+}
+
+func DeleteUser(username string) error {
+	if username == "" {
+		return errors.New("username is required")
+	}
+	loadUsers()
+	usersMu.Lock()
+	defer usersMu.Unlock()
+	idx := -1
+	for i, u := range users {
+		if u.Username == username {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return errors.New("user not found")
+	}
+	users = append(users[:idx], users[idx+1:]...)
+	return saveUsers()
+}
+
+func AuthenticateUser(username, password string) (*User, bool) {
+	if username == "" || password == "" {
+		return nil, false
+	}
+	loadUsers()
+	usersMu.RLock()
+	defer usersMu.RUnlock()
+	for _, u := range users {
+		if u.Username != username {
+			continue
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+			return nil, false
+		}
+		copy := u
+		copy.PasswordHash = ""
+		return &copy, true
+	}
+	return nil, false
+}
+
+type Session struct {
+	ID         string    `json:"id"`
+	Username   string    `json:"username"`
+	Role       string    `json:"role"`
+	IP         string    `json:"ip"`
+	UserAgent  string    `json:"user_agent"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastAccess time.Time `json:"last_accessed"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+type sessionFile struct {
+	Sessions []Session `json:"sessions"`
+}
+
+var (
+	sessionsMu   sync.RWMutex
+	sessions     = make(map[string]Session)
+	sessionsInit bool
+)
+
+func initSessions() {
+	if sessionsInit {
+		return
+	}
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	if sessionsInit {
+		return
+	}
+
+	data, err := os.ReadFile(sessionsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			sessions = make(map[string]Session)
+			sessionsInit = true
+			return
+		}
+		sessions = make(map[string]Session)
+		sessionsInit = true
+		return
+	}
+
+	var sf sessionFile
+	if err := json.Unmarshal(data, &sf); err != nil {
+		sessions = make(map[string]Session)
+		sessionsInit = true
+		return
+	}
+
+	for _, s := range sf.Sessions {
+		if s.ExpiresAt.After(time.Now()) {
+			sessions[s.ID] = s
+		}
+	}
+	sessionsInit = true
+}
+
+func saveSessions() {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	saveSessionsUnlocked()
+}
+
+func saveSessionsUnlocked() {
+	sf := sessionFile{Sessions: make([]Session, 0, len(sessions))}
+	for _, s := range sessions {
+		sf.Sessions = append(sf.Sessions, s)
+	}
+
+	data, err := json.MarshalIndent(sf, "", "  ")
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0755); err != nil {
+		return
+	}
+	os.WriteFile(sessionsPath, data, 0600)
+}
+
+func CreateSession(username, role, ip, userAgent string) string {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	now := time.Now()
+	s := Session{
+		ID:         uuid.NewString(),
+		Username:   username,
+		Role:       role,
+		IP:         ip,
+		UserAgent:  userAgent,
+		CreatedAt:  now,
+		LastAccess: now,
+		ExpiresAt:  now.Add(24 * time.Hour),
+	}
+	sessions[s.ID] = s
+	saveSessionsUnlocked()
+	return s.ID
+}
+
+func GetSession(id string) (Session, bool) {
+	initSessions()
+	sessionsMu.RLock()
+	defer sessionsMu.RUnlock()
+	s, ok := sessions[id]
+	return s, ok
+}
+
+func UpdateSessionLastAccess(id string) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	if s, ok := sessions[id]; ok {
+		s.LastAccess = time.Now()
+		sessions[id] = s
+		saveSessionsUnlocked()
+	}
+}
+
+func RevokeSession(id string) bool {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	if _, ok := sessions[id]; ok {
+		delete(sessions, id)
+		saveSessionsUnlocked()
+		return true
+	}
+	return false
+}
+
+func RevokeSessionsByUser(username string) int {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	removed := 0
+	for id, s := range sessions {
+		if s.Username == username {
+			delete(sessions, id)
+			removed++
+		}
+	}
+	if removed > 0 {
+		saveSessionsUnlocked()
+	}
+	return removed
+}
+
+func ListSessions() []Session {
+	initSessions()
+	sessionsMu.RLock()
+	defer sessionsMu.RUnlock()
+
+	result := make([]Session, 0, len(sessions))
+	for _, s := range sessions {
+		result = append(result, s)
+	}
+	return result
+}
+
+func CountSessionsByUser(username string) int {
+	initSessions()
+	sessionsMu.RLock()
+	defer sessionsMu.RUnlock()
+
+	count := 0
+	for _, s := range sessions {
+		if s.Username == username {
+			count++
+		}
+	}
+	return count
+}
+
+func ValidateSession(id string) bool {
+	initSessions()
+	sessionsMu.RLock()
+	defer sessionsMu.RUnlock()
+	s, ok := sessions[id]
+	if !ok {
+		return false
+	}
+	if s.ExpiresAt.Before(time.Now()) {
+		return false
+	}
+	return true
+}
+
+type CSRFToken struct {
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id"`
+	Token     string    `json:"token"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type csrfFile struct {
+	Tokens []CSRFToken `json:"tokens"`
+}
+
+var (
+	csrfMu     sync.RWMutex
+	csrfTokens = make(map[string]CSRFToken)
+	csrfInit   bool
+)
+
+func initCSRF() {
+	if csrfInit {
+		return
+	}
+	csrfMu.Lock()
+	defer csrfMu.Unlock()
+	if csrfInit {
+		return
+	}
+
+	data, err := os.ReadFile(csrfPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			csrfTokens = make(map[string]CSRFToken)
+			csrfInit = true
+			return
+		}
+		csrfTokens = make(map[string]CSRFToken)
+		csrfInit = true
+		return
+	}
+
+	var cf csrfFile
+	if err := json.Unmarshal(data, &cf); err != nil {
+		csrfTokens = make(map[string]CSRFToken)
+		csrfInit = true
+		return
+	}
+
+	for _, t := range cf.Tokens {
+		if t.CreatedAt.After(time.Now().Add(-1 * time.Hour)) {
+			csrfTokens[t.SessionID] = t
+		}
+	}
+	csrfInit = true
+}
+
+func saveCSRF() {
+	csrfMu.Lock()
+	defer csrfMu.Unlock()
+	saveCSRFUnlocked()
+}
+
+func saveCSRFUnlocked() {
+	tf := csrfFile{Tokens: make([]CSRFToken, 0, len(csrfTokens))}
+	for _, t := range csrfTokens {
+		tf.Tokens = append(tf.Tokens, t)
+	}
+
+	data, err := json.MarshalIndent(tf, "", "  ")
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(csrfPath), 0755); err != nil {
+		return
+	}
+	os.WriteFile(csrfPath, data, 0600)
+}
+
+func GenerateCSRFToken(sessionID string) string {
+	csrfMu.Lock()
+	defer csrfMu.Unlock()
+
+	token := hex.EncodeToString(randomBytes(32))
+
+	t := CSRFToken{
+		ID:        uuid.NewString(),
+		SessionID: sessionID,
+		Token:     token,
+		CreatedAt: time.Now(),
+	}
+	csrfTokens[sessionID] = t
+	saveCSRFUnlocked()
+
+	return token
+}
+
+func ValidateCSRFToken(sessionID, token string) bool {
+	initCSRF()
+	csrfMu.RLock()
+	defer csrfMu.RUnlock()
+
+	t, ok := csrfTokens[sessionID]
+	if !ok {
+		return false
+	}
+	if t.Token != token {
+		return false
+	}
+	if t.CreatedAt.Before(time.Now().Add(-1 * time.Hour)) {
+		return false
+	}
+	return true
+}
+
+func InvalidateCSRFToken(sessionID string) {
+	csrfMu.Lock()
+	defer csrfMu.Unlock()
+	delete(csrfTokens, sessionID)
+	saveCSRFUnlocked()
+}
+
+func randomBytes(n int) []byte {
+	b := make([]byte, n)
+	rand.Read(b)
+	return b
+}
+
+type APIToken struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	TokenPrefix string     `json:"token_prefix"`
+	TokenHash   string     `json:"token_hash"`
+	Permission  string     `json:"permission"`
+	CreatedBy   string     `json:"created_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	ExpiresAt   *time.Time `json:"expires_at"`
+	Active      bool       `json:"active"`
+}
+
+type tokenFile struct {
+	Tokens []APIToken `json:"tokens"`
+}
+
+var (
+	tokensMu     sync.RWMutex
+	tokens       = make(map[string]APIToken)
+	tokensLoaded bool
+)
+
+func loadTokens() {
+	if tokensLoaded {
+		return
+	}
+	tokensMu.Lock()
+	defer tokensMu.Unlock()
+	if tokensLoaded {
+		return
+	}
+
+	data, err := os.ReadFile(tokensPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			tokens = make(map[string]APIToken)
+			tokensLoaded = true
+			return
+		}
+		tokens = make(map[string]APIToken)
+		tokensLoaded = true
+		return
+	}
+
+	var tf tokenFile
+	if err := json.Unmarshal(data, &tf); err != nil {
+		tokens = make(map[string]APIToken)
+		tokensLoaded = true
+		return
+	}
+
+	for _, t := range tf.Tokens {
+		if t.Active && (t.ExpiresAt == nil || t.ExpiresAt.After(time.Now())) {
+			tokens[t.ID] = t
+		}
+	}
+	tokensLoaded = true
+}
+
+func saveTokens() {
+	tokensMu.Lock()
+	defer tokensMu.Unlock()
+	saveTokensUnlocked()
+}
+
+func saveTokensUnlocked() {
+	tf := tokenFile{Tokens: make([]APIToken, 0, len(tokens))}
+	for _, t := range tokens {
+		tf.Tokens = append(tf.Tokens, t)
+	}
+
+	data, err := json.MarshalIndent(tf, "", "  ")
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(tokensPath), 0755); err != nil {
+		return
+	}
+	os.WriteFile(tokensPath, data, 0600)
+}
+
+func GenerateAPIToken() (fullToken, tokenID, prefix string, err error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", "", err
+	}
+	fullToken = "spk_" + base64.RawURLEncoding.EncodeToString(raw)
+	tokenID = uuid.NewString()
+	prefix = fullToken[len(fullToken)-10:]
+
+	return fullToken, tokenID, prefix, nil
+}
+
+func HashAPIToken(token string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}
+
+func CreateAPIToken(name, permission, createdBy string, expiresInDays *int) (fullToken string, err error) {
+	fullToken, tokenID, prefix, err := GenerateAPIToken()
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := HashAPIToken(fullToken)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	var expiresAt *time.Time
+	if expiresInDays != nil && *expiresInDays > 0 {
+		exp := now.AddDate(0, 0, *expiresInDays)
+		expiresAt = &exp
+	}
+
+	t := APIToken{
+		ID:          tokenID,
+		Name:        name,
+		TokenPrefix: prefix,
+		TokenHash:   hash,
+		Permission:  permission,
+		CreatedBy:   createdBy,
+		CreatedAt:   now,
+		ExpiresAt:   expiresAt,
+		Active:      true,
+	}
+
+	tokensMu.Lock()
+	tokens[tokenID] = t
+	saveTokensUnlocked()
+	tokensMu.Unlock()
+
+	return fullToken, nil
+}
+
+func ValidateAPIToken(rawToken, requiredPermission string) (*APIToken, bool) {
+	loadTokens()
+	tokensMu.RLock()
+	defer tokensMu.RUnlock()
+
+	for _, t := range tokens {
+		if !t.Active {
+			continue
+		}
+		if t.ExpiresAt != nil && t.ExpiresAt.Before(time.Now()) {
+			continue
+		}
+		if requiredPermission != "" && t.Permission != requiredPermission {
+			continue
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(rawToken)); err == nil {
+			return &t, true
+		}
+	}
+	return nil, false
+}
+
+func GetAPIToken(id string) (APIToken, bool) {
+	loadTokens()
+	tokensMu.RLock()
+	defer tokensMu.RUnlock()
+	t, ok := tokens[id]
+	return t, ok
+}
+
+func ListAPITokens() []APIToken {
+	loadTokens()
+	tokensMu.RLock()
+	defer tokensMu.RUnlock()
+
+	result := make([]APIToken, 0, len(tokens))
+	for _, t := range tokens {
+		result = append(result, t)
+	}
+	return result
+}
+
+func RevokeAPIToken(id string) bool {
+	loadTokens()
+	tokensMu.Lock()
+	defer tokensMu.Unlock()
+	if _, ok := tokens[id]; ok {
+		delete(tokens, id)
+		saveTokensUnlocked()
+		return true
+	}
+	return false
+}
+
+func UpdateAPITokenLastUsed(id string) {
+	loadTokens()
+	tokensMu.Lock()
+	defer tokensMu.Unlock()
+	if t, ok := tokens[id]; ok {
+		now := time.Now()
+		t.LastUsedAt = &now
+		tokens[id] = t
+		saveTokensUnlocked()
+	}
+}
+
+type PaginatedTokensResponse struct {
+	Tokens     []map[string]interface{} `json:"tokens"`
+	Total      int                      `json:"total"`
+	Page       int                      `json:"page"`
+	Limit      int                      `json:"limit"`
+	TotalPages int                      `json:"total_pages"`
+}
+
+func ListPublicPaginated(page, limit int) PaginatedTokensResponse {
+	loadTokens()
+	tokensMu.RLock()
+	defer tokensMu.RUnlock()
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	allTokens := make([]map[string]interface{}, 0, len(tokens))
+	for _, t := range tokens {
+		allTokens = append(allTokens, map[string]interface{}{
+			"id":           t.ID,
+			"name":         t.Name,
+			"token_prefix": t.TokenPrefix,
+			"permission":   t.Permission,
+			"created_by":   t.CreatedBy,
+			"created_at":   t.CreatedAt.Format(time.RFC3339),
+			"last_used":    t.LastUsedAt,
+			"expires_at":   t.ExpiresAt,
+			"active":       t.Active,
+		})
+	}
+
+	total := len(allTokens)
+	totalPages := (total + limit - 1) / limit
+
+	offset := (page - 1) * limit
+	var tokenList []map[string]interface{}
+	if offset < total {
+		end := offset + limit
+		if end > total {
+			end = total
+		}
+		tokenList = allTokens[offset:end]
+	}
+
+	return PaginatedTokensResponse{
+		Tokens:     tokenList,
+		Total:      total,
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+	}
+}
+
+type Permission string
+
+const (
+	PermissionViewDashboard Permission = "view_dashboard"
+	PermissionViewAnalytics Permission = "view_analytics"
+	PermissionViewLogs      Permission = "view_logs"
+	PermissionManageDomains Permission = "manage_domains"
+	PermissionManageUsers   Permission = "manage_users"
+	PermissionManageRoles   Permission = "manage_roles"
+)
+
+type Role struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Permissions []Permission `json:"permissions"`
+	IsSystem    bool         `json:"is_system"`
+}
+
+type roleFile struct {
+	Roles []Role `json:"roles"`
+}
+
+var (
+	rolesMu     sync.RWMutex
+	roles       []Role
+	rolesLoaded bool
+)
+
+func AllPermissions() []Permission {
+	return []Permission{
+		PermissionViewDashboard,
+		PermissionViewAnalytics,
+		PermissionViewLogs,
+		PermissionManageDomains,
+		PermissionManageUsers,
+		PermissionManageRoles,
+	}
+}
+
+func loadRoles() {
+	if rolesLoaded {
+		return
+	}
+	rolesMu.Lock()
+	defer rolesMu.Unlock()
+	if rolesLoaded {
+		return
+	}
+	b, err := os.ReadFile(rolesPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			initializeDefaultRoles()
+			return
+		}
+		roles = []Role{}
+		rolesLoaded = true
+		return
+	}
+	var rf roleFile
+	if err := json.Unmarshal(b, &rf); err != nil {
+		roles = []Role{}
+		rolesLoaded = true
+		return
+	}
+	roles = rf.Roles
+	rolesLoaded = true
+}
+
+func initializeDefaultRoles() {
+	owner := Role{
+		Name:        "Owner",
+		Description: "Full access to all features",
+		Permissions: AllPermissions(),
+		IsSystem:    true,
+	}
+	admin := Role{
+		Name:        "Admin",
+		Description: "Administrative access",
+		Permissions: []Permission{
+			PermissionManageUsers,
+			PermissionManageRoles,
+			PermissionManageDomains,
+			PermissionViewLogs,
+			PermissionViewAnalytics,
+		},
+		IsSystem: true,
+	}
+	member := Role{
+		Name:        "Member",
+		Description: "Standard user access",
+		Permissions: []Permission{
+			PermissionViewDashboard,
+			PermissionViewAnalytics,
+		},
+		IsSystem: false,
+	}
+	roles = []Role{owner, admin, member}
+	rolesLoaded = true
+	if err := saveRoles(); err != nil {
+		return
+	}
+}
+
+func saveRoles() error {
+	data, err := json.MarshalIndent(roleFile{Roles: roles}, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(rolesPath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(rolesPath, data, 0600)
+}
+
+func ListRoles() []Role {
+	loadRoles()
+	rolesMu.RLock()
+	defer rolesMu.RUnlock()
+	out := make([]Role, len(roles))
+	copy(out, roles)
+	return out
+}
+
+func GetRole(name string) (Role, bool) {
+	loadRoles()
+	rolesMu.RLock()
+	defer rolesMu.RUnlock()
+	for _, r := range roles {
+		if strings.EqualFold(r.Name, name) {
+			return r, true
+		}
+	}
+	return Role{}, false
+}
+
+func HasRolePermission(roleName string, permission Permission) bool {
+	r, ok := GetRole(roleName)
+	if !ok {
+		return false
+	}
+	for _, p := range r.Permissions {
+		if p == permission {
+			return true
+		}
+	}
+	return false
+}
+
+func CreateRole(name, description string, permissions []Permission) (Role, error) {
+	if name == "" {
+		return Role{}, errors.New("role name is required")
+	}
+	if len(permissions) == 0 {
+		return Role{}, errors.New("at least one permission is required")
+	}
+	loadRoles()
+	rolesMu.Lock()
+	defer rolesMu.Unlock()
+	for _, r := range roles {
+		if strings.EqualFold(r.Name, name) {
+			return Role{}, errors.New("role already exists")
+		}
+	}
+	role := Role{
+		Name:        strings.TrimSpace(name),
+		Description: strings.TrimSpace(description),
+		Permissions: permissions,
+		IsSystem:    false,
+	}
+	roles = append(roles, role)
+	if err := saveRoles(); err != nil {
+		return Role{}, err
+	}
+	return role, nil
+}
+
+func UpdateRole(name string, description string, permissions []Permission) (Role, error) {
+	if name == "" {
+		return Role{}, errors.New("role name is required")
+	}
+	loadRoles()
+	rolesMu.Lock()
+	defer rolesMu.Unlock()
+	idx := -1
+	for i, r := range roles {
+		if strings.EqualFold(r.Name, name) {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return Role{}, errors.New("role not found")
+	}
+	if roles[idx].IsSystem {
+		return Role{}, errors.New("cannot modify system roles")
+	}
+	if len(permissions) == 0 {
+		return Role{}, errors.New("at least one permission is required")
+	}
+	roles[idx].Description = strings.TrimSpace(description)
+	roles[idx].Permissions = permissions
+	if err := saveRoles(); err != nil {
+		return Role{}, err
+	}
+	return roles[idx], nil
+}
+
+func DeleteRole(name string) error {
+	if name == "" {
+		return errors.New("role name is required")
+	}
+	loadRoles()
+	rolesMu.Lock()
+	defer rolesMu.Unlock()
+	idx := -1
+	for i, r := range roles {
+		if strings.EqualFold(r.Name, name) {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return errors.New("role not found")
+	}
+	if roles[idx].IsSystem {
+		return errors.New("cannot delete system roles")
+	}
+	roles = append(roles[:idx], roles[idx+1:]...)
+	return saveRoles()
+}

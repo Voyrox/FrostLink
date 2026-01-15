@@ -70,7 +70,39 @@
                 </div>
 
                 <div class="pager">
-                    <div class="page-info" id="page-info">Showing all tokens</div>
+                    <div class="page-info" id="page-info-text">Showing all tokens</div>
+                    <div class="page-controls" id="page-controls" style="display: none;">
+                        <button class="btn small ghost" id="first-page-btn" aria-label="First page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                    <path d="M12 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" id="prev-page-btn" aria-label="Previous page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" id="next-page-btn" aria-label="Next page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button class="btn small ghost" id="last-page-btn" aria-label="Last page">
+                            <span class="icon" aria-hidden="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M6 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                    <path d="M12 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
                 </div>
             </section>
         </main>
@@ -147,6 +179,17 @@
             const createForm = document.getElementById('create-token-form');
             const newTokenInput = document.getElementById('new-token-value');
 
+            const firstPageBtn = document.getElementById('first-page-btn');
+            const prevPageBtn = document.getElementById('prev-page-btn');
+            const nextPageBtn = document.getElementById('next-page-btn');
+            const lastPageBtn = document.getElementById('last-page-btn');
+            const pageInfoText = document.getElementById('page-info-text');
+            const pageControls = document.getElementById('page-controls');
+
+            let currentPage = 1;
+            let itemsPerPage = 50;
+            let totalPages = 1;
+            let totalItems = 0;
             let allTokens = [];
 
             function formatDate(date) {
@@ -173,6 +216,19 @@
                     return hours + ' hours';
                 }
                 return 'Soon';
+            }
+
+            function updatePager() {
+                if (pageInfoText) {
+                    pageInfoText.textContent = 'Page ' + currentPage + ' of ' + (totalPages || 1) + ' (' + totalItems + ' tokens)';
+                }
+                if (pageControls) {
+                    pageControls.style.display = totalPages > 1 ? 'flex' : 'none';
+                }
+                if (firstPageBtn) firstPageBtn.disabled = currentPage <= 1;
+                if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+                if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
+                if (lastPageBtn) lastPageBtn.disabled = currentPage >= totalPages;
             }
 
             function renderTokens() {
@@ -252,12 +308,18 @@
             }
 
             function loadTokens() {
-                fetch('/api/tokens')
+                fetch('/api/tokens?page=' + currentPage + '&limit=' + itemsPerPage)
                     .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
                     .then(function(data) {
+                        const pagination = data.pagination || {};
+                        currentPage = pagination.page || 1;
+                        totalPages = pagination.total_pages || 1;
+                        totalItems = pagination.total || 0;
+
                         allTokens = (data && data.tokens) || [];
                         renderTokens();
-                        if (totalTokensEl) totalTokensEl.textContent = allTokens.length;
+                        if (totalTokensEl) totalTokensEl.textContent = totalItems;
+                        updatePager();
                     })
                     .catch(function(err) {
                         console.error('Failed to load tokens', err);
@@ -317,6 +379,7 @@
                                 newTokenInput.value = data.token;
                                 showModal(displayModal);
                             }
+                            currentPage = 1;
                             loadTokens();
                         })
                         .catch(function(err) {
@@ -331,6 +394,39 @@
                     newTokenInput.select();
                     document.execCommand('copy');
                     showToast('Token copied to clipboard');
+                });
+            }
+
+            if (firstPageBtn) {
+                firstPageBtn.addEventListener('click', function() {
+                    if (currentPage > 1) {
+                        currentPage = 1;
+                        loadTokens();
+                    }
+                });
+            }
+            if (prevPageBtn) {
+                prevPageBtn.addEventListener('click', function() {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        loadTokens();
+                    }
+                });
+            }
+            if (nextPageBtn) {
+                nextPageBtn.addEventListener('click', function() {
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        loadTokens();
+                    }
+                });
+            }
+            if (lastPageBtn) {
+                lastPageBtn.addEventListener('click', function() {
+                    if (currentPage < totalPages) {
+                        currentPage = totalPages;
+                        loadTokens();
+                    }
                 });
             }
 

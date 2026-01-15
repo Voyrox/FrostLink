@@ -1,61 +1,277 @@
 # SparkProxy
 
-SparkProxy is a powerful and flexible reverse proxy tool developed in go. It's designed to route requests efficiently from public domains to local servers, supporting both HTTP and HTTPS traffic. ArcticArch is particularly useful for exposing local development servers to the internet or for setting up a custom routing scheme in a microservices architecture.
+A Go-based reverse proxy with HTTP/HTTPS support, TCP stream proxy, web dashboard, and domain management.
 
+## Features
 
-# 🚀 Features
-> [!TIP]
-> - **Support for HTTP and HTTPS**: Handles both unencrypted and encrypted traffic, with easy SSL/TLS setup.
-> - **Dynamic Configuration**: Configure your domains and SSL settings using simple `.conf` files.
-> - **Asynchronous Processing**: Utilizes go's async capabilities for efficient handling of multiple connections.
-> - **Detailed Logging**: Logs information about each request, including processing time, client IP address, domain, and request path.
-> - **Customizable**: Extendable for various use cases and easily integrable into different environments.
-> 
+- HTTP/HTTPS reverse proxy
+- TCP stream proxy (SMTP, IMAP, custom TCP)
+- Web dashboard
+- User authentication & sessions
+- API tokens
+- Audit logging
+- Firewall (IP blocking, country bans)
 
-## Getting Started
+## Quick Start
+
+### Prerequisites
+
+- Go 1.21+
+- Linux (recommended), macOS, Windows
+
+### Installation
+
+#### Option A: Download Binary
+
+```bash
+wget https://github.com/anomalyco/SparkProxy/releases/latest/download/SparkProxy
+chmod +x SparkProxy
+./SparkProxy
+```
+
+#### Option B: Build from Source
+
+```bash
+git clone https://github.com/anomalyco/SparkProxy.git
+cd SparkProxy
+go build -o SparkProxy main.go
+./SparkProxy
+```
 
 ### Configuration
 
-SparkProxy requires domain configuration files to be placed in the `./domains` directory. Each file should have the `.conf` extension and follow this structure:
+1. Copy `config.example.json` to `config.json`:
 
-### Running the Proxy
+```bash
+cp config.example.json config.json
+```
 
-1. **Set Up Configuration Files:** Create `.conf` files for each domain in the `./domains` directory.
-2. **Start SparkProxy:** Execute the main program. By default, it listens on ports 80 (HTTP) and 443 (HTTPS).
-3. **Monitor Activity:** Observe the console output for logs detailing requests and server activity.
+2. Edit `config.json` with your settings
 
-### Example Configuration File
+3. Start the proxy:
 
-example.conf
-```plaintext
-server: {
-    domain: example.com
-    location: localhost:3000
+```bash
+./SparkProxy
+```
 
-    connection: {
-        AllowSSL: true
-        AllowHTTP: true
-    }
-}
+4. Access the dashboard at http://localhost:8080
 
-SSLCert: {
-    ssl_certificate: /etc/letsencrypt/live/example.com/fullchain.pem
-    ssl_certificate_key: /etc/letsencrypt/live/example.com/privkey.pem
+**Default credentials:** `admin` / `admin` (change immediately!)
+
+### First Run
+
+On first run, SparkProxy creates:
+
+- `db/users.json` - User database
+- `db/domains.json` - Domain configurations
+- `db/request_logs.json` - Request log storage
+- `db/audit_logs.json` - Audit log storage
+- `db/sessions.json` - Active sessions
+- `db/csrf.json` - CSRF tokens
+- `db/api_tokens.json` - API tokens
+
+---
+
+## Configuration
+
+### Main Config (`config.json`)
+
+```json
+{
+  "port": 8080,
+  "admin_user": "admin",
+  "admin_password": "changeme",
+  "session_secret": "your-secret-here",
+  "proxy_addr": ":8081",
+  "tcp_proxies": [],
+  "tcp_defaults": {
+    "proxy_connect_timeout": "10s",
+    "proxy_timeout": "1h",
+    "health_check_interval": "30s",
+    "max_fails": 3,
+    "fail_timeout": "30s"
+  }
 }
 ```
 
-### Dashboard
+### Domains (`db/domains.json`)
 
-SparkProxy includes a user-friendly dashboard for easy monitoring and management. Here's a glimpse of what the dashboard looks like:
+```json
+{
+  "domains": [
+    {
+      "domain": "example.com",
+      "location": "192.168.1.100:8080",
+      "allow_http": true
+    }
+  ]
+}
+```
 
-<p align="center">
-    <img src="./images/sites.png">
-    <img src="./images/analytics.png">
-    <img src="./images/auth.png">
-</p>
+### TCP Proxies (`config.json`)
 
-### Contributing
-Feel free to open issues or submit pull requests if you have ideas or encounter issues. Contributions are always welcome!
+```json
+{
+  "tcp_proxies": [
+    {
+      "name": "mailcow-smtp",
+      "listen": "0.0.0.0:25",
+      "upstream": "192.168.1.60:25"
+    },
+    {
+      "name": "mailcow-imaps",
+      "listen": "0.0.0.0:993",
+      "upstream": "192.168.1.60:993",
+      "tls": {
+        "mode": "terminate",
+        "cert_file": "/etc/ssl/certs/mailcow.crt",
+        "key_file": "/etc/ssl/private/mailcow.key"
+      }
+    }
+  ]
+}
+```
 
-### License
-SparkProxy is open-source software, and its license information can be found in the LICENSE file in the repository.
+---
+
+## TCP Proxy Guide
+
+### Overview
+
+SparkProxy can proxy any TCP traffic, not just HTTP. This is useful for:
+
+- SMTP (25, 465, 587)
+- IMAP (143, 993)
+- POP3 (110, 995)
+- Custom TCP services
+
+### Examples
+
+#### Basic TCP Proxy
+
+```json
+{
+  "name": "my-smtp",
+  "listen": "0.0.0.0:25",
+  "upstream": "192.168.1.10:25"
+}
+```
+
+#### TLS Termination
+
+```json
+{
+  "name": "secure-imap",
+  "listen": "0.0.0.0:993",
+  "upstream": "192.168.1.10:143",
+  "tls": {
+    "mode": "terminate",
+    "cert_file": "/etc/ssl/certs/imap.crt",
+    "key_file": "/etc/ssl/private/imap.key"
+  }
+}
+```
+
+#### TLS Pass-Through with SNI Routing
+
+```json
+{
+  "name": "sni-router",
+  "listen": "0.0.0.0:443",
+  "tls": {
+    "mode": "pass-through"
+  },
+  "sni_routes": [
+    {"host": "smtp.example.com", "upstream": "192.168.1.10:25"},
+    {"host": "imap.example.com", "upstream": "192.168.1.10:993"}
+  ]
+}
+```
+
+---
+
+## API Reference
+
+### Authentication
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/_auth/login` | POST | User login |
+| `/_auth/logout` | POST | User logout |
+| `/_auth/csrf` | POST | Get CSRF token |
+
+### Users (Admin)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/users` | GET | List users |
+| `/api/users` | POST | Create user |
+| `/api/users/{username}` | PUT | Update user |
+| `/api/users/{username}` | DELETE | Delete user |
+
+### Domains
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/domains` | GET | List domains |
+| `/api/domains` | POST | Create domain |
+| `/api/domains/{domain}` | PUT | Update domain |
+| `/api/domains/{domain}` | DELETE | Delete domain |
+
+### Logs
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/logs` | GET | Request logs (paginated) |
+| `/api/audit` | GET | Audit logs (paginated) |
+
+### API Tokens
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/tokens` | GET | List tokens |
+| `/api/tokens` | POST | Create token |
+| `/api/tokens/{id}` | DELETE | Revoke token |
+
+---
+
+## Development
+
+### Building
+
+```bash
+go build -o SparkProxy main.go
+```
+
+### Testing
+
+```bash
+go test ./...
+```
+
+### Project Structure
+
+```
+SparkProxy/
+├── main.go           # Bootstrap and router
+├── proxy/            # HTTP/HTTPS/TCP proxy logic
+├── core/             # Config, auth, firewall, audit
+├── ui/               # Logging and templates
+└── views/            # Dashboard templates
+```
+
+---
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROXY_ADDR` | Proxy listen address | `:8081` |
+| `GEOIP_DB_PATH` | Path to GeoIP database | - |
+| `DEBUG` | Enable debug logging | - |
+
+---
+
+## License
+
+SparkProxy is open-source software. See LICENSE file for details.

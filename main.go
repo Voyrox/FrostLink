@@ -8,16 +8,9 @@ import (
 	"strings"
 	"time"
 
-	auditpkg "SparkProxy/audit"
-	csrfpkg "SparkProxy/csrf"
-	filepkg "SparkProxy/file"
-	firewallpkg "SparkProxy/firewall"
-	proxyhttp "SparkProxy/http"
-	logger "SparkProxy/logger"
-	rolepkg "SparkProxy/role"
-	sessionpkg "SparkProxy/session"
-	tokenpkg "SparkProxy/token"
-	userpkg "SparkProxy/user"
+	"SparkProxy/core"
+	"SparkProxy/proxy"
+	"SparkProxy/ui"
 
 	"github.com/gin-gonic/gin"
 )
@@ -62,7 +55,7 @@ func csrfMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		if token == "" || !csrfpkg.ValidateToken(sid, token) {
+		if token == "" || !core.ValidateCSRFToken(sid, token) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "csrf: invalid token"})
 			c.Abort()
 			return
@@ -134,7 +127,7 @@ func authRequired() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if !sessionpkg.Validate(sid) {
+		if !core.ValidateSession(sid) {
 			clearSessionCookie(c)
 			c.Redirect(http.StatusFound, "/login")
 			c.Abort()
@@ -153,7 +146,7 @@ func apiAuthRequired() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if !sessionpkg.Validate(sid) {
+		if !core.ValidateSession(sid) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
 			c.Abort()
 			return
@@ -247,9 +240,9 @@ func main() {
 	}
 
 	go func() {
-		cfgs := filepkg.ReadConfigs("./domains")
-		if err := proxyhttp.StartProxy(cfgs); err != nil {
-			logger.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
+		cfgs := core.ReadConfigs("./domains")
+		if err := proxy.StartProxy(cfgs); err != nil {
+			ui.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
 		}
 	}()
 
@@ -257,7 +250,7 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	logger.SystemLog("info", "dashboard", fmt.Sprintf("Started on %s", addr))
+	ui.SystemLog("info", "dashboard", fmt.Sprintf("Started on %s", addr))
 	r.Run(addr)
 }
 
@@ -297,7 +290,7 @@ type firewallCountryBanRequest struct {
 func apiLogin(c *gin.Context) {
 	var req loginRequest
 	if err := c.BindJSON(&req); err != nil {
-		auditpkg.Log("user_login_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/login", "failed", map[string]string{"reason": "invalid payload"})
+		core.LogAudit("user_login_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/login", "failed", map[string]string{"reason": "invalid payload"})
 		c.JSON(http.StatusOK, gin.H{"valid": false})
 		return
 	}
@@ -309,40 +302,40 @@ func apiLogin(c *gin.Context) {
 	validPass := os.Getenv("PASSWORD")
 
 	if req.Username == validUser && req.Password == validPass && validUser != "" && validPass != "" {
-		sessionpkg.RevokeByUser(req.Username)
-		sid := sessionpkg.Create(req.Username, "Owner", ip, userAgent)
-		csrfToken := csrfpkg.GenerateToken(sid)
+		core.RevokeSessionsByUser(req.Username)
+		sid := core.CreateSession(req.Username, "Owner", ip, userAgent)
+		csrfToken := core.GenerateCSRFToken(sid)
 		setSessionCookie(c, sid)
 		setCSRFCookie(c, csrfToken)
-		auditpkg.Log("user_login", req.Username, ip, userAgent, "/api/login", "success", nil)
+		core.LogAudit("user_login", req.Username, ip, userAgent, "/api/login", "success", nil)
 		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid, "csrf_token": csrfToken})
 		return
 	}
 
-	u, ok := userpkg.Authenticate(req.Username, req.Password)
+	u, ok := core.AuthenticateUser(req.Username, req.Password)
 	if ok && u != nil {
 		role := "Member"
 		if u.Role != "" {
 			role = u.Role
 		}
-		sessionpkg.RevokeByUser(u.Username)
-		sid := sessionpkg.Create(u.Username, role, ip, userAgent)
-		csrfToken := csrfpkg.GenerateToken(sid)
+		core.RevokeSessionsByUser(u.Username)
+		sid := core.CreateSession(u.Username, role, ip, userAgent)
+		csrfToken := core.GenerateCSRFToken(sid)
 		setSessionCookie(c, sid)
 		setCSRFCookie(c, csrfToken)
-		auditpkg.Log("user_login", u.Username, ip, userAgent, "/api/login", "success", nil)
+		core.LogAudit("user_login", u.Username, ip, userAgent, "/api/login", "success", nil)
 		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid, "csrf_token": csrfToken})
 		return
 	}
 
-	auditpkg.Log("user_login_failed", req.Username, ip, userAgent, "/api/login", "failed", map[string]string{"reason": "invalid credentials"})
+	core.LogAudit("user_login_failed", req.Username, ip, userAgent, "/api/login", "failed", map[string]string{"reason": "invalid credentials"})
 	c.JSON(http.StatusOK, gin.H{"valid": false})
 }
 
 func apiProxys(c *gin.Context) {
-	configs := filepkg.ReadConfigs("./domains")
-	statSlice := proxyhttp.GetDomainStats()
-	stats := make(map[string]proxyhttp.DomainStats)
+	configs := core.ReadConfigs("./domains")
+	statSlice := proxy.GetDomainStats()
+	stats := make(map[string]proxy.DomainStats)
 	for _, s := range statSlice {
 		stats[s.Domain] = s
 	}
@@ -371,7 +364,7 @@ func apiProxys(c *gin.Context) {
 		}
 		m["online"] = online
 
-		m["require_auth"] = proxyhttp.GetDomainAuth(cfg.Domain)
+		m["require_auth"] = proxy.GetDomainAuth(cfg.Domain)
 		if ps, ok := stats[cfg.Domain]; ok {
 			m["data_in_total"] = ps.DataInTotal
 			m["data_out_total"] = ps.DataOutTotal
@@ -391,7 +384,7 @@ func apiProxys(c *gin.Context) {
 }
 
 func apiDashboard(c *gin.Context) {
-	domainStats := proxyhttp.GetDomainStats()
+	domainStats := proxy.GetDomainStats()
 	var uploadTotal int64
 	var downloadTotal int64
 	for _, ds := range domainStats {
@@ -399,7 +392,7 @@ func apiDashboard(c *gin.Context) {
 		downloadTotal += ds.DataInTotal
 	}
 
-	logs := proxyhttp.GetRequestLogs()
+	logs := core.GetRequestLogs()
 	ipSet := make(map[string]struct{})
 	cutoff := time.Now().Add(-30 * time.Second)
 	var firewallBlocked int
@@ -431,7 +424,7 @@ func apiDashboard(c *gin.Context) {
 }
 
 func apiFirewallGet(c *gin.Context) {
-	rules := firewallpkg.List()
+	rules := core.ListFirewallRules()
 	c.JSON(http.StatusOK, gin.H{
 		"banned_ips":       rules.BannedIPs,
 		"banned_countries": rules.BannedCountries,
@@ -449,11 +442,11 @@ func apiFirewallBanIP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ip is required"})
 		return
 	}
-	if err := firewallpkg.BanIP(ip); err != nil {
+	if err := core.BanIP(ip); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("firewall_rule_add", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ban-ip", "success", map[string]string{"type": "ip", "value": ip})
+	core.LogAudit("firewall_rule_add", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ban-ip", "success", map[string]string{"type": "ip", "value": ip})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -484,7 +477,7 @@ func apiFirewallBanIPUpload(c *gin.Context) {
 		}
 		ips = append(ips, line)
 	}
-	added, err := firewallpkg.BanIPs(ips)
+	added, err := core.BanIPs(ips)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -509,12 +502,12 @@ func apiFirewallBanCountry(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "country code is required"})
 		return
 	}
-	added, err := firewallpkg.BanCountries(codes)
+	added, err := core.BanCountries(codes)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("firewall_rule_add", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ban-country", "success", map[string]string{"type": "country", "count": fmt.Sprintf("%d", added)})
+	core.LogAudit("firewall_rule_add", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ban-country", "success", map[string]string{"type": "country", "count": fmt.Sprintf("%d", added)})
 	c.JSON(http.StatusOK, gin.H{"ok": true, "added": added})
 }
 
@@ -560,7 +553,7 @@ func apiDomainsCreate(c *gin.Context) {
 		}
 	}
 
-	cfg := filepkg.Config{
+	cfg := core.Config{
 		Domain:            domain,
 		Location:          target,
 		AllowSSL:          allowSSL,
@@ -569,19 +562,23 @@ func apiDomainsCreate(c *gin.Context) {
 		SSLCertificateKey: keyPathPtr,
 	}
 
-	if err := filepkg.WriteConfig("./domains", cfg); err != nil {
+	if err := core.WriteConfig("./domains", cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write domain config"})
 		return
 	}
 
-	auditpkg.Log("domain_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains", "success", map[string]string{"domain": domain, "target": target})
+	core.LogAudit("domain_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/domains", "success", map[string]string{"domain": domain, "target": target})
 	c.JSON(http.StatusOK, gin.H{"domain": cfg.Domain, "host": cfg.Location, "SSL": cfg.AllowSSL, "HTTP": cfg.AllowHTTP})
 }
 
 func apiLogs(c *gin.Context) {
-	logs := proxyhttp.GetRequestLogs()
+	var page, limit int
+	fmt.Sscanf(c.Query("page"), "%d", &page)
+	fmt.Sscanf(c.Query("limit"), "%d", &limit)
+
+	data := core.GetRequestLogsPaginated(page, limit)
 	var out []map[string]interface{}
-	for _, l := range logs {
+	for _, l := range data.Logs {
 		out = append(out, map[string]interface{}{
 			"timestamp": l.Timestamp.Format("2006-01-02 15:04:05"),
 			"action":    l.Action,
@@ -592,11 +589,19 @@ func apiLogs(c *gin.Context) {
 			"method":    l.Method,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"logs": out})
+	c.JSON(http.StatusOK, gin.H{
+		"logs": out,
+		"pagination": gin.H{
+			"page":        data.Page,
+			"limit":       data.Limit,
+			"total":       data.Total,
+			"total_pages": data.TotalPages,
+		},
+	})
 }
 
 func apiUsersList(c *gin.Context) {
-	users := userpkg.List()
+	users := core.ListUsers()
 	var out []map[string]interface{}
 	for _, u := range users {
 		out = append(out, map[string]interface{}{
@@ -614,20 +619,20 @@ func apiUsersList(c *gin.Context) {
 func apiUsersCreate(c *gin.Context) {
 	var req createUserRequest
 	if err := c.BindJSON(&req); err != nil {
-		auditpkg.Log("user_create_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "failed", map[string]string{"reason": "invalid payload"})
+		core.LogAudit("user_create_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "failed", map[string]string{"reason": "invalid payload"})
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
 	if req.Role == "" {
 		req.Role = "Member"
 	}
-	u, err := userpkg.Create(req.Username, req.Email, req.Password, req.Role, req.AccessType, req.Domains)
+	u, err := core.CreateUser(req.Username, req.Email, req.Password, req.Role, req.AccessType, req.Domains)
 	if err != nil {
-		auditpkg.Log("user_create_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "failed", map[string]string{"reason": err.Error()})
+		core.LogAudit("user_create_failed", "unknown", c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "failed", map[string]string{"reason": err.Error()})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("user_create", u.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "success", map[string]string{"email": u.Email, "role": u.Role})
+	core.LogAudit("user_create", u.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "success", map[string]string{"email": u.Email, "role": u.Role})
 	c.JSON(http.StatusOK, gin.H{"user": map[string]interface{}{
 		"username":          u.Username,
 		"email":             u.Email,
@@ -640,13 +645,13 @@ func apiUsersCreate(c *gin.Context) {
 
 func apiUsersDelete(c *gin.Context) {
 	username := c.Param("username")
-	if err := userpkg.Delete(username); err != nil {
-		auditpkg.Log("user_delete_failed", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/"+username, "failed", map[string]string{"reason": err.Error()})
+	if err := core.DeleteUser(username); err != nil {
+		core.LogAudit("user_delete_failed", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/"+username, "failed", map[string]string{"reason": err.Error()})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	sessionpkg.RevokeByUser(username)
-	auditpkg.Log("user_delete", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/"+username, "success", nil)
+	core.RevokeSessionsByUser(username)
+	core.LogAudit("user_delete", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/"+username, "success", nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -657,7 +662,7 @@ type createRoleRequest struct {
 }
 
 func apiRolesList(c *gin.Context) {
-	rList := rolepkg.List()
+	rList := core.ListRoles()
 	c.JSON(http.StatusOK, gin.H{"roles": rList})
 }
 
@@ -671,16 +676,16 @@ func apiRolesCreate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "role name is required"})
 		return
 	}
-	var perms []rolepkg.Permission
+	var perms []core.Permission
 	for _, p := range req.Permissions {
-		perms = append(perms, rolepkg.Permission(p))
+		perms = append(perms, core.Permission(p))
 	}
-	r, err := rolepkg.Create(req.Name, req.Description, perms)
+	r, err := core.CreateRole(req.Name, req.Description, perms)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("role_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles", "success", map[string]string{"role": r.Name})
+	core.LogAudit("role_create", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles", "success", map[string]string{"role": r.Name})
 	c.JSON(http.StatusOK, gin.H{"role": r})
 }
 
@@ -695,16 +700,16 @@ func apiRolesUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	var perms []rolepkg.Permission
+	var perms []core.Permission
 	for _, p := range req.Permissions {
-		perms = append(perms, rolepkg.Permission(p))
+		perms = append(perms, core.Permission(p))
 	}
-	r, err := rolepkg.Update(name, req.Description, perms)
+	r, err := core.UpdateRole(name, req.Description, perms)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("role_update", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles/"+name, "success", map[string]string{"role": r.Name})
+	core.LogAudit("role_update", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles/"+name, "success", map[string]string{"role": r.Name})
 	c.JSON(http.StatusOK, gin.H{"role": r})
 }
 
@@ -714,11 +719,11 @@ func apiRolesDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "role name is required"})
 		return
 	}
-	if err := rolepkg.Delete(name); err != nil {
+	if err := core.DeleteRole(name); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("role_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles/"+name, "success", map[string]string{"role": name})
+	core.LogAudit("role_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/roles/"+name, "success", map[string]string{"role": name})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -737,12 +742,12 @@ func apiDomainAuthUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	if err := proxyhttp.SetDomainAuth(domain, req.RequireAuth); err != nil {
-		logger.SystemLog("error", "api_domain_auth", fmt.Sprintf("failed to update auth for %s: %v", domain, err))
+	if err := proxy.SetDomainAuth(domain, req.RequireAuth); err != nil {
+		ui.SystemLog("error", "api_domain_auth", fmt.Sprintf("failed to update auth for %s: %v", domain, err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update auth"})
 		return
 	}
-	logger.SystemLog("info", "api_domain_auth", fmt.Sprintf("domain %s auth set to %v", domain, req.RequireAuth))
+	ui.SystemLog("info", "api_domain_auth", fmt.Sprintf("domain %s auth set to %v", domain, req.RequireAuth))
 	c.JSON(http.StatusOK, gin.H{"domain": domain, "require_auth": req.RequireAuth})
 }
 
@@ -756,12 +761,12 @@ func loginPost(c *gin.Context) {
 	validPass := os.Getenv("PASSWORD")
 
 	if email == validUser && password == validPass && validUser != "" && validPass != "" {
-		sessionpkg.RevokeByUser(email)
-		sid := sessionpkg.Create(email, "Owner", ip, userAgent)
-		csrfToken := csrfpkg.GenerateToken(sid)
+		core.RevokeSessionsByUser(email)
+		sid := core.CreateSession(email, "Owner", ip, userAgent)
+		csrfToken := core.GenerateCSRFToken(sid)
 		setSessionCookie(c, sid)
 		setCSRFCookie(c, csrfToken)
-		auditpkg.Log("user_login", email, ip, userAgent, "/login", "success", nil)
+		core.LogAudit("user_login", email, ip, userAgent, "/login", "success", nil)
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": "Logged in successfully, redirecting…",
 			"Redirect":     "/dashboard",
@@ -769,18 +774,18 @@ func loginPost(c *gin.Context) {
 		return
 	}
 
-	u, ok := userpkg.Authenticate(email, password)
+	u, ok := core.AuthenticateUser(email, password)
 	if ok && u != nil {
 		role := "Member"
 		if u.Role != "" {
 			role = u.Role
 		}
-		sessionpkg.RevokeByUser(u.Username)
-		sid := sessionpkg.Create(u.Username, role, ip, userAgent)
-		csrfToken := csrfpkg.GenerateToken(sid)
+		core.RevokeSessionsByUser(u.Username)
+		sid := core.CreateSession(u.Username, role, ip, userAgent)
+		csrfToken := core.GenerateCSRFToken(sid)
 		setSessionCookie(c, sid)
 		setCSRFCookie(c, csrfToken)
-		auditpkg.Log("user_login", u.Username, ip, userAgent, "/login", "success", nil)
+		core.LogAudit("user_login", u.Username, ip, userAgent, "/login", "success", nil)
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": "Logged in successfully, redirecting…",
 			"Redirect":     "/dashboard",
@@ -788,7 +793,7 @@ func loginPost(c *gin.Context) {
 		return
 	}
 
-	auditpkg.Log("user_login_failed", email, ip, userAgent, "/login", "failed", map[string]string{"reason": "invalid credentials"})
+	core.LogAudit("user_login_failed", email, ip, userAgent, "/login", "failed", map[string]string{"reason": "invalid credentials"})
 	c.HTML(http.StatusOK, "login", gin.H{
 		"ToastMessage": "Invalid credentials. Please try again.",
 	})
@@ -821,15 +826,15 @@ func loadEnv(path string) {
 func apiLogout(c *gin.Context) {
 	sid, err := c.Cookie("session")
 	if err == nil && sid != "" {
-		sessionpkg.Revoke(sid)
-		auditpkg.Log("user_logout", "", c.ClientIP(), c.GetHeader("User-Agent"), "/api/logout", "success", nil)
+		core.RevokeSession(sid)
+		core.LogAudit("user_logout", "", c.ClientIP(), c.GetHeader("User-Agent"), "/api/logout", "success", nil)
 	}
 	clearSessionCookie(c)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func apiSessionsList(c *gin.Context) {
-	sessions := sessionpkg.List()
+	sessions := core.ListSessions()
 	var out []map[string]interface{}
 	for _, s := range sessions {
 		out = append(out, map[string]interface{}{
@@ -852,13 +857,13 @@ func apiSessionRevoke(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "session id is required"})
 		return
 	}
-	s, ok := sessionpkg.Get(id)
+	s, ok := core.GetSession(id)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	sessionpkg.Revoke(id)
-	auditpkg.Log("session_revoke", s.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/sessions/"+id, "success", nil)
+	core.RevokeSession(id)
+	core.LogAudit("session_revoke", s.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/sessions/"+id, "success", nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -868,22 +873,21 @@ func apiSessionsRevokeAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
 		return
 	}
-	count := sessionpkg.RevokeByUser(username)
-	auditpkg.Log("session_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/sessions/user/"+username, "success", map[string]string{"count": fmt.Sprintf("%d", count)})
+	count := core.RevokeSessionsByUser(username)
+	core.LogAudit("session_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/sessions/user/"+username, "success", map[string]string{"count": fmt.Sprintf("%d", count)})
 	c.JSON(http.StatusOK, gin.H{"ok": true, "revoked": count})
 }
 
 func apiAuditList(c *gin.Context) {
 	action := c.Query("action")
 	actor := c.Query("actor")
-	var limit int
+	var page, limit int
+	fmt.Sscanf(c.Query("page"), "%d", &page)
 	fmt.Sscanf(c.Query("limit"), "%d", &limit)
 
-	logs := auditpkg.List(action, actor, limit)
-	total, last24h := auditpkg.GetStats()
-
+	data := core.ListAuditLogsPaginated(action, actor, page, limit)
 	var out []map[string]interface{}
-	for _, l := range logs {
+	for _, l := range data.Logs {
 		out = append(out, map[string]interface{}{
 			"id":         l.ID,
 			"timestamp":  l.Timestamp.Format(time.RFC3339),
@@ -897,9 +901,15 @@ func apiAuditList(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"logs":     out,
-		"total":    total,
-		"last_24h": last24h,
+		"logs": out,
+		"pagination": gin.H{
+			"page":        data.Page,
+			"limit":       data.Limit,
+			"total":       data.Total,
+			"total_pages": data.TotalPages,
+		},
+		"total":    data.Total,
+		"last_24h": data.Last24h,
 	})
 }
 
@@ -909,11 +919,11 @@ func apiFirewallUnbanIP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ip is required"})
 		return
 	}
-	if err := firewallpkg.UnbanIP(ip); err != nil {
+	if err := core.UnbanIP(ip); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("firewall_rule_remove", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ip/"+ip, "success", map[string]string{"type": "ip", "value": ip})
+	core.LogAudit("firewall_rule_remove", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/ip/"+ip, "success", map[string]string{"type": "ip", "value": ip})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -923,11 +933,11 @@ func apiFirewallUnbanCountry(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "country code is required"})
 		return
 	}
-	if err := firewallpkg.UnbanCountry(code); err != nil {
+	if err := core.UnbanCountry(code); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditpkg.Log("firewall_rule_remove", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/country/"+code, "success", map[string]string{"type": "country", "value": code})
+	core.LogAudit("firewall_rule_remove", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/firewall/country/"+code, "success", map[string]string{"type": "country", "value": code})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -938,8 +948,20 @@ type createTokenRequest struct {
 }
 
 func apiTokensList(c *gin.Context) {
-	tokens := tokenpkg.ListPublic()
-	c.JSON(http.StatusOK, gin.H{"tokens": tokens})
+	var page, limit int
+	fmt.Sscanf(c.Query("page"), "%d", &page)
+	fmt.Sscanf(c.Query("limit"), "%d", &limit)
+
+	data := core.ListPublicPaginated(page, limit)
+	c.JSON(http.StatusOK, gin.H{
+		"tokens": data.Tokens,
+		"pagination": gin.H{
+			"page":        data.Page,
+			"limit":       data.Limit,
+			"total":       data.Total,
+			"total_pages": data.TotalPages,
+		},
+	})
 }
 
 func apiTokensCreate(c *gin.Context) {
@@ -958,7 +980,7 @@ func apiTokensCreate(c *gin.Context) {
 	}
 
 	sid, _ := c.Cookie("session")
-	s, _ := sessionpkg.Get(sid)
+	s, _ := core.GetSession(sid)
 	username := s.Username
 	if username == "" {
 		username = "unknown"
@@ -969,13 +991,13 @@ func apiTokensCreate(c *gin.Context) {
 		expiresDays = &req.Expiration
 	}
 
-	fullToken, err := tokenpkg.Create(req.Name, req.Permission, username, expiresDays)
+	fullToken, err := core.CreateAPIToken(req.Name, req.Permission, username, expiresDays)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
 		return
 	}
 
-	auditpkg.Log("token_create", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens", "success", map[string]string{"name": req.Name, "permission": req.Permission})
+	core.LogAudit("token_create", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens", "success", map[string]string{"name": req.Name, "permission": req.Permission})
 	c.JSON(http.StatusOK, gin.H{"token": fullToken})
 }
 
@@ -985,16 +1007,16 @@ func apiTokensRevoke(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "token id is required"})
 		return
 	}
-	if !tokenpkg.Revoke(id) {
+	if !core.RevokeAPIToken(id) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
 		return
 	}
 	sid, _ := c.Cookie("session")
-	s, _ := sessionpkg.Get(sid)
+	s, _ := core.GetSession(sid)
 	username := s.Username
 	if username == "" {
 		username = "unknown"
 	}
-	auditpkg.Log("token_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens/"+id, "success", nil)
+	core.LogAudit("token_revoke", username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/tokens/"+id, "success", nil)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
