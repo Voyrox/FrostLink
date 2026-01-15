@@ -18,4 +18,4 @@ Cargo.lock
 *.CSV
 *.json
 *.conf
-db/certs/accounts
+db/certs
