@@ -361,13 +361,16 @@ func apiProxys(c *gin.Context) {
 
 	var cfgsOut []map[string]interface{}
 	for _, cfg := range configs {
+		hasCustomCert := cfg.SSLCertificate != nil && *cfg.SSLCertificate != ""
+		hasCustomKey := cfg.SSLCertificateKey != nil && *cfg.SSLCertificateKey != ""
 		m := map[string]interface{}{
-			"domain":  cfg.Domain,
-			"host":    cfg.Location,
-			"SSL":     cfg.AllowSSL,
-			"HTTP":    cfg.AllowHTTP,
-			"pubkey":  cfg.SSLCertificate,
-			"privkey": cfg.SSLCertificateKey,
+			"domain":    cfg.Domain,
+			"host":      cfg.Location,
+			"SSL":       cfg.AllowSSL,
+			"HTTP":      cfg.AllowHTTP,
+			"pubkey":    cfg.SSLCertificate,
+			"privkey":   cfg.SSLCertificateKey,
+			"auto_cert": !hasCustomCert && !hasCustomKey,
 		}
 
 		online := false
@@ -594,6 +597,7 @@ type updateDomainRequest struct {
 	Target   string `json:"target"`
 	HTTP     bool   `json:"http"`
 	SSL      bool   `json:"ssl"`
+	CertMode string `json:"cert_mode"`
 	CertPath string `json:"cert_path"`
 	KeyPath  string `json:"key_path"`
 }
@@ -614,7 +618,13 @@ func apiDomainsUpdate(c *gin.Context) {
 		return
 	}
 
-	err := core.UpdateDomain(domain, req.Target, req.SSL, req.HTTP, req.CertPath, req.KeyPath)
+	var certPath, keyPath string
+	if req.CertMode == "custom" {
+		certPath = req.CertPath
+		keyPath = req.KeyPath
+	}
+
+	err := core.UpdateDomain(domain, req.Target, req.SSL, req.HTTP, certPath, keyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})

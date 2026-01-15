@@ -254,6 +254,10 @@
                             <span>Certificate</span>
                             <div class="radio-row">
                                 <label>
+                                    <input type="radio" name="edit_cert_mode" value="generate" id="edit-cert-generate" />
+                                    <span>Generate automatically</span>
+                                </label>
+                                <label>
                                     <input type="radio" name="edit_cert_mode" value="custom" id="edit-cert-custom" />
                                     <span>Custom paths</span>
                                 </label>
@@ -640,16 +644,46 @@
             const editDomainModal = document.getElementById('edit-domain-modal');
             const editDomainForm = document.getElementById('edit-domain-form');
             const editDomainCancelBtn = document.getElementById('edit-domain-cancel-btn');
+            const editCertModeRadios = document.querySelectorAll('input[name="edit_cert_mode"]');
+            const editSslDetails = document.getElementById('edit-ssl-details');
+
+            function updateEditSslDetailsVisibility() {
+                let mode = 'custom';
+                editCertModeRadios.forEach(function (r) {
+                    if (r.checked) {
+                        mode = r.value;
+                    }
+                });
+                if (editSslDetails) {
+                    editSslDetails.hidden = mode !== 'custom';
+                }
+            }
+
+            editCertModeRadios.forEach(function (r) {
+                r.addEventListener('change', updateEditSslDetailsVisibility);
+            });
 
             function openEditDomainModal(cfg) {
                 if (!editDomainModal) return;
                 document.getElementById('edit-domain-name').value = cfg.domain;
                 document.getElementById('edit-domain').value = cfg.domain;
                 document.getElementById('edit-target').value = cfg.host || '';
-                document.getElementById('edit-allow-http').checked = cfg.http !== false;
-                document.getElementById('edit-allow-ssl').checked = cfg.ssl === true;
+                document.getElementById('edit-allow-http').checked = cfg.HTTP !== false;
+                document.getElementById('edit-allow-ssl').checked = cfg.SSL === true;
                 document.getElementById('edit-cert-path').value = cfg.pubkey || '';
                 document.getElementById('edit-key-path').value = cfg.privkey || '';
+
+                const generateRadio = document.getElementById('edit-cert-generate');
+                const customRadio = document.getElementById('edit-cert-custom');
+                if (cfg.auto_cert) {
+                    if (generateRadio) generateRadio.checked = true;
+                    if (customRadio) customRadio.checked = false;
+                } else {
+                    if (customRadio) customRadio.checked = true;
+                    if (generateRadio) generateRadio.checked = false;
+                }
+                updateEditSslDetailsVisibility();
+
                 editDomainModal.hidden = false;
             }
 
@@ -685,6 +719,7 @@
                     const allowSSL = !!formData.get('allow_ssl');
                     const certPath = String(formData.get('cert_path') || '').trim();
                     const keyPath = String(formData.get('key_path') || '').trim();
+                    const certMode = String(formData.get('edit_cert_mode') || 'generate').toLowerCase();
 
                     if (!domain || !target) {
                         showToast('Domain and target are required');
@@ -698,8 +733,9 @@
                             target: target,
                             http: allowHTTP,
                             ssl: allowSSL,
-                            cert_path: certPath,
-                            key_path: keyPath
+                            cert_mode: certMode,
+                            cert_path: certMode === 'custom' ? certPath : '',
+                            key_path: certMode === 'custom' ? keyPath : ''
                         })
                     })
                         .then(function (r) {
