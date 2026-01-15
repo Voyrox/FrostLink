@@ -31,10 +31,7 @@
 .avatar {
     width: 40px;
     height: 40px;
-    border-radius: 50%;
     object-fit: cover;
-    background: #0c111a;
-    border: 1px solid #141b28
 }
 
 .avatar-fallback {
