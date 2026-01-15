@@ -35,15 +35,22 @@
 
 
 <script>
-    const toast = document.getElementById('toast');
-    const toastMessage = document.getElementById('toast-message');
-    function showToast(message) {
-        toastMessage.textContent = message;
-        toast.classList.add('show');
-
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 5000);
-    }
+    (function () {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+        window.showToast = function (message) {
+            if (!toast || !toastMessage) {
+                if (typeof alert === 'function') {
+                    alert(message);
+                }
+                return;
+            }
+            toastMessage.textContent = message;
+            toast.classList.add('show');
+            setTimeout(function () {
+                toast.classList.remove('show');
+            }, 5000);
+        };
+    })();
 </script>
 {{ end }}

@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "username": "test",
+      "email": "test@gmail.com",
+      "identity_provider": "Local",
+      "role": "Member",
+      "access_type": "all",
+      "domains": null
+    }
+  ]
+}

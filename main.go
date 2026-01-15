@@ -11,6 +11,7 @@ import (
 	filepkg "SparkProxy/file"
 	proxyhttp "SparkProxy/http"
 	logger "SparkProxy/logger"
+	userpkg "SparkProxy/user"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -85,6 +86,7 @@ func main() {
 	r.GET("/domains", func(c *gin.Context) { c.HTML(http.StatusOK, "domains", gin.H{}) })
 	r.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{}) })
 	r.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{}) })
+	r.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{}) })
 	r.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{}) })
 	r.NoRoute(func(c *gin.Context) {
 		c.HTML(http.StatusNotFound, "404", gin.H{})
@@ -92,6 +94,9 @@ func main() {
 	r.POST("/api/login", apiLogin)
 	r.GET("/api/proxys", apiProxys)
 	r.GET("/api/logs", apiLogs)
+	r.GET("/api/users", apiUsersList)
+	r.POST("/api/users", apiUsersCreate)
+	r.DELETE("/api/users/:username", apiUsersDelete)
 
 	go func() {
 		cfgs := filepkg.ReadConfigs("./domains")
@@ -113,6 +118,15 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type createUserRequest struct {
+	Username   string   `json:"username"`
+	Password   string   `json:"password"`
+	Email      string   `json:"email"`
+	Role       string   `json:"role"`
+	AccessType string   `json:"access_type"`
+	Domains    []string `json:"domains"`
+}
+
 func apiLogin(c *gin.Context) {
 	var req loginRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -132,6 +146,17 @@ func apiLogin(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid})
 		return
 	}
+
+	if u, ok := userpkg.Authenticate(req.Username, req.Password); ok && u != nil {
+		sid := uuid.NewString()
+		sessionsMu.Lock()
+		sessions[sid] = u.Username
+		sessionsMu.Unlock()
+		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
+		c.JSON(http.StatusOK, gin.H{"valid": true, "session_id": sid})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"valid": false})
 }
 
@@ -188,6 +213,60 @@ func apiLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"logs": out})
 }
 
+func apiUsersList(c *gin.Context) {
+	users := userpkg.List()
+	var out []map[string]interface{}
+	for _, u := range users {
+		out = append(out, map[string]interface{}{
+			"username":          u.Username,
+			"email":             u.Email,
+			"identity_provider": u.IdentityProvider,
+			"role":              u.Role,
+			"access_type":       u.AccessType,
+			"domains":           u.AllowedDomainList,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"users": out})
+}
+
+func apiUsersCreate(c *gin.Context) {
+	var req createUserRequest
+	if err := c.BindJSON(&req); err != nil {
+		logger.SystemLog("error", "api_users_create", fmt.Sprintf("invalid payload: %v", err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if req.Role == "" {
+		req.Role = "Member"
+	}
+	u, err := userpkg.Create(req.Username, req.Email, req.Password, req.Role, req.AccessType, req.Domains)
+	if err != nil {
+		logger.SystemLog("error", "api_users_create", fmt.Sprintf("failed to create user '%s': %v", req.Username, err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.SystemLog("success", "api_users_create", fmt.Sprintf("created user '%s' (%s)", u.Username, u.Email))
+	c.JSON(http.StatusOK, gin.H{"user": map[string]interface{}{
+		"username":          u.Username,
+		"email":             u.Email,
+		"identity_provider": u.IdentityProvider,
+		"role":              u.Role,
+		"access_type":       u.AccessType,
+		"domains":           u.AllowedDomainList,
+	}})
+}
+
+func apiUsersDelete(c *gin.Context) {
+	username := c.Param("username")
+	if err := userpkg.Delete(username); err != nil {
+		logger.SystemLog("error", "api_users_delete", fmt.Sprintf("failed to delete user '%s': %v", username, err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logger.SystemLog("success", "api_users_delete", fmt.Sprintf("deleted user '%s'", username))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func loginPost(c *gin.Context) {
 	email := c.PostForm("email")
 	password := c.PostForm("password")
@@ -199,6 +278,19 @@ func loginPost(c *gin.Context) {
 		sid := uuid.NewString()
 		sessionsMu.Lock()
 		sessions[sid] = email
+		sessionsMu.Unlock()
+		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "Logged in successfully, redirecting…",
+			"Redirect":     "/dashboard",
+		})
+		return
+	}
+
+	if u, ok := userpkg.Authenticate(email, password); ok && u != nil {
+		sid := uuid.NewString()
+		sessionsMu.Lock()
+		sessions[sid] = u.Username
 		sessionsMu.Unlock()
 		c.SetCookie("session", sid, 3600*24, "/", "", false, true)
 		c.HTML(http.StatusOK, "login", gin.H{
