@@ -215,6 +215,7 @@ func main() {
 		apiRead.GET("/audit", apiAuditList)
 		apiRead.GET("/streams", apiStreamsList)
 		apiRead.GET("/streams/stats", apiStreamsStats)
+		apiRead.GET("/certs", apiCertsList)
 	}
 
 	apiWrite := r.Group("/api")
@@ -239,6 +240,9 @@ func main() {
 		apiWrite.DELETE("/api/roles/:name", apiRolesDelete)
 		apiWrite.DELETE("/api/sessions/:id", apiSessionRevoke)
 		apiWrite.DELETE("/api/sessions/user/:username", apiSessionsRevokeAll)
+		apiWrite.POST("/certs/request", apiCertsRequest)
+		apiWrite.POST("/certs/:domain/renew", apiCertsRenew)
+		apiWrite.DELETE("/certs/:domain", apiCertsDelete)
 	}
 
 	apiTokens := r.Group("/api/tokens")
@@ -252,6 +256,12 @@ func main() {
 		cfgs := core.ReadConfigs("./domains")
 		if err := proxy.StartProxy(cfgs); err != nil {
 			ui.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
+		}
+	}()
+
+	go func() {
+		if err := proxy.StartStreamServer(); err != nil {
+			ui.SystemLog("error", "stream-server", fmt.Sprintf("Failed to start stream server: %v", err))
 		}
 	}()
 
@@ -1100,14 +1110,14 @@ func apiTokensRevoke(c *gin.Context) {
 }
 
 type createStreamRequest struct {
-	Domain   string `json:"domain"`
-	Upstream string `json:"upstream"`
-	Port     int    `json:"port"`
-	TLSMode  string `json:"tls_mode"`
-	CertFile string `json:"cert_file,omitempty"`
-	KeyFile  string `json:"key_file,omitempty"`
-	MaxConns int    `json:"max_conns"`
-	Enabled  bool   `json:"enabled"`
+	Domain     string `json:"domain,omitempty"`
+	ListenPort int    `json:"listen_port"`
+	Upstream   string `json:"upstream"`
+	TLSMode    string `json:"tls_mode,omitempty"`
+	CertFile   string `json:"cert_file,omitempty"`
+	KeyFile    string `json:"key_file,omitempty"`
+	MaxConns   int    `json:"max_conns"`
+	Enabled    bool   `json:"enabled"`
 }
 
 func apiStreamsList(c *gin.Context) {
@@ -1127,17 +1137,19 @@ func apiStreamsCreate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	if req.Domain == "" || req.Upstream == "" || req.Port == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "domain, upstream, and port are required"})
+	if req.Upstream == "" || req.ListenPort == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "upstream and listen_port are required"})
 		return
 	}
-	tlsMode := strings.ToLower(strings.TrimSpace(req.TLSMode))
-	if tlsMode == "" {
-		tlsMode = "pass-through"
-	}
-	if tlsMode != "pass-through" && tlsMode != "terminate" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "tls_mode must be pass-through or terminate"})
-		return
+	if req.Domain != "" {
+		tlsMode := strings.ToLower(strings.TrimSpace(req.TLSMode))
+		if tlsMode == "" {
+			tlsMode = "pass-through"
+		}
+		if tlsMode != "pass-through" && tlsMode != "terminate" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "tls_mode must be pass-through or terminate"})
+			return
+		}
 	}
 	maxConns := req.MaxConns
 	if maxConns <= 0 {
@@ -1145,14 +1157,15 @@ func apiStreamsCreate(c *gin.Context) {
 	}
 
 	streamCfg := proxy.StreamConfig{
-		ID:       uuid.New().String(),
-		Domain:   strings.ToLower(strings.TrimSpace(req.Domain)),
-		Upstream: fmt.Sprintf("%s:%d", strings.TrimSpace(req.Upstream), req.Port),
-		TLSMode:  tlsMode,
-		CertFile: strings.TrimSpace(req.CertFile),
-		KeyFile:  strings.TrimSpace(req.KeyFile),
-		Enabled:  req.Enabled,
-		MaxConns: maxConns,
+		ID:         uuid.New().String(),
+		Domain:     strings.ToLower(strings.TrimSpace(req.Domain)),
+		ListenPort: req.ListenPort,
+		Upstream:   strings.TrimSpace(req.Upstream),
+		TLSMode:    strings.ToLower(strings.TrimSpace(req.TLSMode)),
+		CertFile:   strings.TrimSpace(req.CertFile),
+		KeyFile:    strings.TrimSpace(req.KeyFile),
+		Enabled:    req.Enabled,
+		MaxConns:   maxConns,
 	}
 
 	if err := proxy.CreateStream(streamCfg); err != nil {
@@ -1199,10 +1212,15 @@ func apiStreamsUpdate(c *gin.Context) {
 	if maxConns <= 0 {
 		maxConns = existing.MaxConns
 	}
+	listenPort := req.ListenPort
+	if listenPort <= 0 {
+		listenPort = existing.ListenPort
+	}
 
 	streamCfg := *existing
 	streamCfg.Domain = strings.ToLower(strings.TrimSpace(req.Domain))
-	streamCfg.Upstream = fmt.Sprintf("%s:%d", strings.TrimSpace(req.Upstream), req.Port)
+	streamCfg.ListenPort = listenPort
+	streamCfg.Upstream = strings.TrimSpace(req.Upstream)
 	streamCfg.TLSMode = tlsMode
 	streamCfg.CertFile = strings.TrimSpace(req.CertFile)
 	streamCfg.KeyFile = strings.TrimSpace(req.KeyFile)
@@ -1286,4 +1304,158 @@ func apiStreamsToggle(c *gin.Context) {
 
 	core.LogAudit("stream_toggle", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/streams/"+id+"/toggle", "success", map[string]string{"domain": streamCfg.Domain, "enabled": fmt.Sprintf("%v", req.Enabled)})
 	c.JSON(http.StatusOK, gin.H{"ok": true, "enabled": req.Enabled})
+}
+
+type certInfoResponse struct {
+	Domain      string `json:"domain"`
+	CertPath    string `json:"cert_path"`
+	KeyPath     string `json:"key_path"`
+	IssuerPath  string `json:"issuer_path"`
+	ExpiresAt   string `json:"expires_at"`
+	DaysLeft    int    `json:"days_left"`
+	AutoManaged bool   `json:"auto_managed"`
+}
+
+func apiCertsList(c *gin.Context) {
+	certs := proxy.ListCertificates()
+	var out []certInfoResponse
+	for _, cert := range certs {
+		out = append(out, certInfoResponse{
+			Domain:      cert.Domain,
+			CertPath:    cert.CertPath,
+			KeyPath:     cert.KeyPath,
+			IssuerPath:  cert.IssuerPath,
+			ExpiresAt:   cert.ExpiresAt.Format(time.RFC3339),
+			DaysLeft:    cert.DaysLeft,
+			AutoManaged: cert.AutoManaged,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"certificates": out})
+}
+
+type requestCertRequest struct {
+	Domain     string `json:"domain"`
+	ApiToken   string `json:"api_token"`
+	UseStaging bool   `json:"use_staging"`
+}
+
+func apiCertsRequest(c *gin.Context) {
+	var req requestCertRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if req.Domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	email := os.Getenv("ACME_EMAIL")
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ACME_EMAIL environment variable not set"})
+		return
+	}
+
+	apiToken := req.ApiToken
+	if apiToken == "" {
+		apiToken = os.Getenv("CLOUDFLARE_API_TOKEN")
+	}
+	if apiToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cloudflare API token required (set CLOUDFLARE_API_TOKEN or provide in request)"})
+		return
+	}
+
+	acmeClient, err := proxy.NewACMEClient(email, "db/certs", req.UseStaging)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create ACME client: %v", err)})
+		return
+	}
+
+	if err := acmeClient.SetCloudflareProvider(apiToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to set DNS provider: %v", err)})
+		return
+	}
+
+	cert, err := acmeClient.ObtainCertificate(req.Domain)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to obtain certificate: %v", err)})
+		return
+	}
+
+	if err := proxy.ReloadCertificate(req.Domain); err != nil {
+		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to reload certificate for %s: %v", req.Domain, err))
+	}
+
+	core.LogAudit("cert_request", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/certs/request", "success", map[string]string{"domain": req.Domain})
+	c.JSON(http.StatusOK, gin.H{
+		"certificate": cert,
+		"message":     "Certificate obtained successfully",
+	})
+}
+
+func apiCertsRenew(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	email := os.Getenv("ACME_EMAIL")
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ACME_EMAIL environment variable not set"})
+		return
+	}
+
+	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
+	if apiToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "CLOUDFLARE_API_TOKEN environment variable not set"})
+		return
+	}
+
+	acmeClient, err := proxy.NewACMEClient(email, "db/certs", false)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create ACME client: %v", err)})
+		return
+	}
+
+	if err := acmeClient.SetCloudflareProvider(apiToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to set DNS provider: %v", err)})
+		return
+	}
+
+	cert, err := acmeClient.RenewCertificate(domain)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to renew certificate: %v", err)})
+		return
+	}
+
+	if err := proxy.ReloadCertificate(domain); err != nil {
+		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to reload certificate for %s: %v", domain, err))
+	}
+
+	core.LogAudit("cert_renew", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/certs/"+domain+"/renew", "success", map[string]string{"domain": domain})
+	c.JSON(http.StatusOK, gin.H{
+		"certificate": cert,
+		"message":     "Certificate renewed successfully",
+	})
+}
+
+func apiCertsDelete(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	if err := proxy.RevokeCertificate(domain); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke certificate"})
+		return
+	}
+
+	if err := proxy.ReloadCertificate(domain); err != nil {
+		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to clear certificate cache for %s: %v", domain, err))
+	}
+
+	core.LogAudit("cert_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/certs/"+domain, "success", map[string]string{"domain": domain})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

@@ -105,6 +105,11 @@
                                                     stroke-linecap="round" />
                                             </svg>
                                         </span> Data out</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span> SSL</span></th>
                                 <th scope="col" class="actions-col">Actions</th>
                             </tr>
                         </thead>
@@ -274,6 +279,50 @@
         </div>
     </div>
 
+    <div class="modal-backdrop" id="cert-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cert-modal-title">
+            <div class="cert-form">
+                <h2 id="cert-modal-title">SSL Certificate</h2>
+                <form id="cert-form">
+                    <input type="hidden" name="cert_domain" id="cert-domain-name" />
+                    <div class="cert-info" id="cert-info"></div>
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Domain</span>
+                            <select name="domain" id="cert-domain-select" required></select>
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>DNS Provider</span>
+                            <select name="dns_provider" id="cert-dns-provider" required>
+                                <option value="cloudflare">Cloudflare</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>API Token (optional)</span>
+                            <input type="password" name="api_token" id="cert-api-token" placeholder="Uses CLOUDFLARE_API_TOKEN env if empty" />
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label class="inline-checkbox">
+                            <input type="checkbox" name="staging" id="cert-staging" checked />
+                            <span>Use staging server (recommended for testing)</span>
+                        </label>
+                    </div>
+                    <div class="actions-row">
+                        <button class="btn primary" type="submit" id="cert-request-btn">Request Certificate</button>
+                        <button class="btn" type="button" id="cert-renew-btn" hidden>Renew</button>
+                        <button class="btn danger" type="button" id="cert-revoke-btn" hidden>Revoke</button>
+                        <button class="btn ghost" type="button" id="cert-cancel-btn">Close</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
             const card = document.querySelector('.profile-card');
@@ -356,6 +405,22 @@
                             const tdOut = document.createElement('td');
                             tdOut.textContent = formatBytes(cfg.data_out_total || 0);
 
+                            const tdSsl = document.createElement('td');
+                            const certStatus = cfg.ssl ? (cfg.auto_cert ? 'Auto' : 'Custom') : 'None';
+                            const sslBadge = document.createElement('span');
+                            sslBadge.className = 'ssl-badge ssl-' + certStatus.toLowerCase();
+                            sslBadge.textContent = certStatus;
+                            tdSsl.appendChild(sslBadge);
+                            const sslBtn = document.createElement('button');
+                            sslBtn.className = 'btn small ghost ssl-lock-btn';
+                            sslBtn.type = 'button';
+                            sslBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+                            sslBtn.title = 'Manage SSL certificate';
+                            sslBtn.addEventListener('click', function() {
+                                openCertModal(cfg.domain);
+                            });
+                            tdSsl.appendChild(sslBtn);
+
                             const tdActions = document.createElement('td');
                             tdActions.className = 'actions';
                             const editBtn = document.createElement('button');
@@ -393,6 +458,7 @@
                             tr.appendChild(tdAuth);
                             tr.appendChild(tdIn);
                             tr.appendChild(tdOut);
+                            tr.appendChild(tdSsl);
                             tr.appendChild(tdActions);
 
                             tableBody.appendChild(tr);
@@ -652,6 +718,224 @@
                         .catch(function (err) {
                             console.error('Failed to update site', err);
                             showToast('Failed to update site');
+                        });
+                });
+            }
+
+            // Certificate Modal
+            const certModal = document.getElementById('cert-modal');
+            const certForm = document.getElementById('cert-form');
+            const certCancelBtn = document.getElementById('cert-cancel-btn');
+            const certDomainSelect = document.getElementById('cert-domain-select');
+            const certDomainName = document.getElementById('cert-domain-name');
+            const certInfo = document.getElementById('cert-info');
+            const certRequestBtn = document.getElementById('cert-request-btn');
+            const certRenewBtn = document.getElementById('cert-renew-btn');
+            const certRevokeBtn = document.getElementById('cert-revoke-btn');
+
+            function closeCertModal() {
+                if (!certModal) return;
+                certModal.hidden = true;
+                if (certForm) {
+                    certForm.reset();
+                }
+                certRequestBtn.hidden = false;
+                certRenewBtn.hidden = true;
+                certRevokeBtn.hidden = true;
+            }
+
+            function loadCertInfo(domain) {
+                fetch('/api/certs')
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(data => {
+                        const certs = (data && data.certs) || [];
+                        const cert = certs.find(c => c.domain === domain);
+                        if (cert) {
+                            const expDate = cert.expiry ? new Date(cert.expiry) : null;
+                            const daysLeft = expDate ? Math.max(0, Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24))) : null;
+                            certInfo.innerHTML = '<div class="cert-details"><span class="cert-status">' + (cert.auto ? 'Auto' : 'Custom') + '</span>' +
+                                (daysLeft ? '<span class="cert-expiry">' + daysLeft + ' days remaining</span>' : '') + '</div>';
+                            certRequestBtn.hidden = true;
+                            certRenewBtn.hidden = false;
+                            certRevokeBtn.hidden = false;
+                        } else {
+                            certInfo.innerHTML = '<div class="cert-details"><span class="cert-status none">No certificate</span></div>';
+                            certRequestBtn.hidden = false;
+                            certRenewBtn.hidden = true;
+                            certRevokeBtn.hidden = true;
+                        }
+                    })
+                    .catch(() => {
+                        certInfo.innerHTML = '';
+                        certRequestBtn.hidden = false;
+                        certRenewBtn.hidden = true;
+                        certRevokeBtn.hidden = true;
+                    });
+            }
+
+            function openCertModal(domain) {
+                if (!certModal) return;
+                certDomainName.value = domain;
+                certDomainSelect.innerHTML = '';
+                fetch('/api/proxys')
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(data => {
+                        const configs = (data && data.configs) || [];
+                        configs.forEach(cfg => {
+                            const opt = document.createElement('option');
+                            opt.value = cfg.domain;
+                            opt.textContent = cfg.domain;
+                            if (cfg.domain === domain) {
+                                opt.selected = true;
+                            }
+                            certDomainSelect.appendChild(opt);
+                        });
+                        loadCertInfo(domain);
+                        certModal.hidden = false;
+                    })
+                    .catch(err => {
+                        console.error('Failed to load domains for cert modal', err);
+                        showToast('Failed to load domains');
+                    });
+            }
+
+            if (certCancelBtn) {
+                certCancelBtn.addEventListener('click', closeCertModal);
+            }
+
+            if (certModal) {
+                certModal.addEventListener('click', function(e) {
+                    if (e.target === certModal) {
+                        closeCertModal();
+                    }
+                });
+            }
+
+            if (certDomainSelect) {
+                certDomainSelect.addEventListener('change', function() {
+                    certDomainName.value = this.value;
+                    loadCertInfo(this.value);
+                });
+            }
+
+            if (certForm) {
+                certForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const domain = String(certDomainName.value || '').trim();
+                    const dnsProvider = String(document.getElementById('cert-dns-provider').value || '');
+                    const apiToken = String(document.getElementById('cert-api-token').value || '').trim();
+                    const staging = !!document.getElementById('cert-staging').checked;
+
+                    if (!domain) {
+                        showToast('Domain is required');
+                        return;
+                    }
+
+                    certRequestBtn.disabled = true;
+                    certRequestBtn.textContent = 'Requesting...';
+
+                    fetch('/api/certs/request', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            domain: domain,
+                            dns_provider: dnsProvider,
+                            api_token: apiToken || undefined,
+                            staging: staging
+                        })
+                    })
+                        .then(function(r) {
+                            return r.json().then(function(data) {
+                                if (!r.ok || (data && data.error)) {
+                                    throw new Error((data && data.error) || 'Failed to request certificate');
+                                }
+                                return data;
+                            });
+                        })
+                        .then(function() {
+                            closeCertModal();
+                            showToast('Certificate requested successfully');
+                            render();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to request certificate', err);
+                            showToast('Failed to request certificate: ' + (err.message || 'Unknown error'));
+                        })
+                        .finally(function() {
+                            certRequestBtn.disabled = false;
+                            certRequestBtn.textContent = 'Request Certificate';
+                        });
+                });
+            }
+
+            if (certRenewBtn) {
+                certRenewBtn.addEventListener('click', function() {
+                    const domain = certDomainName.value;
+                    if (!domain) return;
+                    if (!confirm('Renew certificate for ' + domain + '?')) return;
+
+                    certRenewBtn.disabled = true;
+                    certRenewBtn.textContent = 'Renewing...';
+
+                    fetch('/api/certs/' + encodeURIComponent(domain) + '/renew', {
+                        method: 'POST'
+                    })
+                        .then(function(r) {
+                            return r.json().then(function(data) {
+                                if (!r.ok || (data && data.error)) {
+                                    throw new Error((data && data.error) || 'Failed to renew certificate');
+                                }
+                                return data;
+                            });
+                        })
+                        .then(function() {
+                            closeCertModal();
+                            showToast('Certificate renewed successfully');
+                            render();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to renew certificate', err);
+                            showToast('Failed to renew certificate: ' + (err.message || 'Unknown error'));
+                        })
+                        .finally(function() {
+                            certRenewBtn.disabled = false;
+                            certRenewBtn.textContent = 'Renew';
+                        });
+                });
+            }
+
+            if (certRevokeBtn) {
+                certRevokeBtn.addEventListener('click', function() {
+                    const domain = certDomainName.value;
+                    if (!domain) return;
+                    if (!confirm('Revoke certificate for ' + domain + '? This cannot be undone.')) return;
+
+                    certRevokeBtn.disabled = true;
+                    certRevokeBtn.textContent = 'Revoking...';
+
+                    fetch('/api/certs/' + encodeURIComponent(domain), {
+                        method: 'DELETE'
+                    })
+                        .then(function(r) {
+                            return r.json().then(function(data) {
+                                if (!r.ok || (data && data.error)) {
+                                    throw new Error((data && data.error) || 'Failed to revoke certificate');
+                                }
+                                return data;
+                            });
+                        })
+                        .then(function() {
+                            closeCertModal();
+                            showToast('Certificate revoked successfully');
+                            render();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to revoke certificate', err);
+                            showToast('Failed to revoke certificate: ' + (err.message || 'Unknown error'));
+                        })
+                        .finally(function() {
+                            certRevokeBtn.disabled = false;
+                            certRevokeBtn.textContent = 'Revoke';
                         });
                 });
             }
