@@ -5,67 +5,246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to SparkProxy</title>
+    <title>SparkProxy | Default Welcome Page</title>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Welcome to SparkProxy</h1>
-        </div>
-        <div class="content">
-            <p>Your journey to the icy world of technology begins here. Explore the frozen landscapes of innovation.</p>
-        </div>
-        <div class="footer">
-            <p>Powered by SparkProxy</p>
-        </div>
+    <div class="page">
+        <header class="hero">
+            <div class="hero-logo-wrap">
+                <img src="https://i.ibb.co/675JZ97n/logo.jpg" alt="SparkProxy Logo" class="hero-logo">
+            </div>
+            <h1 class="hero-title">SparkProxy is running.</h1>
+            <p class="hero-subtitle">Your reverse proxy is online and ready to be configured.</p>
+        </header>
+
+        <main class="content">
+            <section class="info-grid">
+                <article class="card">
+                    <h2>Next steps</h2>
+                    <ul>
+                        <li>Point your DNS records to this server.</li>
+                        <li>Configure domains and SSL certificates in the dashboard.</li>
+                        <li>Set up upstream services for your applications.</li>
+                    </ul>
+                </article>
+
+                <article class="card">
+                    <h2>Features</h2>
+                    <ul>
+                        <li>Layer 7 reverse proxy with TLS termination.</li>
+                        <li>Firewall & rate limiting controls.</li>
+                        <li>Real-time analytics and request logging.</li>
+                    </ul>
+                </article>
+
+                <article class="card">
+                    <h2>Where to go</h2>
+                    <p class="card-text">Access the SparkProxy control panel to manage routes, certificates, and security policies.</p>
+                    <div class="actions">
+                        <a href="/login" class="btn primary">Open dashboard</a>
+                        <a href="/docs" class="btn ghost">View documentation</a>
+                    </div>
+                </article>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p class="footer-text">Powered by SparkProxy</p>
+            <p class="footer-meta">If you see this page, the SparkProxy HTTP server is successfully installed and working.</p>
+        </footer>
     </div>
+
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #f9fafb;
+            background: radial-gradient(circle at 0% 0%, #1b2333 0, #050816 50%, #020617 100%);
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+        }
+
+        .page {
+            width: 100%;
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .hero {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .hero-logo-wrap {
+            width: 120px;
+            height: 120px;
+            border-radius: 28px;
+            padding: 4px;
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.8), rgba(37, 99, 235, 0.9));
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hero-logo {
+            width: 100%;
+            height: 100%;
+            border-radius: 22px;
+            object-fit: cover;
+            background-color: #020617;
+        }
+
+        .hero-title {
+            margin: 0;
+            font-size: clamp(2rem, 3vw, 2.6rem);
+            letter-spacing: 0.02em;
+        }
+
+        .hero-subtitle {
+            margin: 0;
+            max-width: 480px;
+            color: #9ca3af;
+            font-size: 0.98rem;
+        }
+
+        .content {
+            flex: 1;
+        }
+
+        .info-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+
+        .card {
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 55%),
+                rgba(15, 23, 42, 0.9);
+            border-radius: 18px;
+            padding: 20px 20px 18px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            box-shadow: 0 14px 40px rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(14px);
+        }
+
+        .card h2 {
+            margin: 0 0 10px;
+            font-size: 1.1rem;
+        }
+
+        .card ul {
+            margin: 0;
+            padding-left: 18px;
+            color: #d1d5db;
+            font-size: 0.95rem;
+        }
+
+        .card li + li {
+            margin-top: 4px;
+        }
+
+        .card-text {
+            margin: 0 0 16px;
+            color: #d1d5db;
+            font-size: 0.95rem;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease,
+                transform 0.08s ease;
+            cursor: pointer;
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+            color: #0b1220;
+            box-shadow: 0 10px 25px rgba(8, 47, 73, 0.9);
+        }
+
+        .btn.primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 35px rgba(8, 47, 73, 0.95);
+        }
+
+        .btn.ghost {
+            background: rgba(15, 23, 42, 0.7);
+            color: #e5e7eb;
+            border-color: rgba(148, 163, 184, 0.6);
+        }
+
+        .btn.ghost:hover {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #38bdf8;
+        }
+
+        .footer {
+            border-top: 1px solid rgba(31, 41, 55, 0.9);
+            padding-top: 16px;
+            margin-top: 8px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+
+        .footer-text {
+            margin: 0 0 4px;
+        }
+
+        .footer-meta {
+            margin: 0;
+            color: #4b5563;
+        }
+
+        @media (max-width: 640px) {
+            .page {
+                padding: 28px 18px;
+            }
+
+            .hero-logo-wrap {
+                width: 100px;
+                height: 100px;
+            }
+
+            .card {
+                padding: 18px 16px 16px;
+            }
+        }
+    </style>
 </body>
-<style>
-    body {
-        margin: 0;
-        padding: 0;
-        font-family: Arial, sans-serif;
-        background-color: #0a0a0f;
-        color: #ffffff;
-    }
-
-    .container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-    }
-
-    .header {
-        text-align: center;
-        margin-bottom: 20px;
-    }
-
-    .header h1 {
-        font-size: 3em;
-        color: #0b87da;
-    }
-
-    .content {
-        text-align: center;
-        margin-bottom: 40px;
-    }
-
-    .content p {
-        font-size: 1.2em;
-    }
-
-    .footer {
-        text-align: center;
-    }
-
-    .footer p {
-        font-size: 0.8em;
-        color: #888888;
-    }
-</style>
 
 </html>
 {{ end }}
