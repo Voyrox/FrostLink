@@ -1,0 +1,312 @@
+/* Rate Limits page (scoped) */
+.page-rate-limits .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0
+}
+
+.page-rate-limits .content {
+    padding: 24px
+}
+
+.page-rate-limits .page-header h1 {
+    margin: 0 0 6px
+}
+
+.page-rate-limits .page-header .subtitle {
+    margin: 0 0 16px
+}
+
+.page-rate-limits .panel {
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow)
+}
+
+/* Toolbar */
+.page-rate-limits .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px
+}
+
+.page-rate-limits .toolbar .left,
+.page-rate-limits .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.page-rate-limits .input-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center
+}
+
+.page-rate-limits .input-icon .icon {
+    position: absolute;
+    left: 10px;
+    color: var(--muted)
+}
+
+.page-rate-limits .input-icon input {
+    padding: 10px 12px 10px 34px;
+    border-radius: 10px;
+    background: #0c111a;
+    border: 1px solid #141b28;
+    color: var(--text);
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease
+}
+
+.page-rate-limits .input-icon input::placeholder {
+    color: #6b7280
+}
+
+.page-rate-limits .input-icon input:focus {
+    border-color: rgba(34, 211, 238, .6);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, .15)
+}
+
+/* Buttons */
+.page-rate-limits .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 16px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease
+}
+
+.page-rate-limits .btn:hover {
+    background: #121a28;
+    border-color: #1f2937
+}
+
+.page-rate-limits .btn:active {
+    transform: translateY(1px)
+}
+
+.page-rate-limits .btn.ghost {
+    background: transparent
+}
+
+.page-rate-limits .btn.small {
+    padding: 8px 12px;
+    font-size: .9rem;
+    border-radius: 8px
+}
+
+.page-rate-limits .btn.primary {
+    background: #0ea5e9;
+    border-color: #0ea5e9;
+    color: #fff
+}
+
+.page-rate-limits .btn.primary:hover {
+    background: #0284c7;
+    border-color: #0284c7
+}
+
+.page-rate-limits .btn.primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed
+}
+
+.page-rate-limits .btn .icon {
+    display: inline-flex;
+    color: var(--muted)
+}
+
+.page-rate-limits .btn .icon.orange {
+    color: var(--orange)
+}
+
+/* Table */
+.page-rate-limits .table-wrap {
+    overflow: auto;
+    border-radius: 12px
+}
+
+.page-rate-limits .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 700px;
+    background: transparent
+}
+
+.page-rate-limits .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-rate-limits .table thead .th {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px
+}
+
+.page-rate-limits .table thead .icon {
+    color: var(--muted)
+}
+
+.page-rate-limits .table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle
+}
+
+.page-rate-limits .table tbody tr:hover {
+    background: #0c111a
+}
+
+.page-rate-limits .table tbody tr:hover .domain-link {
+    color: #22d3ee;
+}
+
+.page-rate-limits .domain-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.15s ease;
+}
+
+.page-rate-limits .actions-col {
+    text-align: right;
+    width: 140px
+}
+
+.page-rate-limits .actions {
+    text-align: right;
+    white-space: nowrap
+}
+
+/* Toggle Switch */
+.page-rate-limits .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+}
+
+.page-rate-limits .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0
+}
+
+.page-rate-limits .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #1f2937;
+    transition: .3s;
+    border-radius: 26px;
+    border: 1px solid #374151
+}
+
+.page-rate-limits .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #9ca3af;
+    transition: .3s;
+    border-radius: 50%
+}
+
+.page-rate-limits .toggle-switch input:checked + .toggle-slider {
+    background-color: #059669;
+    border-color: #10b981
+}
+
+.page-rate-limits .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+    background-color: #fff
+}
+
+.page-rate-limits .toggle-switch input:focus + .toggle-slider {
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, .2)
+}
+
+/* Number Inputs */
+.page-rate-limits input[type="number"] {
+    background: #0c111a;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: .95rem;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease
+}
+
+.page-rate-limits input[type="number"]:focus {
+    border-color: rgba(34, 211, 238, .6);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, .15)
+}
+
+.page-rate-limits input[type="number"]::-webkit-inner-spin-button,
+.page-rate-limits input[type="number"]::-webkit-outer-spin-button {
+    opacity: 1;
+    height: 24px
+}
+
+/* Save Status */
+.page-rate-limits .save-status {
+    margin-left: 12px;
+    font-size: .9rem;
+    display: inline-block;
+    vertical-align: middle
+}
+
+/* Empty State */
+.page-rate-limits .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+    font-size: .95rem
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-rate-limits .app {
+        grid-template-columns: 1fr
+    }
+
+    .page-rate-limits .sidebar {
+        display: none
+    }
+
+    .page-rate-limits .content {
+        padding: 16px
+    }
+
+    .page-rate-limits .table {
+        min-width: 600px
+    }
+}
