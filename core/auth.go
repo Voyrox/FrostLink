@@ -167,6 +167,39 @@ func CreateUser(username, email, password, roleName, accessType string, domains 
 	return u, nil
 }
 
+func InitRootUser() {
+	rootUser := os.Getenv("USER")
+	rootPass := os.Getenv("PASSWORD")
+	rootEmail := os.Getenv("ROOT_EMAIL")
+
+	if rootUser == "" {
+		rootUser = "root"
+	}
+	if rootPass == "" {
+		rootPass = "1234567890"
+	}
+	if rootEmail == "" {
+		rootEmail = "root@localhost"
+	}
+
+	loadUsers()
+	usersMu.RLock()
+	for _, u := range users {
+		if u.Username == rootUser {
+			usersMu.RUnlock()
+			return
+		}
+	}
+	usersMu.RUnlock()
+
+	_, err := CreateUser(rootUser, rootEmail, rootPass, "Owner", "all", nil)
+	if err != nil {
+		fmt.Printf("Failed to create root user: %v\n", err)
+	} else {
+		fmt.Printf("Root user '%s' created successfully\n", rootUser)
+	}
+}
+
 func DeleteUser(username string) error {
 	if username == "" {
 		return errors.New("username is required")

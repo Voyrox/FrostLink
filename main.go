@@ -217,6 +217,9 @@ func apiAuthRequired() gin.HandlerFunc {
 
 func main() {
 	loadEnv(".env")
+
+	core.InitRootUser()
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
