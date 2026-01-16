@@ -395,8 +395,20 @@ func cleanupVerifiedCookies() {
 
 		now := time.Now()
 		verifiedCookies.Range(func(key, value interface{}) bool {
-			expiresAt := value.(time.Time)
-			if now.After(expiresAt) {
+			stored, ok := value.(string)
+			if !ok {
+				verifiedCookies.Delete(key)
+				return true
+			}
+
+			parts := strings.Split(stored, "|")
+			if len(parts) < 2 {
+				verifiedCookies.Delete(key)
+				return true
+			}
+
+			expiresAt, err := time.Parse(time.RFC3339, parts[1])
+			if err != nil || now.After(expiresAt) {
 				verifiedCookies.Delete(key)
 			}
 			return true
@@ -641,23 +653,21 @@ func handleAltchaVerify(w http.ResponseWriter, r *http.Request) {
 	payloadJSON, _ := json.Marshal(payload)
 
 	if !VerifyAltchaSolution(string(payloadJSON), domain) {
-		ui.SystemLog("warn", "altcha", fmt.Sprintf("Verification failed for %s", clientIP))
+		ui.SystemLog("warn", "altcha", "Verification failed for "+clientIP)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(AltchaVerificationResponse{Verified: false})
 		return
 	}
 
-	ui.SystemLog("info", "altcha", fmt.Sprintf("Verification successful for %s", clientIP))
 	SetVerifiedCookie(w, clientIP)
 
-	redirectURL := "/"
-
+	ui.SystemLog("info", "altcha", "ALTCHA verification successful")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(AltchaVerificationResponse{
 		Verified: true,
-		Redirect: redirectURL,
+		Redirect: "/",
 	})
 }
 
