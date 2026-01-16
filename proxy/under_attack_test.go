@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -443,8 +444,6 @@ func TestDifferentIPNotVerified(t *testing.T) {
 
 	if found {
 		t.Error("Expected different IP to not be verified")
-	}
-}
 	}
 }
 

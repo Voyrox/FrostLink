@@ -274,8 +274,6 @@ func GenerateAltchaChallenge(domain string, difficulty int) (*AltchaChallenge, e
 	challengeHex := hex.EncodeToString(challengeHash[:])
 
 	secret := getOrCreateHMACSecret(domain)
-	ui.SystemLog("debug", "altcha", fmt.Sprintf("Generating challenge: domain=%s, salt=%s..., number=%d, challenge=%s..., secret=%s...",
-		domain, saltHex[:min(8, len(saltHex))], numberInt64, challengeHex[:min(16, len(challengeHex))], secret[:min(8, len(secret))]))
 
 	signature := signChallenge(challengeHex, secret)
 
@@ -298,31 +296,21 @@ func VerifyAltchaSolution(payloadJSON string, domain string) bool {
 	_, ok := configCache[domain]
 	configMu.RUnlock()
 	if !ok {
-		ui.SystemLog("debug", "altcha", fmt.Sprintf("No config found for domain: %s", domain))
 		return false
 	}
 
 	var payload AltchaPayload
 	if err := json.Unmarshal([]byte(payloadJSON), &payload); err != nil {
-		ui.SystemLog("debug", "altcha", fmt.Sprintf("Failed to parse payload: %v", err))
 		return false
 	}
 
-	ui.SystemLog("debug", "altcha", fmt.Sprintf("Payload: algorithm=%s, challenge_len=%d, number=%d, salt=%s, signature_len=%d, maxNumber=%d",
-		payload.Algorithm, len(payload.Challenge), payload.Number, payload.Salt[:min(30, len(payload.Salt))], len(payload.Signature), payload.MaxNumber))
-
 	secret := getOrCreateHMACSecret(domain)
-	ui.SystemLog("debug", "altcha", fmt.Sprintf("Using secret (first 8 chars): %s...", secret[:min(8, len(secret))]))
 
 	hmacSig := hmac.New(sha256.New, []byte(secret))
 	hmacSig.Write([]byte(payload.Challenge))
 	expectedSig := hex.EncodeToString(hmacSig.Sum(nil))
-	ui.SystemLog("debug", "altcha", fmt.Sprintf("Signature compare: got=%s..., expected=%s...",
-		payload.Signature[:min(16, len(payload.Signature))],
-		expectedSig[:min(16, len(expectedSig))]))
 
 	if !hmac.Equal([]byte(payload.Signature), []byte(expectedSig)) {
-		ui.SystemLog("debug", "altcha", "Signature verification failed")
 		return false
 	}
 
@@ -333,16 +321,10 @@ func VerifyAltchaSolution(payloadJSON string, domain string) bool {
 	challengeHash := sha256.Sum256([]byte(challengeData))
 	computedChallenge := hex.EncodeToString(challengeHash[:])
 
-	ui.SystemLog("debug", "altcha", fmt.Sprintf("Challenge compare: got=%s..., expected=%s...",
-		payload.Challenge[:min(16, len(payload.Challenge))],
-		computedChallenge[:min(16, len(computedChallenge))]))
-
 	if computedChallenge != payload.Challenge {
-		ui.SystemLog("debug", "altcha", "Challenge verification failed")
 		return false
 	}
 
-	ui.SystemLog("debug", "altcha", "Signature and challenge verified. Skipping PoW threshold check (signature proves authenticity).")
 	return true
 }
 
@@ -628,13 +610,6 @@ func handleAltchaVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid payload format", http.StatusBadRequest)
 		return
 	}
-
-	ui.SystemLog("debug", "altcha", fmt.Sprintf("Received verification request: algorithm=%s, challenge=%s..., number=%d, salt=%s..., signature=%s...",
-		decoded.Algorithm,
-		decoded.Challenge[:min(20, len(decoded.Challenge))],
-		decoded.Number,
-		decoded.Salt[:min(10, len(decoded.Salt))],
-		decoded.Signature[:min(10, len(decoded.Signature))]))
 
 	clientIP := r.RemoteAddr
 	if i := strings.IndexByte(clientIP, ':'); i > -1 {
