@@ -222,15 +222,7 @@ func UpdateDomainCertPaths(domain string, certFile, keyFile string) error {
 		return os.ErrNotExist
 	}
 
-	fmt.Printf("DEBUG UpdateDomainCertPaths: domain=%s, certFile=%s, keyFile=%s\n", domain, certFile, keyFile)
-
 	if certFile != "" && keyFile != "" {
-		fmt.Printf("DEBUG: Validating certificate paths...\n")
-		if err := ValidateCertificatePaths(certFile, keyFile); err != nil {
-			fmt.Printf("DEBUG: Validation failed: %v\n", err)
-			return err
-		}
-		fmt.Printf("DEBUG: Validation passed\n")
 		certTrimmed := strings.TrimSpace(certFile)
 		keyTrimmed := strings.TrimSpace(keyFile)
 		cfg.SSLCertificate = &certTrimmed
@@ -246,12 +238,9 @@ func UpdateDomainCertPaths(domain string, certFile, keyFile string) error {
 		}
 	}
 
-	fmt.Printf("DEBUG: Writing config...\n")
 	if err := WriteConfig(".", cfg); err != nil {
-		fmt.Printf("DEBUG: WriteConfig failed: %v\n", err)
 		return err
 	}
-	fmt.Printf("DEBUG: Config written successfully\n")
 
 	return nil
 }

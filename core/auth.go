@@ -30,6 +30,7 @@ const rolesPath = "db/roles.json"
 type IdentityProviderLink struct {
 	ProviderID   string `json:"provider_id"`
 	ProviderName string `json:"provider_name"`
+	OAuthUserID  string `json:"oauth_user_id"`
 	Email        string `json:"email"`
 	LinkedAt     string `json:"linked_at"`
 }
@@ -84,27 +85,19 @@ func loadUsers() {
 	users = uf.Users
 	usersLoaded = true
 	usersMu.Unlock()
-	fmt.Printf("DEBUG loadUsers: loaded %d users from %s\n", len(users), usersPath)
 }
 
 func saveUsers() error {
-	fmt.Printf("DEBUG saveUsers: START writing to %s\n", usersPath)
 	data, err := json.MarshalIndent(userFile{Users: users}, "", "  ")
 	if err != nil {
-		fmt.Printf("DEBUG saveUsers: MarshalIndent ERROR: %v\n", err)
 		return err
 	}
-	fmt.Printf("DEBUG saveUsers: MarshalIndent SUCCESS, size=%d\n", len(data))
 	if err := os.MkdirAll(filepath.Dir(usersPath), 0755); err != nil {
-		fmt.Printf("DEBUG saveUsers: MkdirAll ERROR: %v\n", err)
 		return err
 	}
-	fmt.Printf("DEBUG saveUsers: MkdirAll SUCCESS\n")
 	if err := os.WriteFile(usersPath, data, 0600); err != nil {
-		fmt.Printf("DEBUG saveUsers: WriteFile ERROR: %v\n", err)
 		return err
 	}
-	fmt.Printf("DEBUG saveUsers: WriteFile SUCCESS\n")
 	usersLoaded = true
 	return nil
 }
@@ -259,10 +252,18 @@ func IsProviderLinkedToUser(username, providerID string) bool {
 	return false
 }
 
-func LinkIdentityProviderToUser(username string, provider IdentityProvider, email string) error {
+func LinkIdentityProviderToUser(username string, provider IdentityProvider, email, oauthUserID string) error {
 	loadUsers()
 	usersMu.Lock()
 	defer usersMu.Unlock()
+
+	for _, u := range users {
+		for _, p := range u.IdentityProviders {
+			if p.ProviderID == provider.ID && p.OAuthUserID == oauthUserID {
+				return errors.New("this " + provider.Name + " account is already linked to another user")
+			}
+		}
+	}
 
 	for i := range users {
 		if users[i].Username != username {
@@ -276,17 +277,11 @@ func LinkIdentityProviderToUser(username string, provider IdentityProvider, emai
 		users[i].IdentityProviders = append(users[i].IdentityProviders, IdentityProviderLink{
 			ProviderID:   provider.ID,
 			ProviderName: provider.Name,
+			OAuthUserID:  oauthUserID,
 			Email:        email,
 			LinkedAt:     time.Now().Format(time.RFC3339),
 		})
-		fmt.Printf("DEBUG LinkIdentityProviderToUser: username=%s, provider=%s, email=%s, about to save\n", username, provider.Name, email)
-		err := saveUsers()
-		if err != nil {
-			fmt.Printf("DEBUG saveUsers ERROR: %v\n", err)
-		} else {
-			fmt.Printf("DEBUG saveUsers SUCCESS\n")
-		}
-		return err
+		return saveUsers()
 	}
 	return errors.New("user not found")
 }
@@ -323,11 +318,9 @@ func GetUserLinkedProviders(username string) []IdentityProviderLink {
 	defer usersMu.RUnlock()
 	for _, u := range users {
 		if u.Username == username {
-			fmt.Printf("DEBUG GetUserLinkedProviders: username=%s, providers=%d\n", username, len(u.IdentityProviders))
 			return u.IdentityProviders
 		}
 	}
-	fmt.Printf("DEBUG GetUserLinkedProviders: user %s not found\n", username)
 	return nil
 }
 
@@ -1607,7 +1600,6 @@ func FetchOAuthUserInfo(provider IdentityProvider, accessToken string) (*OAuthUs
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("DEBUG FetchOAuthUserInfo: provider=%s raw response=%s\n", provider.ProviderType, string(body))
 
 	var rawData map[string]interface{}
 	if err := json.Unmarshal(body, &rawData); err != nil {
@@ -1627,7 +1619,6 @@ func FetchOAuthUserInfo(provider IdentityProvider, accessToken string) (*OAuthUs
 		userInfo.Avatar = getStringFromMap(rawData, "avatar")
 	}
 
-	fmt.Printf("DEBUG FetchOAuthUserInfo: extracted email=%s username=%s\n", userInfo.Email, userInfo.Username)
 	return &userInfo, nil
 }
 

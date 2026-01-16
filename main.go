@@ -1842,15 +1842,12 @@ func apiCertsDelete(c *gin.Context) {
 
 func apiOAuthLogin(c *gin.Context) {
 	providerID := c.Param("provider_id")
-	fmt.Printf("DEBUG apiOAuthLogin: providerID=%s path=%s\n", providerID, c.Request.URL.Path)
 	if providerID == "" {
-		fmt.Printf("DEBUG apiOAuthLogin: providerID is empty, redirecting to /login\n")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
 
 	provider, ok := core.GetIdentityProvider(providerID)
-	fmt.Printf("DEBUG apiOAuthLogin: providerID=%s ok=%v enabled=%v\n", providerID, ok, provider.Enabled)
 	if !ok || !provider.Enabled {
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": "OAuth provider not found or disabled",
@@ -1953,8 +1950,6 @@ func apiOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("DEBUG OAuth login: email=%s username=%s\n", userInfo.Email, userInfo.Username)
-
 	user, found := core.GetUserByEmail(userInfo.Email)
 	if !found {
 		c.HTML(http.StatusOK, "login", gin.H{
@@ -1963,9 +1958,7 @@ func apiOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("DEBUG OAuth login: found user %s, auto-linking provider %s\n", user.Username, providerID)
-
-	err = core.LinkIdentityProviderToUser(user.Username, provider, userInfo.Email)
+	err = core.LinkIdentityProviderToUser(user.Username, provider, userInfo.Email, userInfo.ID)
 	if err != nil {
 		ui.SystemLog("error", "oauth", fmt.Sprintf("Failed to link provider: %v", err))
 	}
@@ -2667,9 +2660,7 @@ func apiUserIdentityProviderUnlink(c *gin.Context) {
 
 func apiOAuthLinkCallback(c *gin.Context) {
 	providerID := c.Param("provider_id")
-	fmt.Printf("DEBUG apiOAuthLinkCallback: START providerID=%s code=%s state=%s\n", providerID, c.Query("code"), c.Query("state"))
 	if providerID == "" {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - invalid provider_id\n")
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: invalid provider",
@@ -2682,7 +2673,6 @@ func apiOAuthLinkCallback(c *gin.Context) {
 	errorParam := c.Query("error")
 
 	if errorParam != "" {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - OAuth error: %s\n", errorParam)
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth linking was cancelled or failed",
@@ -2691,7 +2681,6 @@ func apiOAuthLinkCallback(c *gin.Context) {
 	}
 
 	if code == "" || state == "" {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - missing code or state code=%s state=%s\n", code, state)
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: missing parameters",
@@ -2700,9 +2689,7 @@ func apiOAuthLinkCallback(c *gin.Context) {
 	}
 
 	linkState, err := c.Cookie("link_state")
-	fmt.Printf("DEBUG apiOAuthLinkCallback: link_state cookie=%s err=%v\n", linkState, err)
 	if err != nil || linkState == "" {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - invalid link_state cookie\n")
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: invalid link state",
@@ -2712,7 +2699,6 @@ func apiOAuthLinkCallback(c *gin.Context) {
 
 	parts := strings.SplitN(linkState, ":", 2)
 	if len(parts) != 2 {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - invalid link_state format\n")
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: invalid link state format",
@@ -2723,11 +2709,9 @@ func apiOAuthLinkCallback(c *gin.Context) {
 	sessionID := parts[0]
 	storedState := parts[1]
 	decodedState, _ := url.QueryUnescape(state)
-	fmt.Printf("DEBUG apiOAuthLinkCallback: sessionID=%s storedState=%s state=%s decodedState=%s\n", sessionID, storedState, state, decodedState)
 
 	stateParts := strings.SplitN(decodedState, ":", 2)
 	if len(stateParts) != 2 || storedState != stateParts[1] {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - state mismatch stored=%s stateUUID=%s\n", storedState, stateParts[1])
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: state mismatch",
@@ -2736,9 +2720,7 @@ func apiOAuthLinkCallback(c *gin.Context) {
 	}
 
 	s, ok := core.GetSession(sessionID)
-	fmt.Printf("DEBUG apiOAuthLinkCallback: GetSession sessionID=%s ok=%v username=%s\n", sessionID, ok, s.Username)
 	if !ok {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - session not found\n")
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: session not found",
@@ -2747,9 +2729,7 @@ func apiOAuthLinkCallback(c *gin.Context) {
 	}
 
 	provider, ok := core.GetIdentityProvider(providerID)
-	fmt.Printf("DEBUG apiOAuthLinkCallback: GetIdentityProvider providerID=%s ok=%v enabled=%v\n", providerID, ok, provider.Enabled)
 	if !ok || !provider.Enabled {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - provider not found or disabled\n")
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "Provider not found or disabled",
@@ -2762,10 +2742,8 @@ func apiOAuthLinkCallback(c *gin.Context) {
 		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/link/%s", c.Request.Host, providerID)
 	}
 
-	fmt.Printf("DEBUG apiOAuthLinkCallback: calling ExchangeOAuthCode callbackURL=%s\n", callbackURL)
 	token, err := core.ExchangeOAuthCode(provider, code, callbackURL)
 	if err != nil {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - ExchangeOAuthCode error: %v\n", err)
 		ui.SystemLog("error", "oauth-link", fmt.Sprintf("OAuth token exchange failed: %v", err))
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
@@ -2774,10 +2752,8 @@ func apiOAuthLinkCallback(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("DEBUG apiOAuthLinkCallback: calling FetchOAuthUserInfo\n")
 	userInfo, err := core.FetchOAuthUserInfo(provider, token.AccessToken)
 	if err != nil {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - FetchOAuthUserInfo error: %v\n", err)
 		ui.SystemLog("error", "oauth-link", fmt.Sprintf("OAuth user info fetch failed: %v", err))
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
@@ -2786,10 +2762,8 @@ func apiOAuthLinkCallback(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("DEBUG apiOAuthLinkCallback: calling LinkIdentityProviderToUser username=%s provider=%s email=%s\n", s.Username, provider.Name, userInfo.Email)
-	err = core.LinkIdentityProviderToUser(s.Username, provider, userInfo.Email)
+	err = core.LinkIdentityProviderToUser(s.Username, provider, userInfo.Email, userInfo.ID)
 	if err != nil {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - LinkIdentityProviderToUser error: %v\n", err)
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": err.Error(),
@@ -2797,7 +2771,6 @@ func apiOAuthLinkCallback(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("DEBUG apiOAuthLinkCallback: SUCCESS\n")
 	core.LogAudit("identity_provider_link", s.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/_auth/oauth/link/"+providerID, "success", map[string]string{"provider": provider.Name, "email": userInfo.Email})
 
 	c.HTML(http.StatusOK, "linked-accounts", gin.H{
