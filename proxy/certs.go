@@ -150,13 +150,12 @@ func GetCustomCertificateInfo(domain, certPath, keyPath string) (*CertificateInf
 	}
 
 	return &CertificateInfo{
-		Domain:      domain,
-		CertPath:    certPath,
-		KeyPath:     keyPath,
-		IssuerPath:  "",
-		ExpiresAt:   expiresAt,
-		DaysLeft:    int(time.Until(expiresAt).Hours() / 24),
-		AutoManaged: false,
+		Domain:     domain,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+		IssuerPath: "",
+		ExpiresAt:  expiresAt,
+		DaysLeft:   int(time.Until(expiresAt).Hours() / 24),
 	}, nil
 }
 
