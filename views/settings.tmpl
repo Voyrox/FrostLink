@@ -1,0 +1,305 @@
+{{ define "settings" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • Settings</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/settings.css" />
+</head>
+
+<body class="page-settings">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Settings</h1>
+                <p class="subtitle">Configure SparkProxy server settings</p>
+            </header>
+
+            <div class="settings-grid">
+                <section class="settings-section">
+                    <div class="section-header">
+                        <span class="section-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                            </svg>
+                        </span>
+                        <h2>General</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label for="addr">Server Address</label>
+                            <input type="text" id="addr" placeholder="8080 or 0.0.0.0:8080">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="session_hours">Session Duration (hours)</label>
+                                <input type="number" id="session_hours" min="1" max="168" value="24">
+                            </div>
+                            <div class="form-group">
+                                <label for="log_level">Log Level</label>
+                                <select id="log_level">
+                                    <option value="debug">Debug</option>
+                                    <option value="info">Info</option>
+                                    <option value="warn">Warning</option>
+                                    <option value="error">Error</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="debug_mode">
+                                <span class="checkmark"></span>
+                                <span class="checkbox-text">Debug Mode</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section">
+                    <div class="section-header">
+                        <span class="section-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                        </span>
+                        <h2>Authentication</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label for="auth_shared_secret">Shared Secret</label>
+                            <input type="password" id="auth_shared_secret" placeholder="Enter shared secret">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="default_user">Default Admin Username</label>
+                                <input type="text" id="default_user" placeholder="admin">
+                            </div>
+                            <div class="form-group">
+                                <label for="default_password">Default Admin Password</label>
+                                <input type="password" id="default_password" placeholder="Enter password">
+                            </div>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="allow_basic_auth">
+                                <span class="checkmark"></span>
+                                <span class="checkbox-text">Allow Basic Authentication</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section">
+                    <div class="section-header">
+                        <span class="section-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+                            </svg>
+                        </span>
+                            <h2>SSL/TLS Certificates</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label for="acme_email">ACME Email</label>
+                            <input type="email" id="acme_email" placeholder="your@email.com">
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="acme_staging">
+                                <span class="checkmark"></span>
+                                <span class="checkbox-text">Use Let's Encrypt Staging (recommended for testing)</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section">
+                    <div class="section-header">
+                        <span class="section-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                            </svg>
+                        </span>
+                        <h2>Cloudflare DNS</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label for="cloudflare_api_token">API Token</label>
+                            <input type="password" id="cloudflare_api_token" placeholder="Cloudflare API token">
+                        </div>
+                        <div class="form-group">
+                            <label for="cloudflare_zone_api_token">Zone API Token</label>
+                            <input type="password" id="cloudflare_zone_api_token" placeholder="Cloudflare Zone API token">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="cloudflare_api_key">API Key (legacy)</label>
+                                <input type="password" id="cloudflare_api_key" placeholder="Legacy API key">
+                            </div>
+                            <div class="form-group">
+                                <label for="cloudflare_api_email">API Email</label>
+                                <input type="email" id="cloudflare_api_email" placeholder="Cloudflare email">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section settings-section-full">
+                    <div class="section-header">
+                        <span class="section-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="10" r="3"/>
+                                <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z"/>
+                            </svg>
+                        </span>
+                            <h2>GeoIP Database</h2>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label for="geoip_db_path">Database Path</label>
+                            <input type="text" id="geoip_db_path" placeholder="/path/to/geoip.mmdb">
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="settings-actions">
+                <button class="btn btn-primary" id="save-settings-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    Save Settings
+                </button>
+                <button class="btn btn-ghost" id="reset-settings-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    </svg>
+                    Reset to Defaults
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const card = document.querySelector('.profile-card');
+            if (card) {
+                const img = card.querySelector('.avatar');
+                const fallback = card.querySelector('.avatar-fallback');
+                const nameEl = card.querySelector('.username');
+                const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
+                if (fallback) { fallback.textContent = initial; }
+                function showFallback() { if (img) { img.style.display = 'none'; } if (fallback) { fallback.style.display = 'grid'; } }
+                if (!img || !img.getAttribute('src')) { showFallback(); }
+                else { img.addEventListener('error', showFallback); }
+            }
+
+            const allInputs = [
+                'addr', 'session_hours', 'log_level', 'debug_mode',
+                'auth_shared_secret', 'default_user', 'default_password', 'allow_basic_auth',
+                'acme_email', 'acme_staging',
+                'cloudflare_api_token', 'cloudflare_zone_api_token', 'cloudflare_api_key', 'cloudflare_api_email',
+                'geoip_db_path'
+            ];
+
+            function populateForm(settings) {
+                allInputs.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    const val = settings[id];
+                    if (val === undefined || val === null) return;
+                    if (el.type === 'checkbox') {
+                        el.checked = val === true || val === 'true';
+                    } else if (el.type === 'number') {
+                        el.value = Number(val) || 0;
+                    } else {
+                        el.value = val;
+                    }
+                });
+            }
+
+            function collectFormData() {
+                const data = {};
+                allInputs.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (el.type === 'checkbox') {
+                        data[id] = el.checked;
+                    } else if (el.type === 'number') {
+                        data[id] = Number(el.value) || 0;
+                    } else {
+                        data[id] = el.value;
+                    }
+                });
+                return data;
+            }
+
+            fetch('/api/settings')
+                .then(r => r.ok ? r.json() : Promise.reject(r))
+                .then(data => {
+                    if (data && data.settings) {
+                        populateForm(data.settings);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load settings', err);
+                });
+
+            document.getElementById('save-settings-btn').addEventListener('click', function () {
+                const data = collectFormData();
+                fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(data => {
+                        if (data && data.success) {
+                            showToast('Settings saved successfully');
+                        } else {
+                            showToast(data && data.error || 'Failed to save settings');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to save settings', err);
+                        showToast('Failed to save settings');
+                    });
+            });
+
+            document.getElementById('reset-settings-btn').addEventListener('click', function () {
+                if (!confirm('Reset all settings to defaults?')) return;
+                fetch('/api/settings/reset', {
+                    method: 'POST'
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(data => {
+                        if (data && data.settings) {
+                            populateForm(data.settings);
+                            showToast('Settings reset to defaults');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to reset settings', err);
+                        showToast('Failed to reset settings');
+                    });
+            });
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

@@ -259,6 +259,9 @@ func main() {
 		dashboard.GET("/passkeys", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "passkeys", gin.H{"ActivePage": "passkeys"})
 		})
+		dashboard.GET("/settings", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "settings", gin.H{"ActivePage": "settings"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -283,6 +286,7 @@ func main() {
 		apiRead.GET("/certs", apiCertsList)
 		apiRead.GET("/identity-providers", apiIdentityProvidersList)
 		apiRead.GET("/passkeys", apiPasskeysList)
+		apiRead.GET("/settings", apiSettingsGet)
 	}
 
 	apiWrite := r.Group("/api")
@@ -318,6 +322,8 @@ func main() {
 		apiWrite.POST("/identity-providers", apiIdentityProvidersCreate)
 		apiWrite.DELETE("/identity-providers/:id", apiIdentityProvidersDelete)
 		apiWrite.POST("/identity-providers/:id/toggle", apiIdentityProvidersToggle)
+		apiWrite.PUT("/settings", apiSettingsUpdate)
+		apiWrite.POST("/settings/reset", apiSettingsReset)
 	}
 
 	apiTokens := r.Group("/api/tokens")
@@ -2036,4 +2042,91 @@ func apiPasskeysDelete(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type settingsResponse struct {
+	Settings map[string]interface{} `json:"settings"`
+}
+
+func apiSettingsGet(c *gin.Context) {
+	settings := map[string]interface{}{
+		"addr":                      os.Getenv("ADDR"),
+		"session_hours":             os.Getenv("SESSION_HOURS"),
+		"log_level":                 os.Getenv("LOG_LEVEL"),
+		"debug_mode":                os.Getenv("DEBUG_MODE"),
+		"auth_shared_secret":        os.Getenv("AUTH_SHARED_SECRET"),
+		"default_user":              os.Getenv("USER"),
+		"default_password":          os.Getenv("PASSWORD"),
+		"allow_basic_auth":          os.Getenv("ALLOW_BASIC_AUTH"),
+		"acme_email":                os.Getenv("ACME_EMAIL"),
+		"acme_staging":              os.Getenv("ACME_STAGING"),
+		"cloudflare_api_token":      os.Getenv("CLOUDFLARE_API_TOKEN"),
+		"cloudflare_zone_api_token": os.Getenv("CLOUDFLARE_ZONE_API_TOKEN"),
+		"cloudflare_api_key":        os.Getenv("CLOUDFLARE_API_KEY"),
+		"cloudflare_api_email":      os.Getenv("CLOUDFLARE_API_EMAIL"),
+		"geoip_db_path":             os.Getenv("GEOIP_DB_PATH"),
+	}
+	c.JSON(http.StatusOK, gin.H{"settings": settings})
+}
+
+func apiSettingsUpdate(c *gin.Context) {
+	var updates map[string]interface{}
+	if err := c.BindJSON(&updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	envKeys := map[string]string{
+		"addr":                      "ADDR",
+		"session_hours":             "SESSION_HOURS",
+		"log_level":                 "LOG_LEVEL",
+		"debug_mode":                "DEBUG_MODE",
+		"auth_shared_secret":        "AUTH_SHARED_SECRET",
+		"default_user":              "USER",
+		"default_password":          "PASSWORD",
+		"allow_basic_auth":          "ALLOW_BASIC_AUTH",
+		"acme_email":                "ACME_EMAIL",
+		"acme_staging":              "ACME_STAGING",
+		"cloudflare_api_token":      "CLOUDFLARE_API_TOKEN",
+		"cloudflare_zone_api_token": "CLOUDFLARE_ZONE_API_TOKEN",
+		"cloudflare_api_key":        "CLOUDFLARE_API_KEY",
+		"cloudflare_api_email":      "CLOUDFLARE_API_EMAIL",
+		"geoip_db_path":             "GEOIP_DB_PATH",
+	}
+
+	for key, envKey := range envKeys {
+		if val, ok := updates[key]; ok {
+			if s, ok := val.(string); ok {
+				if s == "" {
+					os.Unsetenv(envKey)
+				} else {
+					os.Setenv(envKey, s)
+				}
+			} else if b, ok := val.(bool); ok {
+				if b {
+					os.Setenv(envKey, "true")
+				} else {
+					os.Unsetenv(envKey)
+				}
+			} else if n, ok := val.(float64); ok {
+				os.Setenv(envKey, fmt.Sprintf("%d", int(n)))
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func apiSettingsReset(c *gin.Context) {
+	envVars := []string{
+		"ADDR", "SESSION_HOURS", "LOG_LEVEL", "DEBUG_MODE",
+		"AUTH_SHARED_SECRET", "USER", "PASSWORD", "ALLOW_BASIC_AUTH",
+		"ACME_EMAIL", "ACME_STAGING",
+		"CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_API_TOKEN", "CLOUDFLARE_API_KEY", "CLOUDFLARE_API_EMAIL",
+		"GEOIP_DB_PATH",
+	}
+	for _, env := range envVars {
+		os.Unsetenv(env)
+	}
+	apiSettingsGet(c)
 }
