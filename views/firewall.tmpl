@@ -62,16 +62,15 @@
             <section class="panel" aria-label="Firewall configuration">
                 <div class="toolbar">
                     <div class="left">
-                        <p class="subtitle">Create firewall rules to block abusive traffic before it reaches your upstreams.</p>
+                        <h2 class="toolbar-title">Firewall Rules</h2>
+                        <p class="subtitle">Create rules to block abusive traffic before it reaches your upstreams.</p>
                     </div>
                     <div class="right">
                         <button class="btn ghost" type="button" id="refresh-firewall-btn">
-                            <span class="icon orange" aria-hidden="true">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2"></path>
-                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-                                </svg>
-                            </span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2"></path>
+                                <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                            </svg>
                             <span>Refresh</span>
                         </button>
                     </div>
@@ -79,116 +78,113 @@
 
                 <div class="firewall-grid">
                     <div class="firewall-column">
-                        <div class="form-section">
-                            <div class="section-header">
-                                <div class="section-icon">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                                         <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                                     </svg>
                                 </div>
-                                <div>
-                                    <h2>Ban single IP</h2>
-                                    <p class="subtitle">Block a specific IPv4 or IPv6 address.</p>
+                                <div class="card-title-group">
+                                    <h3>Ban Single IP</h3>
+                                    <p class="subtitle">Block a specific IPv4 or IPv6 address</p>
                                 </div>
                             </div>
-                            <form id="ban-ip-form">
-                                <label>
-                                    <span>IP address</span>
-                                    <input type="text" id="ban-ip-input" placeholder="e.g. 203.0.113.10 or 2001:db8::1" required />
-                                </label>
-                                <div class="actions-row">
-                                    <button class="btn primary" type="submit">Ban IP</button>
+                            <form id="ban-ip-form" class="card-form">
+                                <div class="form-group">
+                                    <label for="ban-ip-input">IP Address</label>
+                                    <input type="text" id="ban-ip-input" placeholder="e.g. 203.0.113.10 or 2001:db8::1" />
                                 </div>
+                                <button class="btn primary full-width" type="submit">Ban IP</button>
                             </form>
                         </div>
 
-                        <div class="form-section">
-                            <div class="section-header">
-                                <div class="section-icon">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
                                 </div>
-                                <div>
-                                    <h2>Upload IP list</h2>
-                                    <p class="subtitle">Upload a .txt file with one IP per line.</p>
+                                <div class="card-title-group">
+                                    <h3>Upload IP List</h3>
+                                    <p class="subtitle">Upload a .txt file with one IP per line</p>
                                 </div>
                             </div>
-                            <form id="ban-ip-upload-form" enctype="multipart/form-data">
-                                <label>
-                                    <span>IP list file</span>
+                            <form id="ban-ip-upload-form" enctype="multipart/form-data" class="card-form">
+                                <div class="form-group">
+                                    <label for="ban-ip-file">IP List File</label>
                                     <input type="file" id="ban-ip-file" name="file" accept=".txt" />
-                                </label>
-                                <div class="actions-row">
-                                    <button class="btn primary" type="submit">Upload &amp; ban</button>
                                 </div>
+                                <button class="btn primary full-width" type="submit">Upload & Ban</button>
                             </form>
                         </div>
-                    </div>
 
-                    <div class="firewall-column">
-                        <div class="form-section">
-                            <div class="section-header">
-                                <div class="section-icon">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-icon">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                                         <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="2"/>
                                     </svg>
                                 </div>
-                                <div>
-                                    <h2>Ban by country</h2>
-                                    <p class="subtitle">Block traffic based on GeoIP country code.</p>
+                                <div class="card-title-group">
+                                    <h3>Ban by Country</h3>
+                                    <p class="subtitle">Block traffic based on GeoIP country</p>
                                 </div>
                             </div>
-                            <form id="ban-country-form">
-                                <label>
-                                    <span>Country codes</span>
-                                    <input type="text" id="ban-country-input" placeholder="e.g. US, AU, CN" />
-                                </label>
-                                <p class="hint">Use 2-letter ISO country codes, separated by commas.</p>
-                                <div class="actions-row">
-                                    <button class="btn primary" type="submit">Ban countries</button>
+                            <form id="ban-country-form" class="card-form">
+                                <div class="form-group">
+                                    <label for="ban-country-input">Country Codes</label>
+                                    <input type="text" id="ban-country-input" placeholder="e.g. US, AU, CN (comma separated)" />
                                 </div>
+                                <p class="form-hint">Use 2-letter ISO country codes, separated by commas</p>
+                                <button class="btn primary full-width" type="submit">Ban Countries</button>
                             </form>
                         </div>
+                    </div>
 
-                        <div class="form-section">
-                            <div class="section-header">
-                                <div class="section-icon">
+                    <div class="firewall-column">
+                        <div class="card card-full">
+                            <div class="card-header">
+                                <div class="card-icon">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                         <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2"/>
                                     </svg>
                                 </div>
-                                <div>
-                                    <h2>Current bans</h2>
+                                <div class="card-title-group">
+                                    <h3>Active Bans</h3>
+                                    <p class="subtitle">Currently blocked IPs and countries</p>
                                 </div>
                             </div>
-                            <div class="firewall-current">
-                                <div class="ban-list">
-                                    <h3>
+                            <div class="bans-container">
+                                <div class="bans-section">
+                                    <div class="bans-header">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                                             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                                             <path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                                         </svg>
-                                        Banned IPs
-                                    </h3>
-                                    <ul id="banned-ips-list" class="ban-list-ul">
-                                        <li class="muted">None</li>
-                                    </ul>
+                                        <span>Banned IPs</span>
+                                        <span class="count-badge" id="ips-count">0</span>
+                                    </div>
+                                    <div id="banned-ips-list" class="bans-list">
+                                        <span class="empty-state">No IPs banned</span>
+                                    </div>
                                 </div>
-                                <div class="ban-list">
-                                    <h3>
+                                <div class="bans-section">
+                                    <div class="bans-header">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                                             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                                             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="2"/>
                                         </svg>
-                                        Banned Countries
-                                    </h3>
-                                    <ul id="banned-countries-list" class="ban-list-ul">
-                                        <li class="muted">None</li>
-                                    </ul>
+                                        <span>Banned Countries</span>
+                                        <span class="count-badge" id="countries-count">0</span>
+                                    </div>
+                                    <div id="banned-countries-list" class="bans-list">
+                                        <span class="empty-state">No countries banned</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -213,6 +209,8 @@
             const banCountryInput = document.getElementById('ban-country-input');
             const bannedIpsList = document.getElementById('banned-ips-list');
             const bannedCountriesList = document.getElementById('banned-countries-list');
+            const ipsCount = document.getElementById('ips-count');
+            const countriesCount = document.getElementById('countries-count');
             const statIps = document.getElementById('stat-ips');
             const statCountries = document.getElementById('stat-countries');
 
@@ -220,26 +218,14 @@
                 if (!el) return;
                 el.innerHTML = '';
                 if (!items || !items.length) {
-                    const li = document.createElement('li');
-                    li.textContent = 'None';
-                    li.className = 'muted';
-                    el.appendChild(li);
+                    el.innerHTML = '<span class="empty-state">No ' + (isCountry ? 'countries' : 'IPs') + ' banned</span>';
                     return;
                 }
                 items.forEach(function (item) {
-                    const li = document.createElement('li');
-                    li.className = 'ban-item';
-
-                    const span = document.createElement('span');
-                    span.textContent = item;
-                    li.appendChild(span);
-
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.className = 'remove-btn';
-                    removeBtn.innerHTML = '&times;';
-                    removeBtn.title = 'Unban ' + item;
-                    removeBtn.addEventListener('click', function() {
+                    const chip = document.createElement('div');
+                    chip.className = 'ban-chip';
+                    chip.innerHTML = '<span>' + item + '</span><button type="button" class="remove-chip" title="Unban ' + item + '">&times;</button>';
+                    chip.querySelector('.remove-chip').addEventListener('click', function() {
                         if (!confirm('Unban ' + item + '?')) return;
                         const endpoint = isCountry
                             ? '/api/firewall/country/' + encodeURIComponent(item)
@@ -256,9 +242,7 @@
                             })
                             .catch(function() { showToast('Failed to unban'); });
                     });
-                    li.appendChild(removeBtn);
-
-                    el.appendChild(li);
+                    el.appendChild(chip);
                 });
             }
 
@@ -272,6 +256,8 @@
                         renderList(bannedCountriesList, countries, true);
                         if (statIps) statIps.textContent = ips.length;
                         if (statCountries) statCountries.textContent = countries.length;
+                        if (ipsCount) ipsCount.textContent = ips.length;
+                        if (countriesCount) countriesCount.textContent = countries.length;
                     })
                     .catch(function () {
                         showToast('Failed to load firewall rules');

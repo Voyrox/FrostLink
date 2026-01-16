@@ -532,33 +532,26 @@ func SetDomainAuth(domain string, require bool) error {
 func isAuthorizedForDomain(domain string, r *stdhttp.Request) bool {
 	cookie, err := r.Cookie("sp_auth")
 	if err != nil || cookie == nil || cookie.Value == "" {
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: no cookie, domain=%s, err=%v", domain, err))
 		return false
 	}
 	token := cookie.Value
 	now := time.Now()
 
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: checking token=%s, domain=%s", token, domain))
-
 	authSessionsMu.RLock()
 	s, ok := authSessions[token]
 	authSessionsMu.RUnlock()
 	if !ok {
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: token not found in sessions"))
 		return false
 	}
 	if !strings.EqualFold(s.Domain, strings.TrimSpace(domain)) {
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: domain mismatch: %s != %s", s.Domain, domain))
 		return false
 	}
 	if now.After(s.Expires) {
 		authSessionsMu.Lock()
 		delete(authSessions, token)
 		authSessionsMu.Unlock()
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: session expired"))
 		return false
 	}
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: authorized!"))
 	return true
 }
 
@@ -621,16 +614,12 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		renderAuthLoginPage(w, domain, redirect, "")
 	case stdhttp.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			ui.SystemLog("error", "domain-auth", fmt.Sprintf("parse form error: %v", err))
 			renderAuthLoginPage(w, domain, redirect, "Invalid form data")
 			return
 		}
 
 		username := strings.TrimSpace(r.FormValue("username"))
 		password := strings.TrimSpace(r.FormValue("password"))
-
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("POST: username=%s, form_domain=%s, form_redirect=%s, url_domain=%s, url_redirect=%s",
-			username, r.FormValue("domain"), r.FormValue("redirect"), domain, redirect))
 
 		domain = strings.TrimSpace(r.FormValue("domain"))
 		if domain == "" {
@@ -644,10 +633,7 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			redirect = "/"
 		}
 
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("login attempt: domain=%s, username=%s", domain, username))
-
 		if username == "" || password == "" {
-			ui.SystemLog("info", "domain-auth", fmt.Sprintf("login failed: missing credentials"))
 			renderAuthLoginPage(w, domain, redirect, "Username and password are required")
 			return
 		}
@@ -659,12 +645,10 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			return
 		}
 		if !ok {
-			ui.SystemLog("info", "domain-auth", fmt.Sprintf("login failed: invalid credentials for user=%s", username))
 			renderAuthLoginPage(w, domain, redirect, "Invalid credentials")
 			return
 		}
 
-		ui.SystemLog("info", "domain-auth", fmt.Sprintf("login success: user=%s, domain=%s", username, domain))
 		setAuthSession(w, r, domain, redirect, username)
 	default:
 		w.WriteHeader(stdhttp.StatusMethodNotAllowed)
@@ -681,8 +665,6 @@ func setAuthSession(w stdhttp.ResponseWriter, r *stdhttp.Request, domain, redire
 	sharedToken := generateSharedToken(username, domain, expires)
 
 	isSecure := r.TLS != nil
-
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("setAuthSession: token=%s, domain=%s, redirect=%s, username=%s, secure=%v", token, domain, redirect, username, isSecure))
 
 	cookie := &stdhttp.Cookie{
 		Name:     "sp_auth",
@@ -705,8 +687,6 @@ func setAuthSession(w stdhttp.ResponseWriter, r *stdhttp.Request, domain, redire
 		SameSite: stdhttp.SameSiteLaxMode,
 	}
 	stdhttp.SetCookie(w, sharedCookie)
-
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("setAuthSession: cookies set: sp_auth=%s, sp_auth_shared=%s", token, sharedToken))
 
 	stdhttp.Redirect(w, r, redirect, stdhttp.StatusFound)
 }
@@ -924,8 +904,6 @@ func verifyCredentialsWithAPI(username, password string) (bool, error) {
 	}
 	authURL.Path = strings.TrimRight(authURL.Path, "/") + "/api/login"
 
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("verifyCredentials: calling %s", authURL.String()))
-
 	payload := map[string]string{
 		"username": username,
 		"password": password,
@@ -937,22 +915,17 @@ func verifyCredentialsWithAPI(username, password string) (bool, error) {
 
 	resp, err := stdhttp.Post(authURL.String(), "application/json", strings.NewReader(string(data)))
 	if err != nil {
-		ui.SystemLog("error", "domain-auth", fmt.Sprintf("verifyCredentials: request failed: %v", err))
 		return false, err
 	}
 	defer resp.Body.Close()
-
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("verifyCredentials: response status=%d", resp.StatusCode))
 
 	var out struct {
 		Valid bool `json:"valid"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		ui.SystemLog("error", "domain-auth", fmt.Sprintf("verifyCredentials: decode failed: %v", err))
 		return false, err
 	}
 
-	ui.SystemLog("info", "domain-auth", fmt.Sprintf("verifyCredentials: result=%v", out.Valid))
 	return out.Valid, nil
 }
 
