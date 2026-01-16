@@ -114,7 +114,6 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Rows will be populated from /api/proxys -->
                         </tbody>
                     </table>
                 </div>
@@ -347,7 +346,6 @@
             else { img.addEventListener('error', showFallback); }
         })();
 
-        // Load live domain stats from /api/proxys and populate the table
         (function () {
             const tableBody = document.querySelector('.table tbody');
             if (!tableBody) return;
@@ -653,8 +651,6 @@
                         });
                 });
             }
-
-            // Edit Domain Modal
             const editDomainModal = document.getElementById('edit-domain-modal');
             const editDomainForm = document.getElementById('edit-domain-form');
             const editDomainCancelBtn = document.getElementById('edit-domain-cancel-btn');
@@ -771,8 +767,6 @@
                         });
                 });
             }
-
-            // Certificate Modal
             const certModal = document.getElementById('cert-modal');
             const certForm = document.getElementById('cert-form');
             const certCancelBtn = document.getElementById('cert-cancel-btn');

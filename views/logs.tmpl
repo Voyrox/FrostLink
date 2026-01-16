@@ -74,7 +74,6 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Live logs will be populated from /api/logs -->
                         </tbody>
                     </table>
                 </div>
@@ -132,7 +131,6 @@
             else { img.addEventListener('error', showFallback); }
         })();
 
-        // Load live request logs from /api/logs and populate the table
         (function () {
             const tableBody = document.querySelector('.table tbody');
             if (!tableBody) return;

@@ -90,7 +90,6 @@
         else { img.addEventListener('error', showFallback); }
       }
 
-      // Line chart - req by day
       const c = document.getElementById('byDayChart');
       const totalRequestsEl = document.querySelector('.panel.stats .stat:nth-child(1) .stat-value');
       const blockedRequestsEl = document.querySelector('.panel.stats .stat:nth-child(2) .stat-value');
@@ -137,7 +136,6 @@
           rawMax = sum;
         }
 
-        // If all values are 0, still draw axes with a minimal scale.
         if (rawMax <= 0) {
           rawMax = 1;
         }
@@ -147,7 +145,6 @@
         const max = step * tickCount;
 
         ctx.clearRect(0, 0, width, height);
-        // axes + grid
         ctx.strokeStyle = '#1b2230';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -157,34 +154,28 @@
         ctx.lineTo(padding.l, height - padding.b);
         ctx.stroke();
 
-        // labels
         ctx.fillStyle = '#a4acb9';
         ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
 
-        // x-axis labels (days)
         for (let i = 0; i < labels.length; i++) {
           const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
           ctx.fillText(labels[i], x - 12, height - padding.b + 18);
         }
 
-        // y-axis labels (connections / requests)
         const yTicks = tickCount;
         for (let i = 0; i <= yTicks; i++) {
-          const value = step * i;
-          const y = padding.t + (1 - value / max) * areaH;
-          // grid line
-          ctx.strokeStyle = i === 0 ? '#1b2230' : 'rgba(148, 163, 184, 0.25)';
-          ctx.beginPath();
-          ctx.moveTo(padding.l, y);
-          ctx.lineTo(width - padding.r, y);
-          ctx.stroke();
-          // label
-          const labelText = value === 0 ? '0' : value.toFixed(0);
+           const value = step * i;
+           const y = padding.t + (1 - value / max) * areaH;
+           ctx.strokeStyle = i === 0 ? '#1b2230' : 'rgba(148, 163, 184, 0.25)';
+           ctx.beginPath();
+           ctx.moveTo(padding.l, y);
+           ctx.lineTo(width - padding.r, y);
+           ctx.stroke();
+           const labelText = value === 0 ? '0' : value.toFixed(0);
           ctx.fillStyle = '#a4acb9';
           ctx.fillText(labelText, 4, y + 4);
         }
 
-        // line
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#22d3ee';
         ctx.beginPath();
@@ -194,8 +185,6 @@
           if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
-
-        // fill
         const grad = ctx.createLinearGradient(0, padding.t, 0, height - padding.b);
         grad.addColorStop(0, 'rgba(34,211,238,.25)');
         grad.addColorStop(1, 'rgba(34,211,238,0)');
@@ -342,8 +331,7 @@
         for (const code in rawCountsMap) {
           if (!Object.prototype.hasOwnProperty.call(rawCountsMap, code)) continue;
           const count = rawCountsMap[code];
-          const pct = count / total; // 0-1
-          const regionKey = code; // jsVectorMap uses ISO2 region codes like "AU"
+          const pct = count / total;
           valueMap[regionKey] = pct;
         }
 
@@ -409,12 +397,7 @@
           const configs = proxysResp && Array.isArray(proxysResp.configs) ? proxysResp.configs : [];
           const logs = Array.isArray(logsResp.logs) ? logsResp.logs : [];
 
-          // Totals
-          let totalRequests = 0;
-          configs.forEach(cfg => {
-            const v = Number(cfg.total_requests || cfg.totalRequests || 0);
-            if (!isNaN(v)) totalRequests += v;
-          });
+          let totalRequests = logs.length;
 
           let blockedRequests = 0;
           logs.forEach(entry => {
@@ -425,13 +408,12 @@
           if (totalRequestsEl) {
             totalRequestsEl.textContent = formatNumber(totalRequests);
           }
-          if (blockedRequestsEl) {
-            const pct = totalRequests > 0 ? (blockedRequests * 100) / totalRequests : 0;
-            blockedRequestsEl.innerHTML = `${formatNumber(blockedRequests)} <span class="muted">(${pct.toFixed(2)}%)</span>`;
-          }
+           if (blockedRequestsEl) {
+             const pct = totalRequests > 0 ? (blockedRequests * 100) / totalRequests : 0;
+             blockedRequestsEl.innerHTML = `${formatNumber(blockedRequests)} <span class="muted">(${pct.toFixed(2)}%)</span>`;
+           }
 
-          // Requests by day chart (last 8 days)
-          if (c && logs.length > 0) {
+           if (c && logs.length > 0) {
             const days = 8;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -460,10 +442,8 @@
             window.addEventListener('resize', () => drawByDayChart(c, labels, data));
           }
 
-          // Top countries
           updateTopCountries(logs);
         } catch (e) {
-          // Fail silently for now; analytics just won't update
         }
       }
 
