@@ -97,11 +97,48 @@
 .panel {
     display: flex;
     flex-direction: column;
-    gap: 10px
+    gap: 10px;
 }
 
 .panel[hidden] {
-    display: none
+    display: none;
+}
+
+.fingerprint-container {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.fingerprint-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(252, 128, 51, 0.1), rgba(252, 128, 51, 0.05));
+    border: 2px solid rgba(252, 128, 51, 0.2);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(252, 128, 51, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 0 12px rgba(252, 128, 51, 0);
+    }
+}
+
+.fingerprint-icon svg {
+    color: var(--orange);
+}
+
+.fingerprint-container p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
 }
 
 label {
@@ -181,6 +218,31 @@ input:focus {
 }
 
 .btn.ghost {
+    background: transparent;
+}
+
+#passkey-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+#passkey-form label {
+    font-size: .95rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+#passkey-form .btn.primary {
+    margin-top: 8px;
+}
+
+.back-btn {
+    margin-top: 12px;
+}
+
+.btn.ghost {
     background: transparent
 }
 
@@ -227,50 +289,6 @@ input:focus {
 
 .oauth-btn svg {
     flex-shrink: 0;
-}
-
-.fingerprint-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 1.5rem 0;
-}
-
-.fingerprint-icon {
-    width: 80px;
-    height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, rgba(252, 128, 51, 0.1), rgba(252, 128, 51, 0.05));
-    border: 2px solid rgba(252, 128, 51, 0.2);
-    border-radius: 50%;
-    margin-bottom: 1rem;
-    animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        box-shadow: 0 0 0 0 rgba(252, 128, 51, 0.3);
-    }
-    50% {
-        box-shadow: 0 0 0 12px rgba(252, 128, 51, 0);
-    }
-}
-
-.fingerprint-icon svg {
-    color: var(--orange);
-}
-
-.fingerprint-container p {
-    color: var(--muted);
-    font-size: 0.9rem;
-    margin: 0;
-}
-
-.back-btn {
-    margin-top: 0.5rem;
 }
 
 @media (max-width:420px) {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -199,6 +201,9 @@ func main() {
 		dashboard.GET("/identity-providers", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "identity-providers", gin.H{"ActivePage": "identity-providers"})
 		})
+		dashboard.GET("/passkeys", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "passkeys", gin.H{"ActivePage": "passkeys"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -206,6 +211,7 @@ func main() {
 	})
 
 	apiRead := r.Group("/api")
+	apiRead.GET("/identity-providers/public", apiIdentityProvidersList)
 	apiRead.Use(apiAuthRequired())
 	{
 		apiRead.GET("/dashboard", apiDashboard)
@@ -213,6 +219,7 @@ func main() {
 		apiRead.GET("/proxys", apiProxys)
 		apiRead.GET("/logs", apiLogs)
 		apiRead.GET("/users", apiUsersList)
+		apiRead.GET("/users/me", apiUsersMe)
 		apiRead.GET("/roles", apiRolesList)
 		apiRead.GET("/sessions", apiSessionsList)
 		apiRead.GET("/audit", apiAuditList)
@@ -220,11 +227,17 @@ func main() {
 		apiRead.GET("/streams/stats", apiStreamsStats)
 		apiRead.GET("/certs", apiCertsList)
 		apiRead.GET("/identity-providers", apiIdentityProvidersList)
+		apiRead.GET("/passkeys", apiPasskeysList)
 	}
 
 	apiWrite := r.Group("/api")
 	apiWrite.Use(apiAuthRequired(), csrfMiddleware())
 	{
+		apiWrite.POST("/passkeys/register/start", apiPasskeyRegistrationStart)
+		apiWrite.POST("/passkeys/register/complete", apiPasskeyRegistrationComplete)
+		apiWrite.POST("/passkeys/auth/start", apiPasskeyAuthenticationStart)
+		apiWrite.POST("/passkeys/auth/complete", apiPasskeyAuthenticationComplete)
+		apiWrite.DELETE("/passkeys/:id", apiPasskeysDelete)
 		apiWrite.POST("/streams", apiStreamsCreate)
 		apiWrite.PUT("/streams/:id", apiStreamsUpdate)
 		apiWrite.DELETE("/streams/:id", apiStreamsDelete)
@@ -734,6 +747,23 @@ func apiUsersList(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"users": out})
+}
+
+func apiUsersMe(c *gin.Context) {
+	sid, _ := c.Get("session_id")
+	if sid == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	s, ok := core.GetSession(sid.(string))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"username": s.Username,
+		"role":     s.Role,
+	})
 }
 
 func apiUsersCreate(c *gin.Context) {
@@ -1633,4 +1663,322 @@ func apiIdentityProvidersToggle(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "enabled": req.Enabled})
+}
+
+type passkeyRegistrationResponse struct {
+	Challenge   string `json:"challenge"`
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Credentials []struct {
+		ID string `json:"id"`
+	} `json:"credentials"`
+	RP struct {
+		Name string `json:"name"`
+		ID   string `json:"id"`
+	} `json:"rp"`
+	PubKeyCredParams []struct {
+		Type string `json:"type"`
+		Alg  int    `json:"alg"`
+	} `json:"pubKeyCredParams"`
+	Timeout int `json:"timeout"`
+}
+
+func apiPasskeyRegistrationStart(c *gin.Context) {
+	var req struct {
+		Username    string `json:"username"`
+		DisplayName string `json:"display_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "details": err.Error()})
+		return
+	}
+
+	if req.Username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+		return
+	}
+
+	userID := uuid.New().String()
+	challenge := make([]byte, 32)
+	if _, err := rand.Read(challenge); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate challenge"})
+		return
+	}
+	challengeB64 := base64.RawURLEncoding.EncodeToString(challenge)
+
+	host := c.Request.Host
+	if i := strings.IndexByte(host, ':'); i > -1 {
+		host = host[:i]
+	}
+
+	rpID := host
+	if rpID == "" {
+		rpID = "sparkproxy.local"
+	}
+
+	existingCreds := core.ListPasskeyCredentials(req.Username)
+	var existingCredIDs []string
+	for _, cred := range existingCreds {
+		existingCredIDs = append(existingCredIDs, base64.RawURLEncoding.EncodeToString(cred.CredentialID))
+	}
+
+	resp := passkeyRegistrationResponse{
+		Challenge:   challengeB64,
+		UserID:      base64.RawURLEncoding.EncodeToString([]byte(userID)),
+		Username:    req.Username,
+		DisplayName: req.DisplayName,
+		Credentials: []struct {
+			ID string `json:"id"`
+		}{},
+		RP: struct {
+			Name string `json:"name"`
+			ID   string `json:"id"`
+		}{
+			Name: "SparkProxy",
+			ID:   rpID,
+		},
+		PubKeyCredParams: []struct {
+			Type string `json:"type"`
+			Alg  int    `json:"alg"`
+		}{
+			{Type: "public-key", Alg: -7},
+			{Type: "public-key", Alg: -257},
+		},
+		Timeout: 60000,
+	}
+
+	for _, id := range existingCredIDs {
+		resp.Credentials = append(resp.Credentials, struct {
+			ID string `json:"id"`
+		}{ID: id})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"response":          resp,
+		"session_challenge": challengeB64,
+		"session_user_id":   userID,
+		"session_username":  req.Username,
+	})
+}
+
+func apiPasskeyRegistrationComplete(c *gin.Context) {
+	var req struct {
+		Username        string `json:"username"`
+		AttestationData string `json:"attestation_data"`
+		Challenge       string `json:"challenge"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "details": err.Error()})
+		return
+	}
+
+	if req.Username == "" || req.AttestationData == "" || req.Challenge == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+
+	attestationData, err := base64.RawURLEncoding.DecodeString(req.AttestationData)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid attestation data"})
+		return
+	}
+
+	if len(attestationData) < 37 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid attestation format"})
+		return
+	}
+
+	credIDLen := int(attestationData[16])<<8 | int(attestationData[17])
+	if len(attestationData) < 37+credIDLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid attestation format"})
+		return
+	}
+
+	credentialID := attestationData[18 : 18+credIDLen]
+	publicKeyData := attestationData[18+credIDLen:]
+
+	userID := uuid.New().String()
+	users := core.ListUsers()
+	for _, u := range users {
+		if u.Username == req.Username {
+			userID = u.Username
+			break
+		}
+	}
+
+	_, err = core.CreatePasskeyCredential(userID, req.Username, credentialID, publicKeyData, 0, "platform")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save credential"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "Passkey registered successfully"})
+}
+
+type passkeyAuthenticationRequest struct {
+	Username string `json:"username"`
+}
+
+type passkeyAuthenticationResponse struct {
+	Challenge   string `json:"challenge"`
+	RPID        string `json:"rpId"`
+	Timeout     int    `json:"timeout"`
+	Credentials []struct {
+		ID string `json:"id"`
+	} `json:"credentials"`
+	AllowCredentials []struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	} `json:"allowCredentials"`
+}
+
+func apiPasskeyAuthenticationStart(c *gin.Context) {
+	var req passkeyAuthenticationRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	challenge := make([]byte, 32)
+	if _, err := rand.Read(challenge); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate challenge"})
+		return
+	}
+	challengeB64 := base64.RawURLEncoding.EncodeToString(challenge)
+
+	host := c.Request.Host
+	if i := strings.IndexByte(host, ':'); i > -1 {
+		host = host[:i]
+	}
+
+	rpID := host
+	if rpID == "" {
+		rpID = "sparkproxy.local"
+	}
+
+	var credentials []core.PasskeyCredential
+	if req.Username != "" {
+		credentials = core.ListPasskeyCredentials(req.Username)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required for passkey authentication"})
+		return
+	}
+
+	var allowCredentials []struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	}
+	for _, cred := range credentials {
+		allowCredentials = append(allowCredentials, struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		}{
+			ID:   base64.RawURLEncoding.EncodeToString(cred.CredentialID),
+			Type: "public-key",
+		})
+	}
+
+	if len(allowCredentials) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no passkeys found for this user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"response": passkeyAuthenticationResponse{
+			Challenge: challengeB64,
+			RPID:      rpID,
+			Timeout:   60000,
+			Credentials: []struct {
+				ID string `json:"id"`
+			}{},
+			AllowCredentials: allowCredentials,
+		},
+		"session_challenge": challengeB64,
+		"session_username":  req.Username,
+	})
+}
+
+type passkeyAuthenticationCompleteRequest struct {
+	Username          string `json:"username"`
+	AuthenticatorData string `json:"authenticator_data"`
+	Signature         string `json:"signature"`
+	Challenge         string `json:"challenge"`
+}
+
+func apiPasskeyAuthenticationComplete(c *gin.Context) {
+	var req passkeyAuthenticationCompleteRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	if req.Username == "" || req.AuthenticatorData == "" || req.Signature == "" || req.Challenge == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields"})
+		return
+	}
+
+	authData, err := base64.RawURLEncoding.DecodeString(req.AuthenticatorData)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid authenticator data"})
+		return
+	}
+
+	if len(authData) < 37 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid authenticator data format"})
+		return
+	}
+
+	credentialID := authData[32:68]
+	cred := core.GetPasskeyCredentialByID(credentialID)
+	if cred == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		return
+	}
+
+	signCount := uint32(authData[33]) | uint32(authData[34])<<8 | uint32(authData[35])<<16 | uint32(authData[36])<<24
+	if signCount > cred.SignCount {
+		if err := core.UpdatePasskeySignCount(credentialID, signCount); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update sign count"})
+			return
+		}
+	} else if signCount < cred.SignCount {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid signature counter"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "username": cred.Username})
+}
+
+func apiPasskeysList(c *gin.Context) {
+	username := c.Query("username")
+	if username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username is required"})
+		return
+	}
+	creds := core.ListPasskeyCredentials(username)
+	var out []map[string]interface{}
+	for _, cred := range creds {
+		out = append(out, map[string]interface{}{
+			"id":          cred.ID,
+			"username":    cred.Username,
+			"device_type": cred.DeviceType,
+			"created_at":  cred.CreatedAt,
+			"last_used":   cred.LastUsedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"credentials": out})
+}
+
+func apiPasskeysDelete(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	if err := core.DeletePasskeyCredential(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

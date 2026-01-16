@@ -1,0 +1,496 @@
+{{ define "passkeys" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • Passkeys</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/passkeys.css" />
+</head>
+
+<body class="page-passkeys">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Passkeys</h1>
+                <p class="subtitle">Manage your passkeys for passwordless authentication</p>
+            </header>
+
+            <section class="panel" aria-label="Passkeys Panel">
+                <div class="toolbar">
+                    <div class="left">
+                        <div class="passkey-stats">
+                            <span id="total-passkeys">0</span> passkeys registered
+                        </div>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button" id="refresh-passkeys-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2" />
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn ghost" type="button" id="open-register-modal">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+                                    <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+                                    <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
+                                    <path d="M2 12a10 10 0 0 1 18-6"/>
+                                    <path d="M2 16h.01"/>
+                                    <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+                                    <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
+                                    <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
+                                    <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
+                                </svg>
+                            </span>
+                            <span>Add Passkey</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+                                                <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+                                                <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
+                                                <path d="M2 12a10 10 0 0 1 18-6"/>
+                                                <path d="M2 16h.01"/>
+                                                <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+                                                <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
+                                                <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
+                                                <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
+                                            </svg>
+                                        </span> Device</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 8v4l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                            </svg>
+                                        </span> Created</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 8v4l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                            </svg>
+                                        </span> Last Used</span></th>
+                                <th scope="col" class="actions-col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="passkeys-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="modal-backdrop" id="register-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="register-modal-title">
+            <div class="register-form">
+                <h2 id="register-modal-title">Add Passkey</h2>
+                <div class="register-info" id="register-info">
+                    <div class="register-details">
+                        <span class="register-status none">Register a new passkey for passwordless authentication</span>
+                    </div>
+                </div>
+                <div class="passkey-setup">
+                    <div class="passkey-icon-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+                            <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+                            <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
+                            <path d="M2 12a10 10 0 0 1 18-6"/>
+                            <path d="M2 16h.01"/>
+                            <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+                            <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
+                            <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
+                            <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
+                        </svg>
+                    </div>
+                    <p>Use your fingerprint, face, or security key to sign in without a password.</p>
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Passkey Name</span>
+                            <input type="text" id="passkey-name" placeholder="e.g. MacBook Pro, iPhone">
+                        </label>
+                    </div>
+                </div>
+                <div class="actions-row">
+                    <button class="btn primary register-btn" type="button" id="btn-register">Register Passkey</button>
+                    <button class="btn ghost" type="button" id="register-cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="success-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="success-modal-title">
+            <div class="success-form">
+                <h2 id="success-modal-title">Passkey Registered</h2>
+                <div class="success-info">
+                    <div class="success-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <p>Your passkey has been registered successfully!</p>
+                </div>
+                <div class="actions-row">
+                    <button class="btn primary" type="button" id="success-done-btn">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const tableBody = document.getElementById('passkeys-table-body');
+            const registerModal = document.getElementById('register-modal');
+            const registerCancelBtn = document.getElementById('register-cancel-btn');
+            const successModal = document.getElementById('success-modal');
+            const successDoneBtn = document.getElementById('success-done-btn');
+            const registerBtn = document.getElementById('btn-register');
+            const passkeyNameInput = document.getElementById('passkey-name');
+
+            let currentUser = null;
+
+            function getCurrentUser() {
+                return new Promise(function(resolve) {
+                    fetch('/api/users/me')
+                        .then(function(r) {
+                            if (r.ok) {
+                                r.json().then(function(data) {
+                                    if (data && data.username) {
+                                        resolve(data.username);
+                                    } else {
+                                        resolve(null);
+                                    }
+                                });
+                            } else {
+                                resolve(null);
+                            }
+                        })
+                        .catch(function() {
+                            resolve(null);
+                        });
+                });
+            }
+
+            function formatDate(dateStr) {
+                if (!dateStr) return '';
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            }
+
+            function openRegisterModal() {
+                if (!registerModal) return;
+                registerModal.hidden = false;
+                passkeyNameInput.value = '';
+                passkeyNameInput.focus();
+            }
+
+            function closeRegisterModal() {
+                if (!registerModal) return;
+                registerModal.hidden = true;
+            }
+
+            function closeSuccessModal() {
+                if (!successModal) return;
+                successModal.hidden = true;
+            }
+
+            async function render() {
+                const user = await getCurrentUser();
+                if (!user) {
+                    tableBody.innerHTML = '<tr><td colspan="4" class="muted">Please log in to view your passkeys</td></tr>';
+                    return;
+                }
+
+                currentUser = user;
+
+                fetch('/api/passkeys?username=' + encodeURIComponent(user))
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        const passkeys = (data && data.credentials) || [];
+                        tableBody.innerHTML = '';
+
+                        document.getElementById('total-passkeys').textContent = passkeys.length;
+
+                        passkeys.forEach(p => {
+                            const tr = document.createElement('tr');
+
+                            const tdDevice = document.createElement('td');
+                            tdDevice.innerHTML = '<span class="device-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/></svg></span> ' + (p.device_type || 'Passkey');
+
+                            const tdCreated = document.createElement('td');
+                            tdCreated.textContent = formatDate(p.created_at);
+
+                            const tdLastUsed = document.createElement('td');
+                            tdLastUsed.textContent = p.last_used ? formatDate(p.last_used) : 'Never';
+
+                            const tdActions = document.createElement('td');
+                            tdActions.className = 'actions';
+
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'btn small ghost danger';
+                            deleteBtn.type = 'button';
+                            deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+                            deleteBtn.title = 'Delete';
+                            deleteBtn.addEventListener('click', function() {
+                                if (confirm('Delete this passkey? This cannot be undone.')) {
+                                    fetch('/api/passkeys/' + p.id, { method: 'DELETE' })
+                                        .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                                        .then(function() {
+                                            showToast('Passkey deleted');
+                                            render();
+                                        })
+                                        .catch(function(err) {
+                                            console.error('Failed to delete passkey', err);
+                                            showToast('Failed to delete passkey');
+                                        });
+                                }
+                            });
+
+                            tdActions.appendChild(deleteBtn);
+
+                            tr.appendChild(tdDevice);
+                            tr.appendChild(tdCreated);
+                            tr.appendChild(tdLastUsed);
+                            tr.appendChild(tdActions);
+
+                            tableBody.appendChild(tr);
+                        });
+
+                        if (passkeys.length === 0) {
+                            const tr = document.createElement('tr');
+                            const td = document.createElement('td');
+                            td.colSpan = 4;
+                            td.innerHTML = '<div class="empty-state"><p>No passkeys registered</p><button class="btn primary" id="btn-add-first">Add Passkey</button></div>';
+                            tr.appendChild(td);
+                            tableBody.appendChild(tr);
+
+                            document.getElementById('btn-add-first').addEventListener('click', function() {
+                                openRegisterModal();
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to load passkeys', err);
+                        showToast('Failed to load passkeys');
+                    });
+            }
+
+            function formatDate(dateStr) {
+                if (!dateStr) return '';
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            }
+
+            if (registerCancelBtn) {
+                registerCancelBtn.addEventListener('click', function() {
+                    closeRegisterModal();
+                });
+            }
+
+            if (successDoneBtn) {
+                successDoneBtn.addEventListener('click', function() {
+                    closeSuccessModal();
+                });
+            }
+
+            if (registerModal) {
+                registerModal.addEventListener('click', function(e) {
+                    if (e.target === registerModal) {
+                        closeRegisterModal();
+                    }
+                });
+            }
+
+            if (successModal) {
+                successModal.addEventListener('click', function(e) {
+                    if (e.target === successModal) {
+                        closeSuccessModal();
+                    }
+                });
+            }
+
+            const openRegisterBtn = document.getElementById('open-register-modal');
+            if (openRegisterBtn) {
+                openRegisterBtn.addEventListener('click', function() {
+                    openRegisterModal();
+                });
+            }
+
+            if (registerBtn) {
+                registerBtn.addEventListener('click', async function() {
+                    if (!currentUser) {
+                        currentUser = await getCurrentUser();
+                    }
+                    if (!currentUser) {
+                        showToast('Please log in first');
+                        return;
+                    }
+
+                    const displayName = passkeyNameInput.value.trim() || 'Passkey';
+
+                    try {
+                        const resp = await fetch('/api/passkeys/register/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: currentUser, display_name: displayName })
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok) {
+                            throw new Error(data.error || 'Failed to start registration. Status: ' + resp.status);
+                        }
+
+                        if (!navigator.credentials || !navigator.credentials.create) {
+                            throw new Error('WebAuthn is not supported in this browser');
+                        }
+
+                        const host = window.location.hostname;
+                        const rpID = host || 'sparkproxy.local';
+
+                        const userID = base64ToArrayBuffer(data.response.user_id);
+                        const challenge = base64ToArrayBuffer(data.response.challenge);
+
+                        const excludeCredentials = [];
+                        const existingResp = await fetch('/api/passkeys?username=' + encodeURIComponent(currentUser));
+                        if (existingResp.ok) {
+                            const existingData = await existingResp.json();
+                            const creds = existingData && existingData.credentials;
+                            if (creds && Array.isArray(creds)) {
+                                creds.forEach(cred => {
+                                    excludeCredentials.push({
+                                        id: base64ToArrayBuffer(cred.id),
+                                        type: 'public-key',
+                                        transports: ['internal', 'hybrid']
+                                    });
+                                });
+                            }
+                        }
+
+                        const publicKey = {
+                            challenge: challenge,
+                            rp: {
+                                name: data.response.rp.name,
+                                id: rpID
+                            },
+                            user: {
+                                id: userID,
+                                name: data.response.username,
+                                displayName: data.response.display_name || data.response.username
+                            },
+                            pubKeyCredParams: [
+                                { type: 'public-key', alg: -7 },
+                                { type: 'public-key', alg: -257 }
+                            ],
+                            excludeCredentials: excludeCredentials,
+                            timeout: data.response.timeout || 60000
+                        };
+
+                        const credential = await navigator.credentials.create({ publicKey });
+
+                        const attestationBase64 = await arrayBufferToBase64(credential.response);
+                        const completeResp = await fetch('/api/passkeys/register/complete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username: currentUser,
+                                attestation_data: attestationBase64,
+                                challenge: data.session_challenge
+                            })
+                        });
+                        const completeData = await completeResp.json();
+
+                        if (!completeResp.ok) {
+                            throw new Error(completeData.error || 'Failed to complete registration');
+                        }
+
+                        closeRegisterModal();
+                        successModal.hidden = false;
+                        render();
+                    } catch (err) {
+                        console.error('Passkey registration failed', err);
+                        showToast('Passkey registration failed: ' + err.message);
+                    }
+                });
+            }
+
+            const refreshBtn = document.getElementById('refresh-passkeys-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    render();
+                });
+            }
+
+            render();
+
+            function base64ToArrayBuffer(base64) {
+                let base64Standard = base64
+                    .replace(/-/g, '+')
+                    .replace(/_/g, '/');
+                while (base64Standard.length % 4 !== 0) {
+                    base64Standard += '=';
+                }
+                const binary = atob(base64Standard);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes.buffer;
+            }
+
+            function arrayBufferToBase64(buffer) {
+                return new Promise(function(resolve, reject) {
+                    try {
+                        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            try {
+                                const result = reader.result;
+                                const base64 = result.split(',')[1];
+                                resolve(base64);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        };
+                        reader.onerror = function() {
+                            reject(new Error('Failed to read blob'));
+                        };
+                        reader.readAsDataURL(blob);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            }
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

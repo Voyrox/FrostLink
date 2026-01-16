@@ -1,0 +1,350 @@
+/* Passkeys page (scoped) */
+.page-passkeys .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0
+}
+
+.page-passkeys .content {
+    padding: 24px
+}
+
+.page-passkeys .page-header h1 {
+    margin: 0 0 6px
+}
+
+.page-passkeys .page-header .subtitle {
+    margin: 0 0 16px
+}
+
+.page-passkeys .panel {
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow)
+}
+
+/* Toolbar */
+.page-passkeys .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px
+}
+
+.page-passkeys .toolbar .left,
+.page-passkeys .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.page-passkeys .passkey-stats {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+/* Buttons (scoped to passkeys page) */
+.page-passkeys .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease
+}
+
+.page-passkeys .btn:hover {
+    background: #121a28;
+    border-color: #1f2937
+}
+
+.page-passkeys .btn:active {
+    transform: translateY(1px)
+}
+
+.page-passkeys .btn.ghost {
+    background: transparent
+}
+
+.page-passkeys .btn.small {
+    padding: 8px 10px;
+    font-size: .9rem;
+    border-radius: 8px
+}
+
+.page-passkeys .btn .icon {
+    display: inline-flex;
+    color: var(--muted)
+}
+
+.page-passkeys .btn .icon.orange {
+    color: var(--orange)
+}
+
+.page-passkeys .btn.primary {
+    background: linear-gradient(180deg, #f38a48ba, #f38a48);
+    border-color: #e56c1f;
+}
+
+.page-passkeys .btn.primary:hover {
+    background: linear-gradient(180deg, #f38a48ba, #f38a48);
+}
+
+.page-passkeys .btn.danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.page-passkeys .btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Table */
+.page-passkeys .table-wrap {
+    overflow: auto;
+    border-radius: 12px;
+}
+
+.page-passkeys .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 680px;
+    background: transparent
+}
+
+.page-passkeys .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-passkeys .table thead .th {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px
+}
+
+.page-passkeys .table thead .icon {
+    color: var(--muted)
+}
+
+.page-passkeys .table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-passkeys .table tbody tr:hover {
+    background: #0c111a
+}
+
+.page-passkeys .actions-col {
+    text-align: right;
+    width: 1%
+}
+
+.page-passkeys .actions {
+    text-align: right
+}
+
+.page-passkeys .device-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--orange);
+    margin-right: 8px;
+}
+
+/* Empty state */
+.page-passkeys .empty-state {
+    text-align: center;
+    padding: 24px;
+}
+
+.page-passkeys .empty-state p {
+    color: var(--muted);
+    margin-bottom: 12px;
+}
+
+/* Modal */
+.page-passkeys .modal-backdrop {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(10, 10, 15, 0.96);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+}
+
+.page-passkeys .modal-backdrop[hidden] {
+    display: none;
+}
+
+.page-passkeys .modal-backdrop .modal {
+    width: 100%;
+    max-width: 480px;
+    padding: 4px;
+}
+
+.page-passkeys .register-form,
+.page-passkeys .success-form {
+    padding: 20px 24px 24px;
+    border-radius: 16px;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.page-passkeys .register-form h2,
+.page-passkeys .success-form h2 {
+    margin: 0 0 16px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-passkeys .register-info,
+.page-passkeys .success-info {
+    margin-bottom: 20px;
+    padding: 14px 16px;
+    background: rgba(34, 211, 238, 0.05);
+    border: 1px solid rgba(34, 211, 238, 0.1);
+    border-radius: 10px;
+}
+
+.page-passkeys .register-details,
+.page-passkeys .success-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-passkeys .register-status {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #9ca3af;
+}
+
+.page-passkeys .passkey-setup {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.page-passkeys .passkey-icon-large {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(252, 128, 51, 0.1), rgba(252, 128, 51, 0.05));
+    border: 2px solid rgba(252, 128, 51, 0.2);
+    border-radius: 50%;
+}
+
+.page-passkeys .passkey-icon-large svg {
+    color: var(--orange);
+}
+
+.page-passkeys .passkey-setup p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 20px;
+}
+
+.page-passkeys .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.page-passkeys .register-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    flex: 1 1 100%;
+    font-size: 0.85rem;
+    color: #9ca3af;
+}
+
+.page-passkeys .register-form label span {
+    font-weight: 500;
+    color: #d1d5db;
+    text-align: left;
+}
+
+.page-passkeys .register-form input {
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.page-passkeys .register-form input:focus {
+    outline: none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(252, 128, 51, 0.15);
+}
+
+.page-passkeys .register-form input::placeholder {
+    color: #4b5563;
+}
+
+.page-passkeys .actions-row {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid #21262d;
+}
+
+.page-passkeys .success-info {
+    text-align: center;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.page-passkeys .success-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(34, 197, 94, 0.15);
+    border-radius: 50%;
+    color: #22c55e;
+}
+
+.page-passkeys .success-info p {
+    margin: 0;
+    color: #9ca3af;
+    font-size: 0.9rem;
+}

@@ -39,16 +39,24 @@
                     <div class="fingerprint-container">
                         <div class="fingerprint-icon">
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke-opacity="0.3"/>
-                                <path d="M12 6c-2.5 0-4.5 1.5-5.5 3.5 1 2 2.5 3.5 4 4.5 1-.5 2.5-1.5 3.5-1.5s2.5 1 3.5 1.5c1.5-1 3-2.5 4-4.5-1-2-3-3.5-5.5-3.5z" stroke-opacity="0.5"/>
-                                <path d="M8 10c.5-1 1.5-2 3-2s2.5 1 3 2c.5-1 1.5-2 3-2" stroke-opacity="0.7"/>
-                                <path d="M7 12c1-1 2.5-1.5 4-1.5s3 .5 4 1.5" stroke-opacity="0.9"/>
-                                <path d="M6 14c1.5-1 3-1.5 5-1.5s3.5.5 5 1.5"/>
+                                <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+                                <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+                                <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
+                                <path d="M2 12a10 10 0 0 1 18-6"/>
+                                <path d="M2 16h.01"/>
+                                <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+                                <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
+                                <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
+                                <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
                             </svg>
                         </div>
                         <p>Use your fingerprint, face, or security key to continue</p>
                     </div>
-                    <button class="btn primary" type="button">Authenticate with Passkey</button>
+                    <form id="passkey-form">
+                        <label for="passkey-username">Username</label>
+                        <input id="passkey-username" type="text" placeholder="Enter your username" required>
+                        <button class="btn primary" type="submit">Authenticate with Passkey</button>
+                    </form>
                     <button type="button" class="btn ghost back-btn" id="btn-back-user">Back to password</button>
                 </div>
             </main>
@@ -79,12 +87,110 @@
                     backBtn.addEventListener('click', () => showPanel('user'));
                 }
 
+                const passkeyForm = document.getElementById('passkey-form');
+                const passkeyUsernameInput = document.getElementById('passkey-username');
+
+                if (passkeyForm) {
+                    passkeyForm.addEventListener('submit', async function(e) {
+                        e.preventDefault();
+                        const username = passkeyUsernameInput.value.trim();
+                        if (!username) {
+                            alert('Please enter your username');
+                            return;
+                        }
+
+                        try {
+                            const resp = await fetch('/api/passkeys/auth/start', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username: username })
+                            });
+                            const data = await resp.json();
+                            if (!resp.ok) {
+                                throw new Error(data.error || 'Failed to start passkey authentication');
+                            }
+
+                            if (!navigator.credentials || !navigator.credentials.get) {
+                                throw new Error('WebAuthn is not supported in this browser');
+                            }
+
+                            const challenge = base64ToArrayBuffer(data.response.challenge);
+                            const allowCredentials = (data.response.allowCredentials || []).map(cred => ({
+                                id: base64ToArrayBuffer(cred.id),
+                                type: 'public-key',
+                                transports: ['internal', 'hybrid']
+                            }));
+
+                            const publicKey = {
+                                challenge: challenge,
+                                rpId: data.response.rpId,
+                                allowCredentials: allowCredentials,
+                                timeout: data.response.timeout || 60000
+                            };
+
+                            const assertion = await navigator.credentials.get({ publicKey });
+                            
+                            const authData = assertion.response.authenticatorData;
+                            const signature = assertion.response.signature;
+
+                            const completeResp = await fetch('/api/passkeys/auth/complete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    username: username,
+                                    authenticator_data: arrayBufferToBase64URL(authData),
+                                    signature: arrayBufferToBase64URL(signature),
+                                    challenge: data.session_challenge
+                                })
+                            });
+                            const completeData = await completeResp.json();
+                            
+                            if (!completeResp.ok) {
+                                throw new Error(completeData.error || 'Passkey authentication failed');
+                            }
+
+                            window.location.href = '/dashboard';
+                        } catch (err) {
+                            alert('Passkey authentication failed: ' + err.message);
+                            console.error(err);
+                        }
+                    });
+                }
+
+                function base64ToArrayBuffer(base64) {
+                    let base64Standard = base64
+                        .replace(/-/g, '+')
+                        .replace(/_/g, '/');
+                    while (base64Standard.length % 4 !== 0) {
+                        base64Standard += '=';
+                    }
+                    const binary = atob(base64Standard);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) {
+                        bytes[i] = binary.charCodeAt(i);
+                    }
+                    return bytes.buffer;
+                }
+
+                function arrayBufferToBase64URL(buffer) {
+                    const bytes = new Uint8Array(buffer);
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    const base64 = btoa(binary);
+                    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                }
+
                 function loadOAuthProviders() {
                     const container = document.getElementById('oauth-providers');
                     if (!container) return;
 
-                    fetch('/api/identity-providers')
-                        .then(r => r.ok ? r.json() : Promise.reject(r))
+                    fetch('/api/identity-providers/public')
+                        .then(r => {
+                            if (!r.ok) return { providers: [] };
+                            return r.json();
+                        })
                         .then(data => {
                             const providers = (data && data.providers) || [];
                             const enabledProviders = providers.filter(p => p.enabled);

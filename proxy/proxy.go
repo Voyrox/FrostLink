@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -522,7 +524,25 @@ func redirectToAuthLogin(w stdhttp.ResponseWriter, r *stdhttp.Request, cfg core.
 }
 
 func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	if r.URL.Path != "/_auth/login" {
+	path := r.URL.Path
+
+	if strings.HasPrefix(path, "/_auth/passkey/register/") {
+		handlePasskeyRegistration(w, r)
+		return
+	}
+
+	if strings.HasPrefix(path, "/_auth/passkey/auth/") {
+		handlePasskeyAuthentication(w, r)
+		return
+	}
+
+	if strings.HasPrefix(path, "/_auth/passkeys/check/") {
+		username := strings.TrimPrefix(path, "/_auth/passkeys/check/")
+		handlePasskeyCheck(w, username)
+		return
+	}
+
+	if path != "/_auth/login" {
 		stdhttp.NotFound(w, r)
 		return
 	}
@@ -559,27 +579,231 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			return
 		}
 
-		token := uuid.NewString()
-		expires := time.Now().Add(24 * time.Hour)
-		authSessionsMu.Lock()
-		authSessions[token] = authSession{Domain: strings.ToLower(domain), Expires: expires}
-		authSessionsMu.Unlock()
-
-		cookie := &stdhttp.Cookie{
-			Name:     "sp_auth",
-			Value:    token,
-			Path:     "/",
-			Expires:  expires,
-			HttpOnly: true,
-			Secure:   r.TLS != nil,
-			SameSite: stdhttp.SameSiteLaxMode,
-		}
-		stdhttp.SetCookie(w, cookie)
-
-		stdhttp.Redirect(w, r, redirect, stdhttp.StatusFound)
+		setAuthSession(w, domain, redirect)
 	default:
 		w.WriteHeader(stdhttp.StatusMethodNotAllowed)
 	}
+}
+
+func setAuthSession(w stdhttp.ResponseWriter, domain, redirect string) {
+	token := uuid.NewString()
+	expires := time.Now().Add(24 * time.Hour)
+	authSessionsMu.Lock()
+	authSessions[token] = authSession{Domain: strings.ToLower(domain), Expires: expires}
+	authSessionsMu.Unlock()
+
+	cookie := &stdhttp.Cookie{
+		Name:     "sp_auth",
+		Value:    token,
+		Path:     "/",
+		Expires:  expires,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: stdhttp.SameSiteLaxMode,
+	}
+	stdhttp.SetCookie(w, cookie)
+
+	stdhttp.Redirect(w, nil, redirect, stdhttp.StatusFound)
+}
+
+func handlePasskeyCheck(w stdhttp.ResponseWriter, username string) {
+	creds := core.ListPasskeyCredentials(username)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"has_passkeys":     len(creds) > 0,
+		"registered_today": false,
+	})
+}
+
+func handlePasskeyRegistration(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	subPath := strings.TrimPrefix(r.URL.Path, "/_auth/passkey/register/")
+
+	if subPath == "start" && r.Method == "POST" {
+		var req struct {
+			Username    string `json:"username"`
+			DisplayName string `json:"display_name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid payload"})
+			return
+		}
+
+		userID := uuid.NewString()
+		challenge := make([]byte, 32)
+		rand.Read(challenge)
+
+		host := r.Host
+		if i := strings.IndexByte(host, ':'); i > -1 {
+			host = host[:i]
+		}
+
+		resp := map[string]interface{}{
+			"challenge":   base64.RawURLEncoding.EncodeToString(challenge),
+			"userId":      base64.RawURLEncoding.EncodeToString([]byte(userID)),
+			"username":    req.Username,
+			"displayName": req.DisplayName,
+			"rp": map[string]string{
+				"name": "SparkProxy",
+				"id":   host,
+			},
+			"pubKeyCredParams": []map[string]interface{}{
+				{"type": "public-key", "alg": -7},
+				{"type": "public-key", "alg": -257},
+			},
+			"timeout": 60000,
+		}
+
+		existingCreds := core.ListPasskeyCredentials(req.Username)
+		var credIDs []map[string]string
+		for _, cred := range existingCreds {
+			credIDs = append(credIDs, map[string]string{
+				"id": base64.RawURLEncoding.EncodeToString(cred.CredentialID),
+			})
+		}
+		resp["credentials"] = credIDs
+
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	if subPath == "complete" && r.Method == "POST" {
+		var req struct {
+			Username        string `json:"username"`
+			AttestationData string `json:"attestation_data"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid payload"})
+			return
+		}
+
+		attestationData, err := base64.RawURLEncoding.DecodeString(req.AttestationData)
+		if err != nil || len(attestationData) < 37 {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid attestation data"})
+			return
+		}
+
+		credIDLen := int(attestationData[16])<<8 | int(attestationData[17])
+		if len(attestationData) < 37+credIDLen {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid attestation format"})
+			return
+		}
+
+		credentialID := attestationData[18 : 18+credIDLen]
+		publicKeyData := attestationData[18+credIDLen:]
+
+		_, err = core.CreatePasskeyCredential(req.Username, req.Username, credentialID, publicKeyData, 0, "platform")
+		if err != nil {
+			w.WriteHeader(stdhttp.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save credential"})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+		return
+	}
+
+	w.WriteHeader(stdhttp.StatusNotFound)
+}
+
+func handlePasskeyAuthentication(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	subPath := strings.TrimPrefix(r.URL.Path, "/_auth/passkey/auth/")
+
+	if subPath == "start" && r.Method == "POST" {
+		var req struct {
+			Username string `json:"username"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid payload"})
+			return
+		}
+
+		credentials := core.ListPasskeyCredentials(req.Username)
+		if len(credentials) == 0 {
+			w.WriteHeader(stdhttp.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "no passkeys found for this user"})
+			return
+		}
+
+		challenge := make([]byte, 32)
+		rand.Read(challenge)
+
+		host := r.Host
+		if i := strings.IndexByte(host, ':'); i > -1 {
+			host = host[:i]
+		}
+
+		var allowCredentials []map[string]interface{}
+		for _, cred := range credentials {
+			allowCredentials = append(allowCredentials, map[string]interface{}{
+				"id":   base64.RawURLEncoding.EncodeToString(cred.CredentialID),
+				"type": "public-key",
+			})
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"response": map[string]interface{}{
+				"challenge":        base64.RawURLEncoding.EncodeToString(challenge),
+				"rpId":             host,
+				"allowCredentials": allowCredentials,
+				"timeout":          60000,
+			},
+			"session_challenge": base64.RawURLEncoding.EncodeToString(challenge),
+			"session_username":  req.Username,
+		})
+		return
+	}
+
+	if subPath == "complete" && r.Method == "POST" {
+		var req struct {
+			Username          string `json:"username"`
+			AuthenticatorData string `json:"authenticator_data"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid payload"})
+			return
+		}
+
+		authData, err := base64.RawURLEncoding.DecodeString(req.AuthenticatorData)
+		if err != nil || len(authData) < 37 {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid authenticator data"})
+			return
+		}
+
+		credentialID := authData[32:68]
+		cred := core.GetPasskeyCredentialByID(credentialID)
+		if cred == nil {
+			w.WriteHeader(stdhttp.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "credential not found"})
+			return
+		}
+
+		signCount := uint32(authData[33]) | uint32(authData[34])<<8 | uint32(authData[35])<<16 | uint32(authData[36])<<24
+		if signCount > cred.SignCount {
+			core.UpdatePasskeySignCount(credentialID, signCount)
+		}
+
+		domain := strings.TrimSpace(r.URL.Query().Get("domain"))
+		redirect := r.URL.Query().Get("redirect")
+		if redirect == "" {
+			redirect = "/"
+		}
+
+		setAuthSession(w, domain, redirect)
+		return
+	}
+
+	w.WriteHeader(stdhttp.StatusNotFound)
 }
 
 func verifyCredentialsWithAPI(username, password string) (bool, error) {
@@ -623,17 +847,28 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Authentication required</title>
-	<style>
-		body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:radial-gradient(1200px 800px at 70% -10%, rgba(34, 211, 238, .08), transparent 60%), radial-gradient(1000px 600px at 10% 120%, rgba(125, 211, 252, .06), transparent 60%), #0a0a0f; color:#e5e7eb; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; overflow:hidden; }
-        .card { background:#101018;border:1px solid #1f2937;border-radius:12px;padding:24px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.6); }
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:radial-gradient(1200px 800px at 70% -10%, rgba(34, 211, 238, .08), transparent 60%), radial-gradient(1000px 600px at 10% 120%, rgba(125, 211, 252, .06), transparent 60%), #0a0a0f; color:#e5e7eb; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; overflow:hidden; }
+        .card { background:#101018;border:1px solid #1f2937;border-radius:16px;padding:24px;max-width:400px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.6); }
         h1 { margin-top:0;font-size:1.4rem;margin-bottom:4px; }
-        p { margin-top:0;margin-bottom:16px;color:#9ca3af;font-size:.95rem; }
+        p { margin-top:0;margin-bottom:20px;color:#9ca3af;font-size:.95rem; }
         label { display:block;font-size:.9rem;margin-bottom:4px;color:#e5e7eb; }
-        input { width:100%;padding:8px 10px;border-radius:8px;border:1px solid #1f2937;background:#020617;color:#e5e7eb;margin-bottom:10px;box-sizing:border-box; }
-        .btn { width:100%;padding:9px 10px;border-radius:8px;border:1px solid #fe8032;background:#fe8032;color:#022c22;font-weight:600;cursor:pointer; }
+        input { width:100%;padding:10px 12px;border-radius:8px;border:1px solid #1f2937;background:#020617;color:#e5e7eb;margin-bottom:12px;box-sizing:border-box;font-size:.95rem; }
+        input:focus { outline:none;border-color:#fe8032; }
+        .btn { width:100%;padding:10px 12px;border-radius:8px;border:1px solid #fe8032;background:#fe8032;color:#022c22;font-weight:600;cursor:pointer;font-size:.95rem;margin-bottom:10px; }
         .btn:hover { background:#f38a48; }
-        .error { background:#7f1d1d;color:#fecaca;padding:8px 10px;border-radius:8px;font-size:.85rem;margin-bottom:10px; }
-        .meta { font-size:.8rem;color:#6b7280;margin-top:8px; }
+        .btn-secondary { background:transparent;border:1px solid #374151;color:#9ca3af; }
+        .btn-secondary:hover { background:#1f2937;border-color:#4b5563; }
+        .error { background:#7f1d1d;color:#fecaca;padding:10px 12px;border-radius:8px;font-size:.85rem;margin-bottom:12px; }
+        .meta { font-size:.8rem;color:#6b7280;margin-top:12px;text-align:center; }
+        .divider { display:flex;align-items:center;margin:16px 0; }
+        .divider::before, .divider::after { content:"";flex:1;border-top:1px solid #1f2937; }
+        .divider span { padding:0 12px;color:#6b7280;font-size:.85rem; }
+        .passkey-section { text-align:center; }
+        .passkey-icon { width:64px;height:64px;margin:0 auto 16px;background:rgba(34, 211, 238, 0.1);border-radius:50%;display:flex;align-items:center;justify-content:center; }
+        .passkey-icon svg { width:32px;height:32px;color:#22d3ee; }
+        .passkey-text { color:#9ca3af;font-size:.9rem;margin-bottom:16px; }
+        #password-section.hidden, #passkey-section.hidden, #register-passkey.hidden { display:none; }
     </style>
 </head>
 <body>
@@ -641,15 +876,260 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
         <h1>Authentication required</h1>
         <p>Sign in to access <strong>{{ .Domain }}</strong>.</p>
         {{ if .Error }}<div class="error">{{ .Error }}</div>{{ end }}
-        <form method="post">
-            <label for="username">Username or email</label>
-            <input id="username" name="username" type="text" autocomplete="username" required />
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" required />
-            <button class="btn" type="submit">Continue</button>
-        </form>
+        
+        <div id="password-section">
+            <form method="post" id="password-form">
+                <label for="username">Username or email</label>
+                <input id="username" name="username" type="text" autocomplete="username" required />
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required />
+                <button class="btn" type="submit">Continue</button>
+            </form>
+            
+            <div class="divider"><span>or</span></div>
+            
+            <div class="passkey-section">
+                <div class="passkey-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+                </div>
+                <p class="passkey-text">Sign in with your fingerprint, face, or security key</p>
+                <button class="btn btn-secondary" type="button" id="btn-use-passkey">Use Passkey</button>
+            </div>
+        </div>
+
+        <div id="passkey-section" class="hidden">
+            <div class="passkey-section">
+                <div class="passkey-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+                </div>
+                <p class="passkey-text" id="passkey-msg">Authenticate with your passkey</p>
+                <button class="btn" type="button" id="btn-auth-passkey">Authenticate</button>
+                <button class="btn btn-secondary" type="button" id="btn-back">Back</button>
+            </div>
+        </div>
+
+        <div id="register-passkey" class="hidden">
+            <div class="passkey-section">
+                <div class="passkey-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+                </div>
+                <p class="passkey-text">Set up a passkey for easier future sign-ins</p>
+                <button class="btn" type="button" id="btn-register-passkey">Register Passkey</button>
+                <button class="btn btn-secondary" type="button" id="btn-skip">Skip</button>
+            </div>
+        </div>
+
         <div class="meta">Access will be remembered on this device for 24 hours.</div>
     </div>
+
+    <script>
+    (function() {
+        const passwordSection = document.getElementById('password-section');
+        const passkeySection = document.getElementById('passkey-section');
+        const registerSection = document.getElementById('register-passkey');
+        const btnUsePasskey = document.getElementById('btn-use-passkey');
+        const btnAuthPasskey = document.getElementById('btn-auth-passkey');
+        const btnBack = document.getElementById('btn-back');
+        const btnRegisterPasskey = document.getElementById('btn-register-passkey');
+        const btnSkip = document.getElementById('btn-skip');
+        const usernameInput = document.getElementById('username');
+        const passkeyMsg = document.getElementById('passkey-msg');
+        
+        let currentUsername = '';
+        let sessionData = null;
+
+        btnUsePasskey.addEventListener('click', function() {
+            currentUsername = usernameInput.value.trim();
+            if (!currentUsername) {
+                alert('Please enter your username first');
+                usernameInput.focus();
+                return;
+            }
+            passwordSection.classList.add('hidden');
+            passkeySection.classList.remove('hidden');
+            passkeyMsg.textContent = 'Authenticate with your passkey';
+        });
+
+        btnBack.addEventListener('click', function() {
+            passkeySection.classList.add('hidden');
+            registerSection.classList.add('hidden');
+            passwordSection.classList.remove('hidden');
+        });
+
+        btnAuthPasskey.addEventListener('click', async function() {
+            try {
+                const resp = await fetch('/_auth/passkey/auth/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentUsername })
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(data.error || 'Failed to start passkey authentication');
+                }
+                
+                if (!navigator.credentials || !navigator.credentials.get) {
+                    throw new Error('WebAuthn is not supported in this browser');
+                }
+
+                const challenge = base64ToArrayBuffer(data.response.challenge);
+                const allowCredentials = data.response.allowCredentials.map(cred => ({
+                    id: base64ToArrayBuffer(cred.id),
+                    type: 'public-key',
+                    transports: ['internal', 'hybrid']
+                }));
+
+                const publicKey = {
+                    challenge: challenge,
+                    rpId: data.response.rpId,
+                    allowCredentials: allowCredentials,
+                    timeout: data.response.timeout || 60000
+                };
+
+                const assertion = await navigator.credentials.get({ publicKey });
+                
+                const authData = assertion.response.authenticatorData;
+                const signature = assertion.response.signature;
+
+                const completeResp = await fetch('/_auth/passkey/auth/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: currentUsername,
+                        authenticator_data: arrayBufferToBase64URL(authData),
+                        signature: arrayBufferToBase64URL(signature),
+                        challenge: data.session_challenge
+                    })
+                });
+                const completeData = await completeResp.json();
+                
+                if (!completeResp.ok) {
+                    throw new Error(completeData.error || 'Passkey authentication failed');
+                }
+
+                window.location.href = '{{ .Redirect }}';
+            } catch (err) {
+                alert('Passkey authentication failed: ' + err.message);
+                console.error(err);
+            }
+        });
+
+        btnRegisterPasskey.addEventListener('click', async function() {
+            try {
+                const resp = await fetch('/_auth/passkey/register/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentUsername, display_name: currentUsername })
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(data.error || 'Failed to start passkey registration');
+                }
+
+                if (!navigator.credentials || !navigator.credentials.create) {
+                    throw new Error('WebAuthn is not supported in this browser');
+                }
+
+                const userID = base64ToArrayBuffer(data.response.user_id);
+                const challenge = base64ToArrayBuffer(data.response.challenge);
+                
+                const excludeCredentials = (data.response.credentials || []).map(cred => ({
+                    id: base64ToArrayBuffer(cred.id),
+                    type: 'public-key',
+                    transports: ['internal', 'hybrid']
+                }));
+
+                const publicKey = {
+                    challenge: challenge,
+                    rp: {
+                        name: data.response.rp.name,
+                        id: data.response.rp.id
+                    },
+                    user: {
+                        id: userID,
+                        name: data.response.username,
+                        displayName: data.response.display_name || data.response.username
+                    },
+                    pubKeyCredParams: data.response.pubKeyCredParams.map(p => ({
+                        type: p.type,
+                        alg: p.alg
+                    })),
+                    excludeCredentials: excludeCredentials,
+                    timeout: data.response.timeout || 60000
+                };
+
+                const credential = await navigator.credentials.create({ publicKey });
+                
+                const completeResp = await fetch('/_auth/passkey/register/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: currentUsername,
+                        attestation_data: arrayBufferToBase64URL(credential.response),
+                        challenge: data.session_challenge
+                    })
+                });
+                const completeData = await completeResp.json();
+                
+                if (!completeResp.ok) {
+                    throw new Error(completeData.error || 'Failed to complete passkey registration');
+                }
+
+                alert('Passkey registered successfully!');
+                passkeySection.classList.add('hidden');
+                registerSection.classList.add('hidden');
+                passwordSection.classList.remove('hidden');
+            } catch (err) {
+                alert('Passkey registration failed: ' + err.message);
+                console.error(err);
+            }
+        });
+
+        btnSkip.addEventListener('click', function() {
+            registerSection.classList.add('hidden');
+            passwordSection.classList.remove('hidden');
+        });
+
+        document.getElementById('password-form').addEventListener('submit', function(e) {
+            currentUsername = usernameInput.value.trim();
+            localStorage.setItem('last_username', currentUsername);
+        });
+
+        if (localStorage.getItem('last_username')) {
+            usernameInput.value = localStorage.getItem('last_username');
+        }
+
+        function base64ToArrayBuffer(base64) {
+            let base64Standard = base64
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+            while (base64Standard.length % 4 !== 0) {
+                base64Standard += '=';
+            }
+            const binary = atob(base64Standard);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        function arrayBufferToBase64URL(buffer) {
+            const base64 = arrayBufferToBase64(buffer);
+            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+    })();
+
+    </script>
 </body>
 </html>`))
 
