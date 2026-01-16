@@ -95,6 +95,11 @@
                                         </span> Auth</span></th>
                                 <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span> Attack</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                                 <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2"
                                                     stroke-linecap="round" />
                                             </svg>
@@ -413,6 +418,31 @@
                             });
                             tdAuth.appendChild(authToggle);
 
+                            const tdAttack = document.createElement('td');
+                            const attackToggle = document.createElement('button');
+                            const attackOn = !!cfg.under_attack_enabled;
+                            attackToggle.type = 'button';
+                            attackToggle.className = 'attack-toggle' + (attackOn ? ' enabled' : ' disabled');
+                            attackToggle.setAttribute('aria-pressed', String(attackOn));
+                            attackToggle.textContent = attackOn ? 'On' : 'Off';
+                            attackToggle.addEventListener('click', function () {
+                                const next = !attackOn;
+                                fetch('/api/domains/' + encodeURIComponent(cfg.domain) + '/under-attack', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ enabled: next })
+                                })
+                                    .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+                                    .then(function () { render(); })
+                                    .catch(function (err) {
+                                        console.error('Failed to update under-attack for domain', cfg.domain, err);
+                                        if (typeof showToast === 'function') {
+                                            showToast('Failed to update under-attack for ' + (cfg.domain || 'domain'));
+                                        }
+                                    });
+                            });
+                            tdAttack.appendChild(attackToggle);
+
                             const tdIn = document.createElement('td');
                             tdIn.textContent = formatBytes(cfg.data_in_total || 0);
 
@@ -541,6 +571,7 @@
                             tr.appendChild(tdName);
                             tr.appendChild(tdOnline);
                             tr.appendChild(tdAuth);
+                            tr.appendChild(tdAttack);
                             tr.appendChild(tdIn);
                             tr.appendChild(tdOut);
                             tr.appendChild(tdSsl);

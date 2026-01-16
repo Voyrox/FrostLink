@@ -10,8 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"SparkProxy/core"
@@ -22,6 +25,7 @@ import (
 	"github.com/google/uuid"
 )
 
+var startupTime = time.Now()
 var mainSharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
 
 func mainVerifySharedToken(token, domain string) (username string, valid bool) {
@@ -287,12 +291,14 @@ func main() {
 	apiRead.Use(apiAuthRequired())
 	{
 		apiRead.GET("/dashboard", apiDashboard)
+		apiRead.GET("/system", apiSystem)
 		apiRead.GET("/firewall", apiFirewallGet)
 		apiRead.GET("/proxys", apiProxys)
 		apiRead.GET("/domains/:domain/stats", apiDomainStats)
 		apiRead.GET("/domains/:domain/logs", apiDomainLogs)
 		apiRead.GET("/domains/:domain/analytics", apiDomainAnalytics)
 		apiRead.GET("/domains/:domain/profiler", apiDomainProfilerStatus)
+		apiRead.GET("/domains/:domain/under-attack", apiUnderAttackStatus)
 		apiRead.GET("/logs", apiLogs)
 		apiRead.GET("/users", apiUsersList)
 		apiRead.GET("/users/me", apiUsersMe)
@@ -328,6 +334,7 @@ func main() {
 		apiWrite.DELETE("/firewall/country/:code", apiFirewallUnbanCountry)
 		apiWrite.PUT("/domains/:domain/auth", apiDomainAuthUpdate)
 		apiWrite.PUT("/domains/:domain/profiler", apiDomainProfilerToggle)
+		apiWrite.PUT("/domains/:domain/under-attack", apiUnderAttackToggle)
 		apiWrite.POST("/domains", apiDomainsCreate)
 		apiWrite.PUT("/domains/:domain", apiDomainsUpdate)
 		apiWrite.DELETE("/domains/:domain", apiDomainsDelete)
@@ -374,6 +381,15 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
+
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		<-sigChan
+		proxy.ShutdownAnalyticsPersistence()
+		os.Exit(0)
+	}()
+
 	ui.SystemLog("info", "dashboard", fmt.Sprintf("Started on %s", addr))
 	r.Run(addr)
 }
@@ -722,6 +738,53 @@ func apiDomainProfilerToggle(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"enabled": req.Enabled})
 }
 
+func apiUnderAttackStatus(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	cfg := proxy.GetUnderAttackConfig(domain)
+	if cfg == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"enabled":           false,
+			"difficulty":        10,
+			"cookie_duration_h": 24,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":           cfg.Enabled,
+		"difficulty":        cfg.Difficulty,
+		"cookie_duration_h": cfg.CookieDurationH,
+	})
+}
+
+func apiUnderAttackToggle(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	if err := proxy.SetUnderAttackMode(domain, req.Enabled); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"enabled": req.Enabled})
+}
+
 func apiDashboard(c *gin.Context) {
 	domainStats := proxy.GetDomainStats()
 	var uploadTotal int64
@@ -751,15 +814,111 @@ func apiDashboard(c *gin.Context) {
 		}
 	}
 
-	stats := DashboardStats{
-		ActiveUsers:        len(ipSet),
-		FirewallBlocked:    firewallBlocked,
-		DDOSBlocked:        ddosBlocked,
-		UploadBytesTotal:   uploadTotal,
-		DownloadBytesTotal: downloadTotal,
+	methods := make(map[string]int64)
+	responseCodes := make(map[string]int64)
+	countries := make(map[string]int64)
+	requestsByDay := make(map[string]int64)
+	today := time.Now()
+	for i := 0; i < 8; i++ {
+		d := today.AddDate(0, 0, -i)
+		requestsByDay[fmt.Sprintf("%d-%02d-%02d", d.Year(), d.Month(), d.Day())] = 0
 	}
 
-	c.JSON(http.StatusOK, stats)
+	for _, l := range logs {
+		methods[l.Method]++
+		if l.Action != "" && l.Action != "Allow" {
+			if code, err := strconv.Atoi(l.Action); err == nil {
+				codeStr := fmt.Sprintf("%dxx", code/100)
+				responseCodes[codeStr]++
+			}
+		}
+		countries[l.Country]++
+		dayKey := fmt.Sprintf("%d-%02d-%02d", l.Timestamp.Year(), l.Timestamp.Month(), l.Timestamp.Day())
+		if _, ok := requestsByDay[dayKey]; ok {
+			requestsByDay[dayKey]++
+		}
+	}
+
+	var topDomains []map[string]interface{}
+	for _, ds := range domainStats {
+		topDomains = append(topDomains, map[string]interface{}{
+			"domain":       ds.Domain,
+			"requests":     ds.TotalRequests,
+			"data_in":      ds.DataInTotal,
+			"data_out":     ds.DataOutTotal,
+			"last_ip":      ds.LastIP,
+			"last_country": ds.LastCountry,
+		})
+	}
+	for i := 0; i < len(topDomains)-1; i++ {
+		for j := i + 1; j < len(topDomains); j++ {
+			if topDomains[j]["requests"].(int64) > topDomains[i]["requests"].(int64) {
+				topDomains[i], topDomains[j] = topDomains[j], topDomains[i]
+			}
+		}
+	}
+	if len(topDomains) > 10 {
+		topDomains = topDomains[:10]
+	}
+
+	var topCountries []map[string]interface{}
+	for country, count := range countries {
+		topCountries = append(topCountries, map[string]interface{}{
+			"country": country,
+			"count":   count,
+		})
+	}
+	for i := 0; i < len(topCountries)-1; i++ {
+		for j := i + 1; j < len(topCountries); j++ {
+			if topCountries[j]["count"].(int64) > topCountries[i]["count"].(int64) {
+				topCountries[i], topCountries[j] = topCountries[j], topCountries[i]
+			}
+		}
+	}
+	if len(topCountries) > 10 {
+		topCountries = topCountries[:10]
+	}
+
+	dayKeys := make([]string, 0, 8)
+	dayLabels := make([]string, 0, 8)
+	for i := 7; i >= 0; i-- {
+		d := today.AddDate(0, 0, -i)
+		key := fmt.Sprintf("%d-%02d-%02d", d.Year(), d.Month(), d.Day())
+		dayKeys = append(dayKeys, key)
+		dayLabels = append(dayLabels, d.Format("Jan 2"))
+	}
+	requests7Days := make([]int64, 0, 8)
+	for _, k := range dayKeys {
+		requests7Days = append(requests7Days, requestsByDay[k])
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"active_users":         len(ipSet),
+		"firewall_blocked":     firewallBlocked,
+		"ddos_blocked":         ddosBlocked,
+		"upload_bytes_total":   uploadTotal,
+		"download_bytes_total": downloadTotal,
+		"methods":              methods,
+		"response_codes":       responseCodes,
+		"top_countries":        topCountries,
+		"top_domains":          topDomains,
+		"requests_7days":       requests7Days,
+		"requests_labels":      dayLabels,
+	})
+}
+
+func apiSystem(c *gin.Context) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+
+	c.JSON(http.StatusOK, gin.H{
+		"memory_usage_bytes": ms.Alloc,
+		"goroutine_count":    runtime.NumGoroutine(),
+		"uptime_seconds":     int(time.Since(startupTime).Seconds()),
+	})
 }
 
 func apiFirewallGet(c *gin.Context) {

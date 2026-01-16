@@ -1,0 +1,151 @@
+{{ define "challenge" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Checking your browser...</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --card: #10131a;
+            --muted: #a4acb9;
+            --text: #e6e9ef;
+            --brand: #7dd3fc;
+            --accent: #22d3ee;
+            --border: #1b2230;
+            --orange: #fc8033;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0
+        }
+
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            color: var(--text);
+            background: radial-gradient(1200px 800px at 70% -10%, rgba(34, 211, 238, .08), transparent 60%),
+                radial-gradient(1000px 600px at 10% 120%, rgba(125, 211, 252, .06), transparent 60%),
+                var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            text-align: center;
+            padding: 48px;
+            max-width: 420px;
+        }
+
+        .logo {
+            margin-bottom: 32px;
+        }
+
+        .logo svg {
+            width: 48px;
+            height: 48px;
+            color: var(--brand);
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin: 0 0 8px;
+            color: var(--text);
+        }
+
+        p {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin: 0 0 24px;
+            line-height: 1.5;
+        }
+
+        .altcha-widget {
+            margin: 0 auto;
+            --altcha-color-base: #10131a;
+            --altcha-color-border: #2d3748;
+            --altcha-color-text: #e6e9ef;
+            --altcha-color-error-text: #fc8181;
+            --altcha-color-footer-bg: #0d1117;
+            --altcha-border-radius: 8px;
+            --altcha-border-width: 1px;
+            --altcha-max-width: 320px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M9 12l2 2 4-4"/>
+            </svg>
+        </div>
+        <h1>Security Check</h1>
+        <p>Verifying your browser. Please wait...</p>
+        <altcha-widget
+            hidelogo
+            hidefooter
+            strings='{"verifying":"Verifying...","verified":"Verified!","waitAlert":"Please wait...","error":"Verification failed. Please try again.","expired":"Verification expired. Please try again."}'
+            challengeurl="/_altcha/challenge?domain={{ .Domain }}&maxnumber=1000000&difficulty={{ .Difficulty }}"
+            class="altcha-widget">
+        </altcha-widget>
+    </div>
+
+    <script>
+        window.__DOMAIN__ = "{{ .Domain }}";
+    </script>
+    <script type="module">
+        import altcha from 'https://cdn.jsdelivr.net/npm/altcha@2.3.0/+esm';
+
+        function handleAltchaVerified(ev) {
+            var payload = ev.detail.payload;
+            console.log('ALTCHA verified, sending payload:', payload);
+            
+            fetch('/_altcha/verify?domain=' + encodeURIComponent(window.__DOMAIN__), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payload: payload })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                console.log('Verification response:', data);
+                if (data.verified) {
+                    window.location.reload();
+                }
+            })
+            .catch(function(err) {
+                console.error('ALTCHA verification failed:', err);
+            });
+        }
+
+        function initAltchaWidget() {
+            var widget = document.querySelector('altcha-widget');
+            if (widget) {
+                widget.addEventListener('verified', handleAltchaVerified);
+                console.log('ALTCHA widget listener attached');
+            } else {
+                console.error('ALTCHA widget not found');
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAltchaWidget);
+        } else {
+            initAltchaWidget();
+        }
+    </script>
+</body>
+
+</html>
+{{ end }}

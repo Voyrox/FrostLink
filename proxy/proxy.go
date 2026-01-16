@@ -428,12 +428,18 @@ func itoa(i int) string {
 }
 
 func StartProxy(configs []core.Config) error {
+	initAnalyticsPersistence()
+	go cleanupVerifiedCookies()
+
 	addr := os.Getenv("PROXY_ADDR")
 	if addr == "" {
 		addr = ":8081"
 	}
 
 	mux := stdhttp.NewServeMux()
+	mux.Handle("/js/", stdhttp.StripPrefix("/js/", stdhttp.FileServer(stdhttp.Dir("./public/js"))))
+	mux.HandleFunc("/_altcha/challenge", handleAltchaChallenge)
+	mux.HandleFunc("/_altcha/verify", handleAltchaVerify)
 	mux.HandleFunc("/", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		ip := clientIP(r)
 		country := lookupCountry(ip)
@@ -455,6 +461,14 @@ func StartProxy(configs []core.Config) error {
 			serveIndexPage(w, r)
 			return
 		}
+
+		if IsUnderAttackMode(cfg.Domain) {
+			if !IsVerified(r) {
+				ServeAltchaPage(w, r, cfg.Domain, r.URL.String())
+				return
+			}
+		}
+
 		if !cfg.AllowHTTP {
 			w.WriteHeader(stdhttp.StatusForbidden)
 			_, _ = w.Write([]byte("HTTP disabled for this domain"))
@@ -517,7 +531,12 @@ func StartProxy(configs []core.Config) error {
 
 	ui.SystemLog("info", "http-proxy", fmt.Sprintf("Listening on %s", addr))
 	go StartTLSProxy(configs, mux)
-	return stdhttp.ListenAndServe(addr, mux)
+	go func() {
+		if err := stdhttp.ListenAndServe(addr, mux); err != nil {
+			ui.SystemLog("error", "http-proxy", fmt.Sprintf("Server error: %v", err))
+		}
+	}()
+	return nil
 }
 
 func findConfigByHost(configs []core.Config, host string) (core.Config, bool) {

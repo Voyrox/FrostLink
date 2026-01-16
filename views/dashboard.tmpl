@@ -1,131 +1,527 @@
-<{{ define "dashboard" }}
+{{ define "dashboard" }}
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/x-icon" href="/img/logo.ico">
-		<title>SparkProxy • Dashboard</title>
-		<link rel="stylesheet" href="css/global.css" />
-		<link rel="stylesheet" href="css/sidebar.css" />
-		<link rel="stylesheet" href="css/dashboard.css" />
-	</head>
-	<body>
-		<div class="app">
-			{{ template "sidebar" . }}
-			{{ template "notifications" . }}
+  <title>SparkProxy • Dashboard</title>
+  <link rel="stylesheet" href="/css/global.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css" />
+</head>
 
-			<script>
-			(function(){
-				const card = document.querySelector('.profile-card');
-				if(!card) return;
-				const img = card.querySelector('.avatar');
-				const fallback = card.querySelector('.avatar-fallback');
-				const nameEl = card.querySelector('.username');
-				const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
-				if(fallback){ fallback.textContent = initial; }
-				function showFallback(){ if(img){ img.style.display='none'; } if(fallback){ fallback.style.display='grid'; } }
-				if(!img || !img.getAttribute('src')){ showFallback(); }
-				else { img.addEventListener('error', showFallback); }
-			})();
-			</script>
+<body class="page-dashboard">
+  <div class="app">
+    {{ template "sidebar" . }}
+    {{ template "notifications" . }}
 
-			<main class="content" role="main" aria-labelledby="page-title">
-				<header class="page-header">
-					<h1 id="page-title">Dashboard</h1>
-					<p class="subtitle">Overview of system activity and usage</p>
-				</header>
+    <main class="content" role="main" aria-labelledby="page-title">
+      <header class="page-header">
+        <div class="header-row">
+          <div>
+            <h1 id="page-title">Dashboard</h1>
+            <p class="subtitle">Overview of system activity and usage</p>
+          </div>
+          <div class="header-actions">
+            <a href="/domains" class="btn primary">+ Add Domain</a>
+          </div>
+        </div>
+      </header>
 
-				<section class="stats-grid" aria-label="Key Metrics">
-					<article class="stat" aria-labelledby="fw-title">
-						<div class="stat-header">
-							<div class="stat-title" id="fw-title">Firewall blocked</div>
-						</div>
-						<div class="stat-value" id="stat-fw-blocked">0</div>
-						<div class="stat-meta">since startup</div>
-					</article>
+      <section class="stats-grid" aria-label="Key Metrics">
+        <article class="stat" aria-labelledby="users-title">
+          <div class="stat-header">
+            <div class="stat-title" id="users-title">Active Users</div>
+          </div>
+          <div class="stat-value" id="stat-active-users">0</div>
+          <div class="stat-meta">currently online</div>
+        </article>
 
-					<article class="stat" aria-labelledby="ddos-title">
-						<div class="stat-header">
-							<div class="stat-title" id="ddos-title">DDoS attacks</div>
-						</div>
-						<div class="stat-value" id="stat-ddos-blocked">0</div>
-						<div class="stat-meta">since startup</div>
-					</article>
+        <article class="stat" aria-labelledby="fw-title">
+          <div class="stat-header">
+            <div class="stat-title" id="fw-title">Firewall Blocked</div>
+          </div>
+          <div class="stat-value" id="stat-fw-blocked">0</div>
+          <div class="stat-meta">since startup</div>
+        </article>
 
-					<article class="stat" aria-labelledby="users-title">
-						<div class="stat-header">
-							<div class="stat-title" id="users-title">Active users</div>
-						</div>
-						<div class="stat-value" id="stat-active-users">0</div>
-						<div class="stat-meta">currently online</div>
-					</article>
+        <article class="stat" aria-labelledby="ddos-title">
+          <div class="stat-header">
+            <div class="stat-title" id="ddos-title">DDoS Attacks</div>
+          </div>
+          <div class="stat-value" id="stat-ddos-blocked">0</div>
+          <div class="stat-meta">since startup</div>
+        </article>
 
-					<article class="stat" aria-labelledby="data-title">
-						<div class="stat-header">
-							<div class="stat-title" id="data-title">Data usage</div>
-						</div>
-						<div class="dual">
-							<div>
-								<div class="dual-label">Sent</div>
-								<div class="dual-value" id="stat-data-sent">0 B</div>
-							</div>
-							<div>
-								<div class="dual-label">Retrieved</div>
-								<div class="dual-value" id="stat-data-retrieved">0 B</div>
-							</div>
-						</div>
-						<div class="stat-meta">since startup</div>
-					</article>
-				</section>
-			</main>
-		</div>
-		<script>
-		(function(){
-			function formatBytes(bytes) {
-				if (!bytes || bytes <= 0) return '0 B';
-				const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-				let i = 0;
-				let value = bytes;
-				while (value >= 1024 && i < units.length - 1) {
-					value /= 1024;
-					i++;
-				}
-				return value.toFixed(1) + ' ' + units[i];
-			}
+        <article class="stat" aria-labelledby="data-title">
+          <div class="stat-header">
+            <div class="stat-title" id="data-title">Data Usage</div>
+          </div>
+          <div class="dual">
+            <div>
+              <div class="dual-label">Sent</div>
+              <div class="dual-value" id="stat-data-sent">0 B</div>
+            </div>
+            <div>
+              <div class="dual-label">Retrieved</div>
+              <div class="dual-value" id="stat-data-retrieved">0 B</div>
+            </div>
+          </div>
+          <div class="stat-meta">since startup</div>
+        </article>
+      </section>
 
-			function formatNumber(n) {
-				if (typeof n !== 'number' || !isFinite(n)) return '0';
-				return n.toLocaleString();
-			}
+      <section class="system-health" aria-label="System Health">
+        <div class="health-item">
+          <div class="health-label">Memory</div>
+          <div class="health-value" id="sys-memory">-</div>
+        </div>
+        <div class="health-item">
+          <div class="health-label">Goroutines</div>
+          <div class="health-value" id="sys-goroutines">-</div>
+        </div>
+        <div class="health-item">
+          <div class="health-label">Uptime</div>
+          <div class="health-value" id="sys-uptime">-</div>
+        </div>
+      </section>
 
-			function refreshDashboardStats(){
-				fetch('/api/dashboard')
-					.then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
-					.then(function(data){
-						var fwEl = document.getElementById('stat-fw-blocked');
-						var ddosEl = document.getElementById('stat-ddos-blocked');
-						var usersEl = document.getElementById('stat-active-users');
-						var sentEl = document.getElementById('stat-data-sent');
-						var recvEl = document.getElementById('stat-data-retrieved');
-						if (fwEl) fwEl.textContent = formatNumber(data.firewall_blocked || 0);
-						if (ddosEl) ddosEl.textContent = formatNumber(data.ddos_blocked || 0);
-						if (usersEl) usersEl.textContent = formatNumber(data.active_users || 0);
-						if (sentEl) sentEl.textContent = formatBytes(data.upload_bytes_total || 0);
-						if (recvEl) recvEl.textContent = formatBytes(data.download_bytes_total || 0);
-					})
-					.catch(function(err){
-						console.error('Failed to load /api/dashboard', err);
-						if (typeof showToast === 'function') {
-							showToast('Failed to load dashboard stats');
-						}
-					});
-			}
+      <section class="panel" aria-label="Traffic Overview">
+        <div class="panel-header">
+          <h2>Traffic (Last 7 Days)</h2>
+        </div>
+        <canvas id="trafficChart" aria-label="Requests over last 7 days" role="img"></canvas>
+      </section>
 
-			refreshDashboardStats();
-			setInterval(refreshDashboardStats, 15000);
-		})();
-		</script>
-	</body>
+      <section class="panel grid-2" aria-label="Distribution">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Request Methods</h2>
+          </div>
+          <div class="chart-wrap">
+            <div id="methodsChart" class="methods-bars"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Response Codes</h2>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="responseCodesChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel grid-2" aria-label="Top Data">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Top Domains</h2>
+            <a href="/domains" class="link">View All</a>
+          </div>
+          <div class="table-wrap">
+            <table class="table" role="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Domain</th>
+                  <th scope="col" class="num">Requests</th>
+                  <th scope="col" class="num">Data</th>
+                </tr>
+              </thead>
+              <tbody id="top-domains-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Top Countries</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table" role="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Country</th>
+                  <th scope="col" class="num">Requests</th>
+                </tr>
+              </thead>
+              <tbody id="top-countries-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="World Map">
+        <div class="panel-header">
+          <h2>Traffic by Country</h2>
+        </div>
+        <div class="map-wrap">
+          <div id="world-map" class="world" aria-hidden="true"></div>
+          <div class="tooltip" role="tooltip" hidden></div>
+        </div>
+      </section>
+
+      <section class="quick-links" aria-label="Quick Actions">
+        <a href="/domains" class="quick-link">
+          <span class="quick-icon">🌐</span>
+          <span class="quick-text">Manage Domains</span>
+        </a>
+        <a href="/firewall" class="quick-link">
+          <span class="quick-icon">🛡️</span>
+          <span class="quick-text">Firewall</span>
+        </a>
+        <a href="/logs" class="quick-link">
+          <span class="quick-icon">📋</span>
+          <span class="quick-text">View Logs</span>
+        </a>
+        <a href="/analytics" class="quick-link">
+          <span class="quick-icon">📊</span>
+          <span class="quick-text">Analytics</span>
+        </a>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/js/jsvectormap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js"></script>
+  <script>
+    (function(){
+      function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0;
+        let value = bytes;
+        while (value >= 1024 && i < units.length - 1) {
+          value /= 1024;
+          i++;
+        }
+        return value.toFixed(1) + ' ' + units[i];
+      }
+
+      function formatNumber(n) {
+        if (typeof n !== 'number' || !isFinite(n)) return '0';
+        return n.toLocaleString();
+      }
+
+      function formatUptime(seconds) {
+        if (seconds < 60) return seconds + 's';
+        if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+        if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
+        return Math.floor(seconds / 86400) + 'd ' + Math.floor((seconds % 86400) / 3600) + 'h';
+      }
+
+      function codeToFlag(code) {
+        if (!code) return '🏳️';
+        return code.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+      }
+
+      function drawTrafficChart(canvas, labels, data) {
+        if (!canvas || !labels || !data || labels.length === 0 || data.length === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const displayW = canvas.parentElement ? canvas.parentElement.clientWidth - 32 : 900;
+        const displayH = 250;
+        canvas.style.width = displayW + 'px';
+        canvas.style.height = displayH + 'px';
+        canvas.width = Math.floor(displayW * dpr);
+        canvas.height = Math.floor(displayH * dpr);
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const width = displayW;
+        const height = displayH;
+        const padding = { t: 20, r: 24, b: 32, l: 50 };
+        const areaW = width - padding.l - padding.r;
+        const areaH = height - padding.t - padding.b;
+
+        let rawMax = Math.max.apply(null, data);
+        if (!isFinite(rawMax)) rawMax = 1;
+        const sum = data.reduce((acc, val) => acc + (Number(val) || 0), 0);
+        if (sum > rawMax) rawMax = sum;
+        if (rawMax <= 0) rawMax = 1;
+        const maxTicks = 5;
+        const tickCount = Math.min(maxTicks, Math.max(1, Math.round(rawMax)));
+        const step = Math.max(1, Math.ceil(rawMax / tickCount));
+        const max = step * tickCount;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = '#1b2230';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.l, height - padding.b);
+        ctx.lineTo(width - padding.r, height - padding.b);
+        ctx.moveTo(padding.l, padding.t);
+        ctx.lineTo(padding.l, height - padding.b);
+        ctx.stroke();
+
+        ctx.fillStyle = '#a4acb9';
+        ctx.font = '11px ui-sans-serif, system-ui';
+
+        for (let i = 0; i < labels.length; i++) {
+          const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
+          ctx.fillText(labels[i], x - 12, height - padding.b + 16);
+        }
+
+        const yTicks = tickCount;
+        for (let i = 0; i <= yTicks; i++) {
+           const value = step * i;
+           const y = padding.t + (1 - value / max) * areaH;
+           ctx.strokeStyle = i === 0 ? '#1b2230' : 'rgba(148, 163, 184, 0.25)';
+           ctx.beginPath();
+           ctx.moveTo(padding.l, y);
+           ctx.lineTo(width - padding.r, y);
+           ctx.stroke();
+           ctx.fillStyle = '#a4acb9';
+           ctx.fillText(value === 0 ? '0' : formatNumber(value), 4, y + 4);
+        }
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#22d3ee';
+        ctx.beginPath();
+        for (let i = 0; i < labels.length; i++) {
+          const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
+          const y = padding.t + (1 - data[i] / max) * areaH;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        const grad = ctx.createLinearGradient(0, padding.t, 0, height - padding.b);
+        grad.addColorStop(0, 'rgba(34,211,238,.25)');
+        grad.addColorStop(1, 'rgba(34,211,238,0)');
+        ctx.lineTo(width - padding.r, height - padding.b);
+        ctx.lineTo(padding.l, height - padding.b);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+
+      function drawMethodsChart(methods) {
+        const container = document.getElementById('methodsChart');
+        if (!container) return;
+
+        const entries = Object.entries(methods || {}).sort((a, b) => b[1] - a[1]);
+        const max = Math.max(...entries.map(e => e[1]), 1);
+
+        container.innerHTML = '';
+        entries.forEach(([method, count]) => {
+          const bar = document.createElement('div');
+          bar.className = 'bar';
+          const height = (count / max * 100).toFixed(1);
+          bar.style.height = height + '%';
+          bar.innerHTML = `<span>${method}</span><strong>${formatNumber(count)}</strong>`;
+          container.appendChild(bar);
+        });
+      }
+
+      function drawResponseCodesChart(responseCodes) {
+        const canvas = document.getElementById('responseCodesChart');
+        if (!canvas) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const displayW = canvas.parentElement ? canvas.parentElement.clientWidth - 32 : 300;
+        const displayH = 180;
+        canvas.style.width = displayW + 'px';
+        canvas.style.height = displayH + 'px';
+        canvas.width = Math.floor(displayW * dpr);
+        canvas.height = Math.floor(displayH * dpr);
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const categories = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 };
+        for (const [code, count] of Object.entries(responseCodes || {})) {
+          categories[code] = (categories[code] || 0) + (Number(count) || 0);
+        }
+
+        const labels = Object.keys(categories);
+        const data = Object.values(categories);
+        const max = Math.max(...data, 1);
+
+        const colors = { '2xx': '#22c55e', '3xx': '#3b82f6', '4xx': '#f59e0b', '5xx': '#ef4444' };
+
+        ctx.clearRect(0, 0, displayW, displayH);
+        const barWidth = (displayW - 60) / labels.length - 10;
+        const padding = { t: 20, r: 20, b: 30, l: 50 };
+        const areaW = displayW - padding.l - padding.r;
+        const areaH = displayH - padding.t - padding.b;
+
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px ui-sans-serif, system-ui';
+        ctx.textAlign = 'center';
+
+        labels.forEach((label, i) => {
+          const x = padding.l + (i + 0.5) * (areaW / labels.length);
+          ctx.fillText(label + 'xx', x, displayH - 8);
+
+          const barH = (data[i] / max) * areaH;
+          const y = padding.t + areaH - barH;
+          ctx.fillStyle = colors[label] || '#6b7280';
+          ctx.fillRect(x - barWidth / 2, y, barWidth, barH);
+
+          ctx.fillStyle = '#a4acb9';
+          ctx.font = '10px ui-sans-serif, system-ui';
+          ctx.fillText(formatNumber(data[i]), x, y - 6);
+          ctx.font = '11px ui-sans-serif, system-ui';
+        });
+      }
+
+      let worldMapInstance = null;
+      let worldMapTooltip = null;
+
+      function ensureWorldMap() {
+        const mapWrap = document.querySelector('.map-wrap');
+        if (!mapWrap) return null;
+
+        if (!worldMapTooltip) {
+          worldMapTooltip = mapWrap.querySelector('.tooltip');
+          if (worldMapTooltip) {
+            worldMapTooltip.style.position = 'absolute';
+            worldMapTooltip.style.pointerEvents = 'none';
+          }
+        }
+
+        const container = mapWrap.querySelector('#world-map');
+        if (!container) return null;
+        if (typeof window.jsVectorMap !== 'function') return null;
+
+        if (!worldMapInstance) {
+          worldMapInstance = new window.jsVectorMap({
+            selector: '#world-map',
+            map: 'world',
+            backgroundColor: 'transparent',
+            zoomButtons: false,
+            regionStyle: {
+              initial: { fill: '#323236', stroke: '#18181b', 'stroke-width': 0.5 }
+            },
+            series: {
+              regions: [{
+                attribute: 'fill',
+                scale: ['#323236', '#00dd56b8'],
+                normalizeFunction: 'linear',
+                values: {}
+              }]
+            }
+          });
+        }
+        return worldMapInstance;
+      }
+
+      function updateWorldMap(counts) {
+        const vm = ensureWorldMap();
+        if (!vm || !counts) return;
+
+        const valueMap = {};
+        const rawCountsMap = {};
+        let total = 0;
+
+        for (const key in counts) {
+          if (!Object.prototype.hasOwnProperty.call(counts, key)) continue;
+          const value = Number(counts[key]) || 0;
+          if (value <= 0) continue;
+          const upperCode = String(key).toUpperCase();
+          rawCountsMap[upperCode] = (rawCountsMap[upperCode] || 0) + value;
+          total += value;
+        }
+
+        if (!total) {
+          if (vm.series && vm.series.regions && vm.series.regions[0] && typeof vm.series.regions[0].clear === 'function') {
+            vm.series.regions[0].clear();
+          }
+          vm.__dataCounts = {};
+          return;
+        }
+
+        for (const code in rawCountsMap) {
+          if (!Object.prototype.hasOwnProperty.call(rawCountsMap, code)) continue;
+          const count = rawCountsMap[code];
+          valueMap[code] = count / total;
+        }
+
+        if (vm.series && vm.series.regions && vm.series.regions[0] && typeof vm.series.regions[0].setValues === 'function') {
+          vm.series.regions[0].setValues(valueMap);
+        }
+        vm.__dataCounts = rawCountsMap;
+      }
+
+      function refreshDashboard(){
+        Promise.all([
+          fetch('/api/dashboard').then(r => r.ok ? r.json() : Promise.reject(r.status)).catch(() => ({})),
+          fetch('/api/system').then(r => r.ok ? r.json() : Promise.reject(r.status)).catch(() => ({}))
+        ]).then(([data, sys]) => {
+          document.getElementById('stat-active-users').textContent = formatNumber(data.active_users || 0);
+          document.getElementById('stat-fw-blocked').textContent = formatNumber(data.firewall_blocked || 0);
+          document.getElementById('stat-ddos-blocked').textContent = formatNumber(data.ddos_blocked || 0);
+          document.getElementById('stat-data-sent').textContent = formatBytes(data.upload_bytes_total || 0);
+          document.getElementById('stat-data-retrieved').textContent = formatBytes(data.download_bytes_total || 0);
+
+          if (sys.memory_usage_bytes) {
+            document.getElementById('sys-memory').textContent = formatBytes(sys.memory_usage_bytes);
+          }
+          if (sys.goroutine_count) {
+            document.getElementById('sys-goroutines').textContent = formatNumber(sys.goroutine_count);
+          }
+          if (sys.uptime_seconds) {
+            document.getElementById('sys-uptime').textContent = formatUptime(sys.uptime_seconds);
+          }
+
+          const trafficCanvas = document.getElementById('trafficChart');
+          if (trafficCanvas && data.requests_7days && data.requests_labels) {
+            drawTrafficChart(trafficCanvas, data.requests_labels, data.requests_7days);
+            window.addEventListener('resize', () => drawTrafficChart(trafficCanvas, data.requests_labels, data.requests_7days));
+          }
+
+          drawMethodsChart(data.methods || {});
+          drawResponseCodesChart(data.response_codes || {});
+
+          const domainsTbody = document.getElementById('top-domains-tbody');
+          if (domainsTbody && data.top_domains) {
+            domainsTbody.innerHTML = '';
+            (data.top_domains || []).slice(0, 5).forEach(d => {
+              const tr = document.createElement('tr');
+              const dataTotal = (d.data_in || 0) + (d.data_out || 0);
+              tr.innerHTML = `
+                <td><a href="/domains/${d.domain}" class="domain-link">${escapeHtml(d.domain)}</a></td>
+                <td class="num">${formatNumber(d.requests || 0)}</td>
+                <td class="num">${formatBytes(dataTotal)}</td>
+              `;
+              domainsTbody.appendChild(tr);
+            });
+          }
+
+          const countriesTbody = document.getElementById('top-countries-tbody');
+          if (countriesTbody && data.top_countries) {
+            countriesTbody.innerHTML = '';
+            (data.top_countries || []).slice(0, 5).forEach(c => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `
+                <td>${codeToFlag(c.country) || c.country} ${c.country}</td>
+                <td class="num">${formatNumber(c.count || 0)}</td>
+              `;
+              countriesTbody.appendChild(tr);
+            });
+            updateWorldMap(data.top_countries.reduce((acc, c) => {
+              acc[c.country] = c.count;
+              return acc;
+            }, {}));
+          }
+        }).catch(err => console.error('Failed to load dashboard:', err));
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      refreshDashboard();
+      setInterval(refreshDashboard, 15000);
+    })();
+  </script>
+</body>
+
 </html>
 {{ end }}
