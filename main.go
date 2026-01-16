@@ -330,7 +330,7 @@ func main() {
 		apiWrite.POST("/identity-providers", apiIdentityProvidersCreate)
 		apiWrite.DELETE("/identity-providers/:id", apiIdentityProvidersDelete)
 		apiWrite.POST("/identity-providers/:id/toggle", apiIdentityProvidersToggle)
-		apiWrite.POST("/users/me/identity-providers/:provider_id/link", apiUserIdentityProviderLinkStart)
+		apiWrite.GET("/users/me/identity-providers/:provider_id/link", apiUserIdentityProviderLinkStart)
 		apiWrite.DELETE("/users/me/identity-providers/:provider_id", apiUserIdentityProviderUnlink)
 		apiWrite.PUT("/settings", apiSettingsUpdate)
 		apiWrite.POST("/settings/reset", apiSettingsReset)

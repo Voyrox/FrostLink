@@ -1,14 +1,48 @@
-.linked-providers-section,
-.available-providers-section {
-    margin-bottom: 32px;
+.page-linked-accounts .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
 }
 
-.linked-providers-section h2,
-.available-providers-section h2 {
+.page-linked-accounts .content {
+    padding: 24px;
+}
+
+.page-linked-accounts .page-header h1 {
+    margin: 0 0 6px;
+}
+
+.page-linked-accounts .page-header .subtitle {
+    margin: 0 0 16px;
+}
+
+.page-linked-accounts .panel {
+    position: relative;
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+}
+
+.page-linked-accounts .panel::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    right: 20px;
+    height: 20px;
+    background: radial-gradient(200px 20px at 50% 0%, rgba(34, 211, 238, .12), transparent 70%);
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+}
+
+.page-linked-accounts .panel h2 {
+    margin: 0 0 12px;
     font-size: 1rem;
     font-weight: 600;
-    margin-bottom: 16px;
-    color: var(--text);
 }
 
 .provider-list {
@@ -22,9 +56,6 @@
     font-size: 0.9rem;
     padding: 24px;
     text-align: center;
-    background: var(--card);
-    border: 1px dashed var(--border);
-    border-radius: 12px;
 }
 
 .provider-item {
@@ -42,7 +73,7 @@
     border-color: var(--muted);
 }
 
-.provider-item .provider-icon {
+.provider-icon {
     width: 40px;
     height: 40px;
     border-radius: 8px;
@@ -52,48 +83,44 @@
     flex-shrink: 0;
 }
 
-.provider-item .provider-icon.discord {
+.provider-icon.discord {
     background: #5865F2;
     color: #fff;
 }
 
-.provider-item .provider-icon.google {
+.provider-icon.google {
     background: #fff;
     color: #3c4043;
 }
 
-.provider-item .provider-icon.oauth {
+.provider-icon.oauth {
     background: var(--card-secondary);
     color: var(--text);
 }
 
-.provider-item .provider-info {
+.provider-info {
     flex: 1;
     min-width: 0;
 }
 
-.provider-item .provider-name {
+.provider-name {
     font-weight: 600;
     font-size: 0.95rem;
     display: block;
     margin-bottom: 2px;
 }
 
-.provider-item .provider-email {
+.provider-email {
     color: var(--muted);
     font-size: 0.85rem;
     display: block;
 }
 
-.provider-item .linked-date {
+.linked-date {
     color: var(--muted);
     font-size: 0.8rem;
     display: block;
     margin-top: 4px;
-}
-
-.provider-item .unlink-btn {
-    flex-shrink: 0;
 }
 
 .provider-actions {
@@ -102,42 +129,42 @@
     gap: 12px;
 }
 
-.provider-actions .btn.oauth-btn {
+.oauth-btn {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
 }
 
-.provider-actions .btn.oauth-btn.discord {
+.oauth-btn.discord {
     background: #5865F2;
     border-color: #4752C4;
     color: #fff;
 }
 
-.provider-actions .btn.oauth-btn.discord:hover {
+.oauth-btn.discord:hover {
     background: #4752C4;
     border-color: #3C45A5;
 }
 
-.provider-actions .btn.oauth-btn.google {
+.oauth-btn.google {
     background: #fff;
     border-color: #dadce0;
     color: #3c4043;
 }
 
-.provider-actions .btn.oauth-btn.google:hover {
+.oauth-btn.google:hover {
     background: #f8f9fa;
     border-color: #d2d3d4;
 }
 
-.provider-actions .btn.oauth-btn.oauth {
+.oauth-btn.oauth {
     background: var(--card);
     border-color: var(--border);
     color: var(--text);
 }
 
-.provider-actions .btn.oauth-btn.oauth:hover {
+.oauth-btn.oauth:hover {
     background: #1a1f2e;
     border-color: var(--muted);
 }
@@ -154,12 +181,12 @@
         flex-wrap: wrap;
     }
 
-    .provider-item .unlink-btn {
+    .provider-item .provider-actions {
         width: 100%;
         margin-top: 12px;
     }
 
-    .provider-item .unlink-btn .btn {
+    .provider-item .provider-actions .btn {
         width: 100%;
     }
 }
