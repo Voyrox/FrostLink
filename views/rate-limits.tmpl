@@ -124,7 +124,7 @@
                     const rpsInput = document.createElement('input');
                     rpsInput.type = 'number';
                     rpsInput.min = '0';
-                    rpsInput.value = domain.rps || 0;
+                    rpsInput.value = domain.requests_per_second || 10;
                     rpsInput.className = 'input rps-input';
                     rpsInput.style.width = '80px';
                     rpsInput.dataset.domain = domain.domain;
@@ -212,7 +212,7 @@
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        rps: rps,
+                        requests_per_second: rps,
                         burst: burst,
                         enabled: enabled
                     })
