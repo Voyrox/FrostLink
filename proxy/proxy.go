@@ -315,6 +315,11 @@ func logRequestStats(cfg core.Config, r *stdhttp.Request, bytesIn, bytesOut int6
 	}
 	analyticsMu.Unlock()
 
+	IncRequests(domain, method, statusCode)
+	AddBytesIn(domain, bytesIn)
+	AddBytesOut(domain, bytesOut)
+	ObserveDuration(domain, duration.Seconds())
+
 	core.LogRequest("Allow", ip, country, domain, path, method)
 
 	debugLog := os.Getenv("DEBUG")
@@ -329,6 +334,13 @@ func logBlockedRequest(host, ip, country string, r *stdhttp.Request, reason stri
 	if reason == "" {
 		reason = "blocked"
 	}
+
+	hostClean := host
+	if i := strings.IndexByte(hostClean, ':'); i > -1 {
+		hostClean = hostClean[:i]
+	}
+	IncFirewallBlocks(hostClean)
+
 	core.LogRequest(reason, ip, country, host, r.URL.Path, r.Method)
 
 	debugLog := os.Getenv("DEBUG")

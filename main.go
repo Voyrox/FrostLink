@@ -23,6 +23,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var startupTime = time.Now()
@@ -364,8 +366,20 @@ func main() {
 		apiTokens.DELETE("/:id", apiAuthRequired(), csrfMiddleware(), apiTokensRevoke)
 	}
 
+	prometheusRegistry := prometheus.NewRegistry()
+	prometheusRegistry.MustRegister(
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+	)
+
+	proxy.GetMetricsAuthToken()
+	proxy.StartUptimeUpdater()
+
+	r.GET("/metrics", proxy.MetricsAuthMiddleware(), gin.WrapH(promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{})))
+
 	go func() {
 		cfgs := core.ReadConfigs("./domains")
+		proxy.SetActiveDomains(len(cfgs))
 		if err := proxy.StartProxy(cfgs); err != nil {
 			ui.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
 		}
