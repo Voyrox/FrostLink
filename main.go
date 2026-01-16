@@ -282,6 +282,9 @@ func main() {
 		dashboard.GET("/linked-accounts", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "linked-accounts", gin.H{"ActivePage": "linked-accounts"})
 		})
+		dashboard.GET("/rate-limits", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "rate-limits", gin.H{"ActivePage": "rate-limits"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -316,6 +319,7 @@ func main() {
 		apiRead.GET("/passkeys", apiPasskeysList)
 		apiRead.GET("/settings", apiSettingsGet)
 		apiRead.GET("/users/me/identity-providers", apiUserIdentityProvidersList)
+		apiRead.GET("/rate-limits", apiRateLimitsList)
 	}
 
 	apiWrite := r.Group("/api")
@@ -3036,4 +3040,20 @@ func apiDomainRateLimitUpdate(c *gin.Context) {
 		RateLimitRPS:     cfg.RateLimit.RequestsPerSecond,
 		RateLimitBurst:   cfg.RateLimit.Burst,
 	})
+}
+
+func apiRateLimitsList(c *gin.Context) {
+	configs := core.ReadConfigs("./domains")
+
+	var rateLimits []map[string]interface{}
+	for _, cfg := range configs {
+		rateLimits = append(rateLimits, map[string]interface{}{
+			"domain":              cfg.Domain,
+			"enabled":             cfg.RateLimit.Enabled,
+			"requests_per_second": cfg.RateLimit.RequestsPerSecond,
+			"burst":               cfg.RateLimit.Burst,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"rate_limits": rateLimits})
 }
