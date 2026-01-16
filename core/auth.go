@@ -55,44 +55,58 @@ var (
 )
 
 func loadUsers() {
-	if usersLoaded {
+	if usersLoaded && len(users) > 0 {
 		return
 	}
 	usersMu.Lock()
-	defer usersMu.Unlock()
-	if usersLoaded {
+	if usersLoaded && len(users) > 0 {
+		usersMu.Unlock()
 		return
 	}
 	b, err := os.ReadFile(usersPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			users = []User{}
-			usersLoaded = true
-			return
+		} else {
+			users = []User{}
 		}
-		users = []User{}
 		usersLoaded = true
+		usersMu.Unlock()
 		return
 	}
 	var uf userFile
 	if err := json.Unmarshal(b, &uf); err != nil {
 		users = []User{}
 		usersLoaded = true
+		usersMu.Unlock()
 		return
 	}
 	users = uf.Users
 	usersLoaded = true
+	usersMu.Unlock()
+	fmt.Printf("DEBUG loadUsers: loaded %d users from %s\n", len(users), usersPath)
 }
 
 func saveUsers() error {
+	fmt.Printf("DEBUG saveUsers: START writing to %s\n", usersPath)
 	data, err := json.MarshalIndent(userFile{Users: users}, "", "  ")
 	if err != nil {
+		fmt.Printf("DEBUG saveUsers: MarshalIndent ERROR: %v\n", err)
 		return err
 	}
+	fmt.Printf("DEBUG saveUsers: MarshalIndent SUCCESS, size=%d\n", len(data))
 	if err := os.MkdirAll(filepath.Dir(usersPath), 0755); err != nil {
+		fmt.Printf("DEBUG saveUsers: MkdirAll ERROR: %v\n", err)
 		return err
 	}
-	return os.WriteFile(usersPath, data, 0600)
+	fmt.Printf("DEBUG saveUsers: MkdirAll SUCCESS\n")
+	if err := os.WriteFile(usersPath, data, 0600); err != nil {
+		fmt.Printf("DEBUG saveUsers: WriteFile ERROR: %v\n", err)
+		return err
+	}
+	fmt.Printf("DEBUG saveUsers: WriteFile SUCCESS\n")
+	usersLoaded = true
+	return nil
 }
 
 func ListUsers() []User {
@@ -232,7 +246,14 @@ func LinkIdentityProviderToUser(username string, provider IdentityProvider, emai
 			Email:        email,
 			LinkedAt:     time.Now().Format(time.RFC3339),
 		})
-		return saveUsers()
+		fmt.Printf("DEBUG LinkIdentityProviderToUser: username=%s, provider=%s, email=%s, about to save\n", username, provider.Name, email)
+		err := saveUsers()
+		if err != nil {
+			fmt.Printf("DEBUG saveUsers ERROR: %v\n", err)
+		} else {
+			fmt.Printf("DEBUG saveUsers SUCCESS\n")
+		}
+		return err
 	}
 	return errors.New("user not found")
 }
@@ -269,9 +290,11 @@ func GetUserLinkedProviders(username string) []IdentityProviderLink {
 	defer usersMu.RUnlock()
 	for _, u := range users {
 		if u.Username == username {
+			fmt.Printf("DEBUG GetUserLinkedProviders: username=%s, providers=%d\n", username, len(u.IdentityProviders))
 			return u.IdentityProviders
 		}
 	}
+	fmt.Printf("DEBUG GetUserLinkedProviders: user %s not found\n", username)
 	return nil
 }
 
@@ -987,7 +1010,11 @@ func saveRoles() error {
 	if err := os.MkdirAll(filepath.Dir(rolesPath), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(rolesPath, data, 0600)
+	if err := os.WriteFile(rolesPath, data, 0600); err != nil {
+		return err
+	}
+	rolesLoaded = true
+	return nil
 }
 
 func ListRoles() []Role {

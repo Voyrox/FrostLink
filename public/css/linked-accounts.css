@@ -169,6 +169,23 @@
     border-color: var(--muted);
 }
 
+.provider-actions .btn.small.ghost.danger {
+    background: transparent;
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.provider-actions .btn.small.ghost.danger:hover {
+    background: #dc3545;
+    color: #fff;
+}
+
 .loading {
     color: var(--muted);
     font-size: 0.9rem;
