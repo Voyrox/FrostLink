@@ -1,0 +1,899 @@
+{{ define "domain" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+  <title>SparkProxy • {{ .Domain }}</title>
+  <link rel="stylesheet" href="/css/global.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/analytics.css" />
+  <link rel="stylesheet" href="/css/domain.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css" />
+</head>
+
+<body class="page-domain">
+  <div class="app">
+    {{ template "sidebar" . }}
+
+    <main class="content" role="main" aria-labelledby="page-title">
+      <header class="page-header">
+        <div class="domain-header">
+          <h1 id="page-title">{{ .Domain }}</h1>
+          <span class="domain-badge" id="online-badge">Loading...</span>
+        </div>
+        <p class="subtitle" id="domain-subtitle">Domain analytics and configuration</p>
+      </header>
+
+      <section class="panel config-grid" aria-label="Domain configuration">
+        <div class="config-item">
+          <div class="config-label">Upstream Host</div>
+          <div class="config-value" id="config-host">-</div>
+        </div>
+        <div class="config-item">
+          <div class="config-label">SSL Status</div>
+          <div class="config-value" id="config-ssl">-</div>
+        </div>
+        <div class="config-item">
+          <div class="config-label">Auth Required</div>
+          <div class="config-value" id="config-auth">-</div>
+        </div>
+        <div class="config-item">
+          <div class="config-label">Last Request</div>
+          <div class="config-value" id="config-last">-</div>
+        </div>
+      </section>
+
+      <section class="panel stats" aria-label="Totals">
+        <div class="stat">
+          <div class="stat-title">Total requests</div>
+          <div class="stat-value" id="total-requests">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Data received</div>
+          <div class="stat-value" id="data-in">0 B</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Data sent</div>
+          <div class="stat-value" id="data-out">0 B</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Blocked requests</div>
+          <div class="stat-value" id="blocked-requests">0 <span class="muted">(0.00%)</span></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Requests by day">
+        <div class="panel-header">
+          <h2>Requests by day</h2>
+        </div>
+        <canvas id="byDayChart" aria-label="Requests over last 8 days" role="img"></canvas>
+      </section>
+
+      <section class="panel grid-2" aria-label="Requests by country">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Requests by country</h2>
+          </div>
+          <div class="map-wrap">
+            <div id="world-map" class="world" aria-hidden="true"></div>
+            <div class="tooltip" role="tooltip" hidden></div>
+          </div>
+        </div>
+
+        <div class="panel" aria-labelledby="top-countries-title" style="margin-top: 0 !important;">
+          <div class="panel-header">
+            <h2 id="top-countries-title">Top countries</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table" role="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Country</th>
+                  <th scope="col" class="num">Total</th>
+                  <th scope="col" class="num">%</th>
+                </tr>
+              </thead>
+              <tbody>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel grid-2" aria-label="Method and response distribution">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Request methods</h2>
+          </div>
+          <div class="chart-wrap">
+            <div id="methodsChart" class="methods-bars"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Response codes</h2>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="responseCodesChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Traffic by hour">
+        <div class="panel-header">
+          <h2>Traffic by hour (today)</h2>
+          <span class="badge" id="profiler-badge" hidden>Profiler Active</span>
+        </div>
+        <canvas id="hourlyChart" aria-label="Requests by hour" role="img"></canvas>
+      </section>
+
+      <section class="panel grid-2" aria-label="Top paths and clients">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Top paths</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table" role="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Path</th>
+                  <th scope="col" class="num">Requests</th>
+                </tr>
+              </thead>
+              <tbody id="paths-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Top clients</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="table" role="grid">
+              <thead>
+                <tr>
+                  <th scope="col">IP</th>
+                  <th scope="col">Country</th>
+                  <th scope="col" class="num">Requests</th>
+                </tr>
+              </thead>
+              <tbody id="ips-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="slowest-section" aria-label="Slowest requests" hidden>
+        <div class="panel-header">
+          <h2>Slowest requests</h2>
+          <span class="muted">Profiler active</span>
+        </div>
+        <div class="table-wrap">
+          <table class="table" role="grid">
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Path</th>
+                <th scope="col">Method</th>
+                <th scope="col">IP</th>
+                <th scope="col" class="num">Duration</th>
+              </tr>
+            </thead>
+            <tbody id="slowest-tbody">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="recent-logs-title">
+        <div class="panel-header">
+          <h2 id="recent-logs-title">Recent requests</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="table" role="grid">
+            <thead>
+              <tr>
+                <th scope="col">Timestamp</th>
+                <th scope="col">Action</th>
+                <th scope="col">IP</th>
+                <th scope="col">Location</th>
+                <th scope="col">Path</th>
+                <th scope="col">Method</th>
+              </tr>
+            </thead>
+            <tbody id="logs-tbody">
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination" style="display: none;">
+          <button class="btn" id="prev-page">Previous</button>
+          <span id="page-info">Page 1 of 1</span>
+          <button class="btn" id="next-page">Next</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/js/jsvectormap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/maps/world.js"></script>
+  <script>
+    const DOMAIN = {{ .Domain }};
+    let currentPage = 1;
+    let totalPages = 1;
+    let domainLogs = [];
+
+    function formatNumber(n) {
+      if (typeof n !== 'number' || !isFinite(n)) return '0';
+      return n.toLocaleString();
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatDateKey(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).toString().padStart(2, '0');
+      return year + '-' + month + '-' + day;
+    }
+
+    function drawByDayChart(canvas, labels, data) {
+      if (!canvas || !labels || !data || labels.length === 0 || data.length === 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const displayW = canvas.parentElement ? canvas.parentElement.clientWidth : 900;
+      const displayH = 300;
+      canvas.style.width = '100%';
+      canvas.style.height = displayH + 'px';
+      canvas.width = Math.floor(displayW * dpr);
+      canvas.height = Math.floor(displayH * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+
+      const width = displayW;
+      const height = displayH;
+      const padding = { t: 20, r: 24, b: 28, l: 36 };
+      const areaW = width - padding.l - padding.r;
+      const areaH = height - padding.t - padding.b;
+
+      let rawMax = Math.max.apply(null, data);
+      if (!isFinite(rawMax)) {
+        return;
+      }
+
+      const sum = data.reduce((acc, val) => acc + (Number(val) || 0), 0);
+      if (sum > rawMax) {
+        rawMax = sum;
+      }
+
+      if (rawMax <= 0) {
+        rawMax = 1;
+      }
+      const maxTicks = 5;
+      const tickCount = Math.min(maxTicks, Math.max(1, Math.round(rawMax)));
+      const step = Math.max(1, Math.ceil(rawMax / tickCount));
+      const max = step * tickCount;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = '#1b2230';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding.l, height - padding.b);
+      ctx.lineTo(width - padding.r, height - padding.b);
+      ctx.moveTo(padding.l, padding.t);
+      ctx.lineTo(padding.l, height - padding.b);
+      ctx.stroke();
+
+      ctx.fillStyle = '#a4acb9';
+      ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+
+      for (let i = 0; i < labels.length; i++) {
+        const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
+        ctx.fillText(labels[i], x - 12, height - padding.b + 18);
+      }
+
+      const yTicks = tickCount;
+      for (let i = 0; i <= yTicks; i++) {
+         const value = step * i;
+         const y = padding.t + (1 - value / max) * areaH;
+         ctx.strokeStyle = i === 0 ? '#1b2230' : 'rgba(148, 163, 184, 0.25)';
+         ctx.beginPath();
+         ctx.moveTo(padding.l, y);
+         ctx.lineTo(width - padding.r, y);
+         ctx.stroke();
+         const labelText = value === 0 ? '0' : value.toFixed(0);
+        ctx.fillStyle = '#a4acb9';
+        ctx.fillText(labelText, 4, y + 4);
+      }
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#22d3ee';
+      ctx.beginPath();
+      for (let i = 0; i < labels.length; i++) {
+        const x = padding.l + (i / Math.max(labels.length - 1, 1)) * areaW;
+        const y = padding.t + (1 - data[i] / max) * areaH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      const grad = ctx.createLinearGradient(0, padding.t, 0, height - padding.b);
+      grad.addColorStop(0, 'rgba(34,211,238,.25)');
+      grad.addColorStop(1, 'rgba(34,211,238,0)');
+      ctx.lineTo(width - padding.r, height - padding.b);
+      ctx.lineTo(padding.l, height - padding.b);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    let worldMapInstance = null;
+    let worldMapTooltip = null;
+
+    function ensureWorldMap() {
+      const mapWrap = document.querySelector('.map-wrap');
+      if (!mapWrap) return null;
+
+      if (!worldMapTooltip) {
+        worldMapTooltip = mapWrap.querySelector('.tooltip');
+        if (worldMapTooltip) {
+          worldMapTooltip.style.position = 'absolute';
+          worldMapTooltip.style.pointerEvents = 'none';
+        }
+      }
+
+      const container = mapWrap.querySelector('#world-map');
+      if (!container) return null;
+      if (typeof window.jsVectorMap !== 'function') return null;
+
+      if (!worldMapInstance) {
+        worldMapInstance = new window.jsVectorMap({
+          selector: '#world-map',
+          map: 'world',
+          backgroundColor: 'transparent',
+          zoomButtons: false,
+          regionStyle: {
+            initial: {
+              fill: '#323236',
+              stroke: '#18181b',
+              'stroke-width': 0.5
+            }
+          },
+          series: {
+            regions: [
+              {
+                attribute: 'fill',
+                scale: ['#323236', '#00dd56b8'],
+                normalizeFunction: 'linear',
+                values: {}
+              }
+            ]
+          },
+          onRegionTooltipShow: function (event) {
+            if (event && typeof event.preventDefault === 'function') {
+              event.preventDefault();
+            }
+          }
+        });
+
+        const containerEl = worldMapInstance && worldMapInstance.container;
+        if (containerEl && worldMapTooltip) {
+          containerEl.addEventListener('mousemove', function (e) {
+            const target = e && e.target;
+            if (!target || !target.getAttribute) {
+              worldMapTooltip.hidden = true;
+              return;
+            }
+            const regionCode = target.getAttribute('data-code');
+            if (!regionCode) {
+              worldMapTooltip.hidden = true;
+              return;
+            }
+
+            const code = regionCode.toUpperCase();
+            const dataCounts = worldMapInstance && worldMapInstance.__dataCounts;
+            const countVal = dataCounts && dataCounts[code] ? dataCounts[code] : 0;
+
+            worldMapTooltip.hidden = false;
+            worldMapTooltip.textContent = codeToFlag(code) + ' ' + code + ': ' + formatNumber(countVal);
+
+            const rect = mapWrap.getBoundingClientRect();
+            worldMapTooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+            worldMapTooltip.style.top = (e.clientY - rect.top + 12) + 'px';
+          });
+
+          containerEl.addEventListener('mouseleave', function () {
+            if (worldMapTooltip) {
+              worldMapTooltip.hidden = true;
+            }
+          });
+        }
+      }
+
+      return worldMapInstance;
+    }
+
+    function codeToFlag(code) {
+      if (!code) return '🏳️';
+      return code.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+    }
+
+    function decorateCountryFlags(panel) {
+      if (!panel) return;
+      const rows = panel.querySelectorAll('.table tbody tr');
+      if (!rows || rows.length === 0) return;
+      rows.forEach(tr => {
+        const td = tr.querySelector('td');
+        if (!td) return;
+        if (td.querySelector('.flag')) return;
+        const code = td.textContent.trim();
+        const flag = codeToFlag(code);
+        const span = document.createElement('span');
+        span.className = 'flag';
+        span.textContent = flag + ' ';
+        td.prepend(span);
+      });
+    }
+
+    function updateWorldMap(counts) {
+      const vm = ensureWorldMap();
+      if (!vm || !counts) return;
+
+      const valueMap = {};
+      const rawCountsMap = {};
+      let total = 0;
+
+      for (const key in counts) {
+        if (!Object.prototype.hasOwnProperty.call(counts, key)) continue;
+        const value = Number(counts[key]) || 0;
+        if (value <= 0) continue;
+        const upperCode = String(key).toUpperCase();
+        rawCountsMap[upperCode] = (rawCountsMap[upperCode] || 0) + value;
+        total += value;
+      }
+
+      if (!total) {
+        if (vm.series && vm.series.regions && vm.series.regions[0] && typeof vm.series.regions[0].clear === 'function') {
+          vm.series.regions[0].clear();
+        }
+        vm.__dataCounts = {};
+        return;
+      }
+
+      for (const code in rawCountsMap) {
+        if (!Object.prototype.hasOwnProperty.call(rawCountsMap, code)) continue;
+        const count = rawCountsMap[code];
+        const pct = count / total;
+        const regionKey = code;
+        valueMap[regionKey] = pct;
+      }
+
+      if (vm.series && vm.series.regions && vm.series.regions[0] && typeof vm.series.regions[0].setValues === 'function') {
+        vm.series.regions[0].setValues(valueMap);
+      } else if (typeof vm.setValues === 'function') {
+        vm.setValues(valueMap);
+      }
+      vm.__dataCounts = rawCountsMap;
+    }
+
+    function updateTopCountries(logs) {
+      const titleEl = document.getElementById('top-countries-title');
+      if (!titleEl) return;
+      const panel = titleEl.closest('.panel');
+      if (!panel) return;
+      const tbody = panel.querySelector('.table tbody');
+      if (!tbody) return;
+
+      const counts = {};
+      let total = 0;
+      (logs || []).forEach(entry => {
+        const locRaw = (entry && entry.location) ? String(entry.location).trim() : '';
+        if (!locRaw) return;
+        const key = locRaw.toUpperCase();
+        counts[key] = (counts[key] || 0) + 1;
+        total++;
+      });
+
+      const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      tbody.innerHTML = '';
+
+      entries.forEach(([countryKey, count]) => {
+        const countryLabel = countryKey;
+        const pct = total > 0 ? (count * 100) / total : 0;
+        const tr = document.createElement('tr');
+        const tdCountry = document.createElement('td');
+        const tdTotal = document.createElement('td');
+        const tdPct = document.createElement('td');
+        tdTotal.className = 'num';
+        tdPct.className = 'num';
+        tdCountry.textContent = countryLabel;
+        tdTotal.textContent = formatNumber(count);
+        tdPct.textContent = pct.toFixed(1) + '%';
+        tr.appendChild(tdCountry);
+        tr.appendChild(tdTotal);
+        tr.appendChild(tdPct);
+        tbody.appendChild(tr);
+      });
+
+      updateWorldMap(counts);
+      decorateCountryFlags(panel);
+    }
+
+    function updateConfig(data) {
+      const hostEl = document.getElementById('config-host');
+      const sslEl = document.getElementById('config-ssl');
+      const authEl = document.getElementById('config-auth');
+      const lastEl = document.getElementById('config-last');
+      const badgeEl = document.getElementById('online-badge');
+
+      if (hostEl) hostEl.textContent = data.host || '-';
+      if (sslEl) {
+        const sslText = data.allow_ssl ? 'Enabled' : 'Disabled';
+        sslEl.textContent = sslText + (data.days_left > 0 ? ` (${data.days_left}d left)` : '');
+      }
+      if (authEl) authEl.textContent = data.require_auth ? 'Yes' : 'No';
+      if (lastEl) {
+        const parts = [];
+        if (data.last_ip) parts.push(data.last_ip);
+        if (data.last_country) parts.push(data.last_country);
+        lastEl.textContent = parts.join(' / ') || '-';
+      }
+      if (badgeEl) {
+        badgeEl.textContent = data.online ? 'ONLINE' : 'OFFLINE';
+        badgeEl.className = 'domain-badge' + (data.online ? '' : ' offline');
+      }
+    }
+
+    function updateStats(data, logs) {
+      document.getElementById('total-requests').textContent = formatNumber(data.total_requests || 0);
+      document.getElementById('data-in').textContent = formatBytes(data.data_in_total || 0);
+      document.getElementById('data-out').textContent = formatBytes(data.data_out_total || 0);
+
+      let blocked = 0;
+      logs.forEach(entry => {
+        const action = (entry && entry.action ? String(entry.action) : '').toLowerCase();
+        if (action && action !== 'allow') blocked++;
+      });
+      const total = logs.length;
+      const pct = total > 0 ? (blocked * 100) / total : 0;
+      document.getElementById('blocked-requests').innerHTML = `${formatNumber(blocked)} <span class="muted">(${pct.toFixed(2)}%)</span>`;
+    }
+
+    function updateLogs() {
+      const tbody = document.getElementById('logs-tbody');
+      if (!tbody) return;
+
+      const start = (currentPage - 1) * 50;
+      const end = start + 50;
+      const pageLogs = domainLogs.slice(start, end);
+
+      tbody.innerHTML = '';
+      pageLogs.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${log.timestamp || '-'}</td>
+          <td>${log.action || '-'}</td>
+          <td>${log.ip || '-'}</td>
+          <td>${log.location || '-'}</td>
+          <td>${log.path || '-'}</td>
+          <td>${log.method || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const pagination = document.getElementById('pagination');
+      const pageInfo = document.getElementById('page-info');
+      if (pagination && totalPages > 1) {
+        pagination.style.display = 'flex';
+        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+      } else if (pagination) {
+        pagination.style.display = 'none';
+      }
+    }
+
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        updateLogs();
+      }
+    });
+
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage < totalPages) {
+        currentPage++;
+        updateLogs();
+      }
+    });
+
+    async function refreshDomain() {
+      try {
+        const [statsResp, logsResp, analyticsResp] = await Promise.all([
+          fetch('/api/domains/' + encodeURIComponent(DOMAIN) + '/stats').then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch('/api/domains/' + encodeURIComponent(DOMAIN) + '/logs?limit=500').then(r => r.ok ? r.json() : { logs: [] }).catch(() => ({ logs: [] })),
+          fetch('/api/domains/' + encodeURIComponent(DOMAIN) + '/analytics').then(r => r.ok ? r.json() : null).catch(() => null)
+        ]);
+
+        if (statsResp) {
+          updateConfig(statsResp);
+        }
+
+        domainLogs = (logsResp.logs || []).map(log => ({
+          timestamp: log.timestamp,
+          action: log.action,
+          ip: log.ip,
+          location: log.location,
+          host: log.host,
+          path: log.path,
+          method: log.method
+        }));
+
+        totalPages = Math.ceil(domainLogs.length / 50);
+        currentPage = 1;
+        updateLogs();
+
+        const c = document.getElementById('byDayChart');
+        if (c && domainLogs.length > 0) {
+          const days = 8;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const dayKeys = [];
+          const labels = [];
+          for (let i = days - 1; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const key = formatDateKey(d);
+            dayKeys.push(key);
+            labels.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+          }
+
+          const countsByDay = {};
+          domainLogs.forEach(entry => {
+            if (!entry || !entry.timestamp) return;
+            const t = String(entry.timestamp).replace(' ', 'T');
+            const d = new Date(t);
+            if (isNaN(d.getTime())) return;
+            const key = formatDateKey(d);
+            countsByDay[key] = (countsByDay[key] || 0) + 1;
+          });
+
+          const data = dayKeys.map(k => countsByDay[k] || 0);
+          drawByDayChart(c, labels, data);
+          window.addEventListener('resize', () => drawByDayChart(c, labels, data));
+        }
+
+        updateTopCountries(domainLogs);
+
+        if (statsResp) {
+          updateStats(statsResp, domainLogs);
+        }
+
+        if (analyticsResp) {
+          drawMethodsChart(analyticsResp.methods || {});
+          drawResponseCodesChart(analyticsResp.response_codes || {});
+          drawHourlyChart(analyticsResp.hourly_requests || []);
+          updatePathsTable(analyticsResp.paths || []);
+          updateIPsTable(analyticsResp.ips || []);
+          updateSlowestTable(analyticsResp.slowest_requests || []);
+
+          const badge = document.getElementById('profiler-badge');
+          const slowestSection = document.getElementById('slowest-section');
+          if (analyticsResp.profiler_enabled) {
+            if (badge) badge.hidden = false;
+            if (slowestSection) slowestSection.hidden = false;
+          } else {
+            if (badge) badge.hidden = true;
+            if (slowestSection) slowestSection.hidden = true;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load domain data:', e);
+      }
+    }
+
+    function drawMethodsChart(methods) {
+      const container = document.getElementById('methodsChart');
+      if (!container) return;
+
+      const entries = Object.entries(methods || {}).sort((a, b) => b[1] - a[1]);
+      const max = Math.max(...entries.map(e => e[1]), 1);
+
+      container.innerHTML = '';
+      entries.forEach(([method, count]) => {
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        const height = (count / max * 100).toFixed(1);
+        bar.style.height = height + '%';
+        bar.innerHTML = `<span>${method}</span><strong>${formatNumber(count)}</strong>`;
+        container.appendChild(bar);
+      });
+    }
+
+    function drawResponseCodesChart(responseCodes) {
+      const canvas = document.getElementById('responseCodesChart');
+      if (!canvas) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const displayW = canvas.parentElement ? canvas.parentElement.clientWidth - 32 : 300;
+      const displayH = 180;
+      canvas.style.width = displayW + 'px';
+      canvas.style.height = displayH + 'px';
+      canvas.width = Math.floor(displayW * dpr);
+      canvas.height = Math.floor(displayH * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+
+      const categories = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 };
+      for (const [code, count] of Object.entries(responseCodes || {})) {
+        const c = parseInt(code, 10);
+        if (c >= 200 && c < 300) categories['2xx'] += count;
+        else if (c >= 300 && c < 400) categories['3xx'] += count;
+        else if (c >= 400 && c < 500) categories['4xx'] += count;
+        else if (c >= 500 && c < 600) categories['5xx'] += count;
+      }
+
+      const labels = Object.keys(categories);
+      const data = Object.values(categories);
+      const max = Math.max(...data, 1);
+
+      const colors = { '2xx': '#22c55e', '3xx': '#3b82f6', '4xx': '#f59e0b', '5xx': '#ef4444' };
+
+      ctx.clearRect(0, 0, displayW, displayH);
+      const barWidth = (displayW - 40) / labels.length - 10;
+      const padding = { t: 20, r: 20, b: 30, l: 50 };
+      const areaW = displayW - padding.l - padding.r;
+      const areaH = displayH - padding.t - padding.b;
+
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '11px ui-sans-serif, system-ui';
+      ctx.textAlign = 'center';
+
+      labels.forEach((label, i) => {
+        const x = padding.l + (i + 0.5) * (areaW / labels.length);
+        ctx.fillText(label + 'xx', x, displayH - 8);
+
+        const barH = (data[i] / max) * areaH;
+        const y = padding.t + areaH - barH;
+        ctx.fillStyle = colors[label];
+        ctx.fillRect(x - barWidth / 2, y, barWidth, barH);
+
+        ctx.fillStyle = '#a4acb9';
+        ctx.font = '10px ui-sans-serif, system-ui';
+        ctx.fillText(formatNumber(data[i]), x, y - 6);
+        ctx.font = '11px ui-sans-serif, system-ui';
+      });
+    }
+
+    function drawHourlyChart(hourly) {
+      const canvas = document.getElementById('hourlyChart');
+      if (!canvas) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const displayW = canvas.parentElement ? canvas.parentElement.clientWidth : 900;
+      const displayH = 200;
+      canvas.style.width = '100%';
+      canvas.style.height = displayH + 'px';
+      canvas.width = Math.floor(displayW * dpr);
+      canvas.height = Math.floor(displayH * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+
+      const data = hourly || [];
+      const max = Math.max(...data, 1);
+
+      ctx.clearRect(0, 0, displayW, displayH);
+      const padding = { t: 20, r: 20, b: 30, l: 40 };
+      const areaW = displayW - padding.l - padding.r;
+      const areaH = displayH - padding.t - padding.b;
+      const barWidth = areaW / 24 - 2;
+
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '10px ui-sans-serif, system-ui';
+      ctx.textAlign = 'center';
+
+      for (let i = 0; i < 24; i++) {
+        const x = padding.l + i * (areaW / 24) + 1;
+        const barH = (data[i] || 0) / max * areaH;
+        const y = padding.t + areaH - barH;
+
+        ctx.fillStyle = data[i] > max * 0.7 ? '#22d3ee' : (data[i] > max * 0.3 ? '#3b82f6' : '#323236');
+        ctx.fillRect(x, y, barWidth, barH);
+
+        if (i % 3 === 0) {
+          ctx.fillStyle = '#6b7280';
+          ctx.fillText(i.toString(), x + barWidth / 2, displayH - 10);
+        }
+      }
+    }
+
+    function updatePathsTable(paths) {
+      const tbody = document.getElementById('paths-tbody');
+      if (!tbody) return;
+
+      tbody.innerHTML = '';
+      (paths || []).slice(0, 15).forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(p.path || '/')}</td>
+          <td class="num">${formatNumber(p.count || 0)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateIPsTable(ips) {
+      const tbody = document.getElementById('ips-tbody');
+      if (!tbody) return;
+
+      tbody.innerHTML = '';
+      (ips || []).slice(0, 15).forEach(ip => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(ip.ip || '')}</td>
+          <td>${codeToFlag(ip.country || '') || ip.country || '-'}</td>
+          <td class="num">${formatNumber(ip.count || 0)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateSlowestTable(slowest) {
+      const tbody = document.getElementById('slowest-tbody');
+      if (!tbody) return;
+
+      tbody.innerHTML = '';
+      (slowest || []).slice(0, 20).forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'slowest-row';
+        const duration = s.duration_ms || 0;
+        const durationClass = duration > 1000 ? 'slow' : '';
+        tr.innerHTML = `
+          <td>${formatTimestamp(s.timestamp)}</td>
+          <td>${escapeHtml(s.path || '')}</td>
+          <td>${s.method || '-'}</td>
+          <td>${escapeHtml(s.ip || '')}</td>
+          <td class="num duration ${durationClass}">${formatDuration(duration)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function formatTimestamp(ts) {
+      if (!ts) return '-';
+      try {
+        const d = new Date(ts.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return '-';
+      }
+    }
+
+    function formatDuration(ms) {
+      if (ms < 1000) return ms + 'ms';
+      return (ms / 1000).toFixed(2) + 's';
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    refreshDomain();
+  </script>
+</body>
+
+</html>
+{{ end }}

@@ -1,0 +1,291 @@
+/* Domain dashboard page (scoped) */
+.page-domain .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0
+}
+
+.page-domain .content {
+    padding: 24px
+}
+
+.page-domain .page-header h1 {
+    margin: 0 0 6px
+}
+
+.page-domain .page-header .subtitle {
+    margin: 0 0 16px
+}
+
+.page-domain .panel {
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow)
+}
+
+.page-domain .config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px
+}
+
+.page-domain .config-item {
+    background: #1e1e24;
+    border-radius: 8px;
+    padding: 16px
+}
+
+.page-domain .config-label {
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px
+}
+
+.page-domain .config-value {
+    font-size: 16px;
+    font-weight: 500
+}
+
+.page-domain .config-value.online {
+    color: #22c55e
+}
+
+.page-domain .config-value.offline {
+    color: #ef4444
+}
+
+.page-domain .domain-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px
+}
+
+.page-domain .domain-badge {
+    background: #22d3ee;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600
+}
+
+.page-domain .domain-badge.offline {
+    background: #ef4444;
+    color: #fff
+}
+
+.page-domain .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px
+}
+
+.page-domain .stat {
+    background: #1e1e24;
+    border-radius: 8px;
+    padding: 16px
+}
+
+.page-domain .stat-title {
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px
+}
+
+.page-domain .stat-value {
+    font-size: 24px;
+    font-weight: 600
+}
+
+.page-domain .stat-value .muted {
+    font-size: 14px;
+    color: #6b7280
+}
+
+.page-domain .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 16px;
+    margin-bottom: 24px
+}
+
+@media (max-width: 900px) {
+    .page-domain .grid-2 {
+        grid-template-columns: 1fr
+    }
+}
+
+.page-domain .table-wrap {
+    overflow: auto;
+    border-radius: 12px
+}
+
+.page-domain .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 600px;
+    background: transparent
+}
+
+.page-domain .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-domain .table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-domain .table tbody tr:hover {
+    background: #0c111a
+}
+
+.page-domain .map-wrap {
+    position: relative;
+    height: 300px
+}
+
+.page-domain .world {
+    width: 100%;
+    height: 100%
+}
+
+.page-domain .tooltip {
+    position: absolute;
+    background: #1e1e24;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    z-index: 10;
+    pointer-events: none
+}
+
+.page-domain .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding-top: 16px
+}
+
+.page-domain .pagination .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 8px 16px;
+    font-size: .9rem;
+    border-radius: 8px;
+    cursor: pointer
+}
+
+.page-domain .pagination .btn:hover {
+    background: #121a28;
+    border-color: #1f2937
+}
+
+.page-domain .pagination .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed
+}
+
+.page-domain .page-info {
+    color: #6b7280;
+    font-size: .9rem
+}
+
+.page-domain .badge {
+    background: #f59e0b;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600
+}
+
+.page-domain .chart-wrap {
+    height: 180px;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.page-domain .methods-bars {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    height: 160px;
+    width: 100%;
+    padding: 0 10px
+}
+
+.page-domain .methods-bars .bar {
+    flex: 1;
+    background: linear-gradient(to top, #22d3ee, #06b6d4);
+    border-radius: 4px 4px 0 0;
+    min-width: 30px;
+    max-width: 60px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 24px;
+    transition: opacity 0.2s ease
+}
+
+.page-domain .methods-bars .bar:hover {
+    opacity: 0.85
+}
+
+.page-domain .methods-bars .bar span {
+    position: absolute;
+    bottom: 4px;
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    font-weight: 600
+}
+
+.page-domain .methods-bars .bar strong {
+    position: absolute;
+    top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff
+}
+
+.page-domain .slowest-row .duration {
+    color: #f59e0b;
+    font-weight: 500
+}
+
+.page-domain .slowest-row .duration.slow {
+    color: #ef4444;
+    font-weight: 600
+}
+
+.page-domain .flag {
+    margin-right: 4px
+}

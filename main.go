@@ -247,6 +247,10 @@ func main() {
 	{
 		dashboard.GET("/dashboard", func(c *gin.Context) { c.HTML(http.StatusOK, "dashboard", gin.H{"ActivePage": "dashboard"}) })
 		dashboard.GET("/domains", func(c *gin.Context) { c.HTML(http.StatusOK, "domains", gin.H{"ActivePage": "domains"}) })
+		dashboard.GET("/domains/:domain", func(c *gin.Context) {
+			domain := c.Param("domain")
+			c.HTML(http.StatusOK, "domain", gin.H{"ActivePage": "domains", "Domain": domain})
+		})
 		dashboard.GET("/analytics", func(c *gin.Context) { c.HTML(http.StatusOK, "analytics", gin.H{"ActivePage": "analytics"}) })
 		dashboard.GET("/logs", func(c *gin.Context) { c.HTML(http.StatusOK, "logs", gin.H{"ActivePage": "logs"}) })
 		dashboard.GET("/users", func(c *gin.Context) { c.HTML(http.StatusOK, "users", gin.H{"ActivePage": "users"}) })
@@ -282,6 +286,10 @@ func main() {
 		apiRead.GET("/dashboard", apiDashboard)
 		apiRead.GET("/firewall", apiFirewallGet)
 		apiRead.GET("/proxys", apiProxys)
+		apiRead.GET("/domains/:domain/stats", apiDomainStats)
+		apiRead.GET("/domains/:domain/logs", apiDomainLogs)
+		apiRead.GET("/domains/:domain/analytics", apiDomainAnalytics)
+		apiRead.GET("/domains/:domain/profiler", apiDomainProfilerStatus)
 		apiRead.GET("/logs", apiLogs)
 		apiRead.GET("/users", apiUsersList)
 		apiRead.GET("/users/me", apiUsersMe)
@@ -291,6 +299,7 @@ func main() {
 		apiRead.GET("/streams", apiStreamsList)
 		apiRead.GET("/streams/stats", apiStreamsStats)
 		apiRead.GET("/certs", apiCertsList)
+		apiRead.GET("/certs/:domain/verify", apiCertsVerify)
 		apiRead.GET("/identity-providers", apiIdentityProvidersList)
 		apiRead.GET("/passkeys", apiPasskeysList)
 		apiRead.GET("/settings", apiSettingsGet)
@@ -315,6 +324,7 @@ func main() {
 		apiWrite.DELETE("/firewall/ip/:ip", apiFirewallUnbanIP)
 		apiWrite.DELETE("/firewall/country/:code", apiFirewallUnbanCountry)
 		apiWrite.PUT("/domains/:domain/auth", apiDomainAuthUpdate)
+		apiWrite.PUT("/domains/:domain/profiler", apiDomainProfilerToggle)
 		apiWrite.POST("/domains", apiDomainsCreate)
 		apiWrite.PUT("/domains/:domain", apiDomainsUpdate)
 		apiWrite.DELETE("/domains/:domain", apiDomainsDelete)
@@ -510,6 +520,203 @@ func apiProxys(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"configs": cfgsOut})
+}
+
+func apiDomainStats(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	cfg, ok := core.GetDomainConfig(domain)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+		return
+	}
+
+	stats := proxy.GetDomainStats()
+	var stat proxy.DomainStats
+	for _, s := range stats {
+		if s.Domain == domain {
+			stat = s
+			break
+		}
+	}
+
+	hasCustomCert := cfg.SSLCertificate != nil && *cfg.SSLCertificate != ""
+	hasCustomKey := cfg.SSLCertificateKey != nil && *cfg.SSLCertificateKey != ""
+
+	certSource := proxy.SourceNone
+	if cfg.AllowSSL {
+		if hasCustomCert && hasCustomKey {
+			certSource = proxy.SourceCustom
+		} else if proxy.CertificateExists(cfg.Domain) {
+			certSource = proxy.SourceAuto
+		}
+	}
+
+	certInfo := proxy.GetCertificateInfoForDomain(cfg.Domain, cfg.SSLCertificate, cfg.SSLCertificateKey)
+
+	online := false
+	if strings.TrimSpace(cfg.Location) != "" && cfg.AllowHTTP {
+		if req, err := http.NewRequest("GET", "http"+"://"+strings.TrimSpace(cfg.Location), nil); err == nil {
+			if resp, err := healthClient.Do(req); err == nil {
+				_ = resp.Body.Close()
+				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+					online = true
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"domain":         cfg.Domain,
+		"host":           cfg.Location,
+		"allow_ssl":      cfg.AllowSSL,
+		"allow_http":     cfg.AllowHTTP,
+		"cert_source":    string(certSource),
+		"cert_status":    string(certInfo.Source),
+		"days_left":      certInfo.DaysLeft,
+		"auto_cert":      certInfo.Source == proxy.SourceAuto,
+		"online":         online,
+		"require_auth":   proxy.GetDomainAuth(cfg.Domain),
+		"data_in_total":  stat.DataInTotal,
+		"data_out_total": stat.DataOutTotal,
+		"total_requests": stat.TotalRequests,
+		"last_ip":        stat.LastIP,
+		"last_country":   stat.LastCountry,
+		"last_path":      stat.LastPath,
+	})
+}
+
+func apiDomainLogs(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	var page, limit int
+	fmt.Sscanf(c.Query("page"), "%d", &page)
+	fmt.Sscanf(c.Query("limit"), "%d", &limit)
+
+	allLogs := core.GetRequestLogs()
+	var filteredLogs []core.RequestLog
+	for _, l := range allLogs {
+		if strings.EqualFold(l.Host, domain) {
+			filteredLogs = append(filteredLogs, l)
+		}
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	total := len(filteredLogs)
+	totalPages := (total + limit - 1) / limit
+
+	offset := (page - 1) * limit
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	var logs []core.RequestLog
+	if offset < total {
+		logs = filteredLogs[offset:end]
+	}
+
+	var out []map[string]interface{}
+	for _, l := range logs {
+		out = append(out, map[string]interface{}{
+			"timestamp": l.Timestamp.Format("2006-01-02 15:04:05"),
+			"action":    l.Action,
+			"ip":        l.IP,
+			"location":  l.Country,
+			"host":      l.Host,
+			"path":      l.Path,
+			"method":    l.Method,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs": out,
+		"pagination": gin.H{
+			"page":        page,
+			"limit":       limit,
+			"total":       total,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+func apiDomainAnalytics(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	cfg, ok := core.GetDomainConfig(domain)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+		return
+	}
+
+	analytics := proxy.GetDomainAnalytics(domain)
+	profilerEnabled := proxy.IsProfilerEnabled(domain)
+
+	c.JSON(http.StatusOK, gin.H{
+		"domain":           cfg.Domain,
+		"methods":          analytics.Methods,
+		"paths":            analytics.Paths,
+		"ips":              analytics.IPs,
+		"response_codes":   analytics.ResponseCodes,
+		"hourly_requests":  analytics.HourlyRequests,
+		"slowest_requests": analytics.SlowestRequests,
+		"profiler_enabled": profilerEnabled,
+	})
+}
+
+func apiDomainProfilerStatus(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	enabled := proxy.IsProfilerEnabled(domain)
+	c.JSON(http.StatusOK, gin.H{"enabled": enabled})
+}
+
+func apiDomainProfilerToggle(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	if err := proxy.SetProfilerEnabled(domain, req.Enabled); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"enabled": req.Enabled})
 }
 
 func apiDashboard(c *gin.Context) {
@@ -1754,6 +1961,79 @@ func apiOAuthCallback(c *gin.Context) {
 		"ToastMessage": "Logged in successfully, redirecting…",
 		"Redirect":     "/dashboard",
 	})
+}
+
+type certVerifyResponse struct {
+	Domain               string                  `json:"domain"`
+	CustomCertConfigured bool                    `json:"custom_cert_configured"`
+	CustomCertValid      bool                    `json:"custom_cert_valid"`
+	CustomCertPath       string                  `json:"custom_cert_path,omitempty"`
+	CustomCertKeyPath    string                  `json:"custom_cert_key_path,omitempty"`
+	CustomCertError      string                  `json:"custom_cert_error,omitempty"`
+	AutoDetected         bool                    `json:"auto_detected"`
+	AutoDetectedPath     string                  `json:"auto_detected_path,omitempty"`
+	AutoDetectedValid    bool                    `json:"auto_detected_valid"`
+	ACMEExists           bool                    `json:"acme_exists"`
+	EffectiveSource      proxy.CertificateSource `json:"effective_source"`
+	EffectiveCertInfo    *certInfoResponse       `json:"effective_cert_info,omitempty"`
+}
+
+func apiCertsVerify(c *gin.Context) {
+	domain := c.Param("domain")
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	cfg, ok := core.GetDomainConfig(domain)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+		return
+	}
+
+	resp := certVerifyResponse{
+		Domain:               domain,
+		CustomCertConfigured: cfg.SSLCertificate != nil && cfg.SSLCertificateKey != nil && *cfg.SSLCertificate != "" && *cfg.SSLCertificateKey != "",
+		CustomCertValid:      false,
+		AutoDetected:         false,
+		ACMEExists:           proxy.CertificateExists(domain),
+	}
+
+	if resp.CustomCertConfigured {
+		resp.CustomCertPath = *cfg.SSLCertificate
+		resp.CustomCertKeyPath = *cfg.SSLCertificateKey
+		if err := proxy.ValidateCertificatePaths(*cfg.SSLCertificate, *cfg.SSLCertificateKey); err != nil {
+			resp.CustomCertError = err.Error()
+		} else {
+			resp.CustomCertValid = true
+		}
+	}
+
+	autoCertPath, autoKeyPath, autoFound := proxy.AutoDetectCertificate(domain)
+	if autoFound {
+		resp.AutoDetected = true
+		resp.AutoDetectedPath = autoCertPath
+		resp.AutoDetectedValid = proxy.ValidateCertificatePaths(autoCertPath, autoKeyPath) == nil
+	}
+
+	effectiveCert, err := proxy.GetEffectiveCertificateInfo(domain)
+	if err == nil && effectiveCert != nil {
+		resp.EffectiveSource = effectiveCert.Source
+		if effectiveCert.Source != proxy.SourceNone {
+			resp.EffectiveCertInfo = &certInfoResponse{
+				Domain:     effectiveCert.Domain,
+				Source:     effectiveCert.Source,
+				CertPath:   effectiveCert.CertPath,
+				KeyPath:    effectiveCert.KeyPath,
+				IssuerPath: effectiveCert.IssuerPath,
+				ExpiresAt:  effectiveCert.ExpiresAt.Format(time.RFC3339),
+				DaysLeft:   effectiveCert.DaysLeft,
+				Provider:   effectiveCert.Provider,
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 type identityProviderResponse struct {

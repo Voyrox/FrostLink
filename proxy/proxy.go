@@ -38,6 +38,24 @@ type domainStats struct {
 	LastPath      string
 }
 
+type domainAnalytics struct {
+	Domain          string
+	Methods         map[string]int64
+	Paths           map[string]int64
+	IPs             map[string]int64
+	ResponseCodes   map[int]int64
+	HourlyRequests  [24]int64
+	SlowestRequests []slowestRequest
+}
+
+type slowestRequest struct {
+	Timestamp time.Time `json:"timestamp"`
+	Path      string    `json:"path"`
+	Method    string    `json:"method"`
+	IP        string    `json:"ip"`
+	Duration  int64     `json:"duration_ms"`
+}
+
 type DomainStats struct {
 	Domain        string `json:"domain"`
 	DataInTotal   int64  `json:"data_in_total"`
@@ -48,11 +66,34 @@ type DomainStats struct {
 	LastPath      string `json:"last_path"`
 }
 
+type DomainAnalytics struct {
+	Domain          string           `json:"domain"`
+	Methods         map[string]int64 `json:"methods"`
+	Paths           []pathCount      `json:"paths"`
+	IPs             []ipCount        `json:"ips"`
+	ResponseCodes   map[string]int64 `json:"response_codes"`
+	HourlyRequests  [24]int64        `json:"hourly_requests"`
+	SlowestRequests []slowestRequest `json:"slowest_requests,omitempty"`
+}
+
+type pathCount struct {
+	Path  string `json:"path"`
+	Count int64  `json:"count"`
+}
+
+type ipCount struct {
+	IP      string `json:"ip"`
+	Country string `json:"country"`
+	Count   int64  `json:"count"`
+}
+
 var (
-	statsMu      sync.Mutex
-	domainStatsM = make(map[string]*domainStats)
-	geoDBOnce    sync.Once
-	geoDB        *geoip2.Reader
+	statsMu          sync.Mutex
+	domainStatsM     = make(map[string]*domainStats)
+	analyticsMu      sync.Mutex
+	domainAnalyticsM = make(map[string]*domainAnalytics)
+	geoDBOnce        sync.Once
+	geoDB            *geoip2.Reader
 
 	cidrOnce sync.Once
 	ipv4CIDR []ipRange
@@ -193,6 +234,8 @@ func lookupCountryCIDR(netIP net.IP) string {
 type loggingResponseWriter struct {
 	stdhttp.ResponseWriter
 	bytesWritten int64
+	statusCode   int
+	wroteHeader  bool
 }
 
 func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
@@ -201,15 +244,25 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func logRequestStats(cfg core.Config, r *stdhttp.Request, bytesIn, bytesOut int64) {
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	if !lrw.wroteHeader {
+		lrw.statusCode = code
+		lrw.wroteHeader = true
+	}
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
+func logRequestStats(cfg core.Config, r *stdhttp.Request, bytesIn, bytesOut int64, statusCode int, duration time.Duration) {
 	ip := clientIP(r)
 	country := lookupCountry(ip)
 	domain := cfg.Domain
 	path := r.URL.Path
+	method := r.Method
 	proto := "http"
 	if r.TLS != nil {
 		proto = "https"
 	}
+	hour := time.Now().Hour()
 
 	statsMu.Lock()
 	ds, ok := domainStatsM[domain]
@@ -228,13 +281,47 @@ func logRequestStats(cfg core.Config, r *stdhttp.Request, bytesIn, bytesOut int6
 	totalOut := ds.DataOutTotal
 	statsMu.Unlock()
 
-	core.LogRequest("Allow", ip, country, domain, path, r.Method)
+	analyticsMu.Lock()
+	da, ok := domainAnalyticsM[domain]
+	if !ok {
+		da = &domainAnalytics{
+			Domain:        domain,
+			Methods:       make(map[string]int64),
+			Paths:         make(map[string]int64),
+			IPs:           make(map[string]int64),
+			ResponseCodes: make(map[int]int64),
+		}
+		domainAnalyticsM[domain] = da
+	}
+
+	da.Methods[method]++
+	da.Paths[path]++
+	da.IPs[ip]++
+	da.ResponseCodes[statusCode]++
+	da.HourlyRequests[hour]++
+
+	if IsProfilerEnabled(domain) {
+		slowReq := slowestRequest{
+			Timestamp: time.Now(),
+			Path:      path,
+			Method:    method,
+			IP:        ip,
+			Duration:  duration.Milliseconds(),
+		}
+		da.SlowestRequests = append([]slowestRequest{slowReq}, da.SlowestRequests...)
+		if len(da.SlowestRequests) > 50 {
+			da.SlowestRequests = da.SlowestRequests[:50]
+		}
+	}
+	analyticsMu.Unlock()
+
+	core.LogRequest("Allow", ip, country, domain, path, method)
 
 	debugLog := os.Getenv("DEBUG")
 	if debugLog == "true" {
 		ui.SystemLog("info", "proxy-request",
-			fmt.Sprintf("proto=%s domain=%s ip=%s country=%s path=%s data_in=%d data_out=%d total_requests=%d total_in=%d total_out=%d",
-				proto, domain, ip, country, path, bytesIn, bytesOut, currentTotal, totalIn, totalOut))
+			fmt.Sprintf("proto=%s domain=%s ip=%s country=%s path=%s method=%s status=%d data_in=%d data_out=%d total_requests=%d total_in=%d total_out=%d duration=%dms",
+				proto, domain, ip, country, path, method, statusCode, bytesIn, bytesOut, currentTotal, totalIn, totalOut, duration.Milliseconds()))
 	}
 }
 
@@ -268,6 +355,76 @@ func GetDomainStats() []DomainStats {
 		})
 	}
 	return res
+}
+
+func GetDomainAnalytics(domain string) *DomainAnalytics {
+	analyticsMu.Lock()
+	defer analyticsMu.Unlock()
+
+	da, ok := domainAnalyticsM[domain]
+	if !ok {
+		return &DomainAnalytics{
+			Domain:         domain,
+			Methods:        make(map[string]int64),
+			Paths:          []pathCount{},
+			IPs:            []ipCount{},
+			ResponseCodes:  make(map[string]int64),
+			HourlyRequests: [24]int64{},
+		}
+	}
+
+	paths := make([]pathCount, 0, len(da.Paths))
+	for p, c := range da.Paths {
+		paths = append(paths, pathCount{Path: p, Count: c})
+	}
+	for i := 0; i < len(paths)-1; i++ {
+		for j := i + 1; j < len(paths); j++ {
+			if paths[j].Count > paths[i].Count {
+				paths[i], paths[j] = paths[j], paths[i]
+			}
+		}
+	}
+	if len(paths) > 20 {
+		paths = paths[:20]
+	}
+
+	ips := make([]ipCount, 0, len(da.IPs))
+	for ip, c := range da.IPs {
+		country := lookupCountry(ip)
+		ips = append(ips, ipCount{IP: ip, Country: country, Count: c})
+	}
+	for i := 0; i < len(ips)-1; i++ {
+		for j := i + 1; j < len(ips); j++ {
+			if ips[j].Count > ips[i].Count {
+				ips[i], ips[j] = ips[j], ips[i]
+			}
+		}
+	}
+	if len(ips) > 20 {
+		ips = ips[:20]
+	}
+
+	responseCodes := make(map[string]int64)
+	for code, count := range da.ResponseCodes {
+		responseCodes[itoa(code)] = count
+	}
+
+	slowest := make([]slowestRequest, len(da.SlowestRequests))
+	copy(slowest, da.SlowestRequests)
+
+	return &DomainAnalytics{
+		Domain:          da.Domain,
+		Methods:         da.Methods,
+		Paths:           paths,
+		IPs:             ips,
+		ResponseCodes:   responseCodes,
+		HourlyRequests:  da.HourlyRequests,
+		SlowestRequests: slowest,
+	}
+}
+
+func itoa(i int) string {
+	return string(rune('0'+i/1000%10)) + string(rune('0'+i/100%10)) + string(rune('0'+i/10%10)) + string(rune('0'+i%10))
 }
 
 func StartProxy(configs []core.Config) error {
@@ -346,8 +503,16 @@ func StartProxy(configs []core.Config) error {
 			_, _ = w.Write([]byte("Proxy error: " + e.Error()))
 		}
 
+		start := time.Now()
 		proxy.ServeHTTP(lrw, r)
-		logRequestStats(cfg, r, bytesIn, lrw.bytesWritten)
+		duration := time.Since(start)
+
+		statusCode := lrw.statusCode
+		if statusCode == 0 {
+			statusCode = 200
+		}
+
+		logRequestStats(cfg, r, bytesIn, lrw.bytesWritten, statusCode, duration)
 	})
 
 	ui.SystemLog("info", "http-proxy", fmt.Sprintf("Listening on %s", addr))
