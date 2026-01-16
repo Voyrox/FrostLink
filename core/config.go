@@ -56,7 +56,7 @@ func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP b
 	var d, l string
 	var sslPtr, httpPtr *bool
 	var pubStr, privStr *string
-	rateLimit = RateLimitConfig{Enabled: true, RequestsPerSecond: 10, Burst: 20}
+	rateLimit = RateLimitConfig{Enabled: false, RequestsPerSecond: 10, Burst: 20}
 	var inRateLimit bool
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -172,21 +172,11 @@ func WriteConfig(dir string, cfg Config) error {
 		b.WriteString("}\n")
 	}
 
-	if !cfg.RateLimit.Enabled || cfg.RateLimit.RequestsPerSecond != 10 || cfg.RateLimit.Burst != 20 {
-		b.WriteString("rate_limit: {\n")
-		if !cfg.RateLimit.Enabled {
-			b.WriteString("    enabled: false\n")
-		} else {
-			b.WriteString("    enabled: true\n")
-		}
-		if cfg.RateLimit.RequestsPerSecond != 10 {
-			b.WriteString("    requests_per_second: " + fmt.Sprintf("%d", cfg.RateLimit.RequestsPerSecond) + "\n")
-		}
-		if cfg.RateLimit.Burst != 20 {
-			b.WriteString("    burst: " + fmt.Sprintf("%d", cfg.RateLimit.Burst) + "\n")
-		}
-		b.WriteString("}\n")
-	}
+	b.WriteString("rate_limit: {\n")
+	b.WriteString(fmt.Sprintf("    enabled: %v\n", cfg.RateLimit.Enabled))
+	b.WriteString(fmt.Sprintf("    requests_per_second: %d\n", cfg.RateLimit.RequestsPerSecond))
+	b.WriteString(fmt.Sprintf("    burst: %d\n", cfg.RateLimit.Burst))
+	b.WriteString("}\n")
 
 	return ioutil.WriteFile(path, []byte(b.String()), 0644)
 }

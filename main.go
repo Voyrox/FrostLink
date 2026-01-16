@@ -343,6 +343,7 @@ func main() {
 		apiWrite.PUT("/domains/:domain/profiler", apiDomainProfilerToggle)
 		apiWrite.PUT("/domains/:domain/under-attack", apiUnderAttackToggle)
 		apiWrite.PUT("/domains/:domain/rate-limit", apiDomainRateLimitUpdate)
+		apiWrite.POST("/domains/reload", apiAuthRequired(), csrfMiddleware(), apiReloadDomains)
 		apiWrite.POST("/domains", apiDomainsCreate)
 		apiWrite.PUT("/domains/:domain", apiDomainsUpdate)
 		apiWrite.DELETE("/domains/:domain", apiDomainsDelete)
@@ -386,7 +387,7 @@ func main() {
 	go func() {
 		cfgs := core.ReadConfigs("./domains")
 		proxy.SetActiveDomains(len(cfgs))
-		if err := proxy.StartProxy(cfgs); err != nil {
+		if err := proxy.StartProxy(); err != nil {
 			ui.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
 		}
 	}()
@@ -3040,6 +3041,11 @@ func apiDomainRateLimitUpdate(c *gin.Context) {
 		RateLimitRPS:     cfg.RateLimit.RequestsPerSecond,
 		RateLimitBurst:   cfg.RateLimit.Burst,
 	})
+}
+
+func apiReloadDomains(c *gin.Context) {
+	proxy.ReloadConfigs()
+	c.JSON(http.StatusOK, gin.H{"status": "reloaded"})
 }
 
 func apiRateLimitsList(c *gin.Context) {

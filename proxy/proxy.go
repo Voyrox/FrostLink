@@ -103,7 +103,15 @@ var (
 
 	indexTplOnce sync.Once
 	indexTpl     *template.Template
+
+	ProxyConfigs []core.Config
 )
+
+func ReloadConfigs() {
+	ProxyConfigs = core.ReadConfigs("./domains")
+	GetRateLimiter().Reset()
+	ui.SystemLog("info", "proxy", "Configs reloaded, rate limiter reset")
+}
 
 type ipRange struct {
 	network *net.IPNet
@@ -492,9 +500,11 @@ func serveRateLimitExceeded(w stdhttp.ResponseWriter, domain string, rl RateLimi
 	})
 }
 
-func StartProxy(configs []core.Config) error {
+func StartProxy() error {
 	initAnalyticsPersistence()
 	go cleanupVerifiedCookies()
+
+	ProxyConfigs = core.ReadConfigs("./domains")
 
 	addr := os.Getenv("PROXY_ADDR")
 	if addr == "" {
@@ -521,7 +531,7 @@ func StartProxy(configs []core.Config) error {
 		}
 
 		host := r.Host
-		cfg, ok := findConfigByHost(configs, host)
+		cfg, ok := findConfigByHost(ProxyConfigs, host)
 		if !ok {
 			serveIndexPage(w, r)
 			return
@@ -612,7 +622,7 @@ func StartProxy(configs []core.Config) error {
 	})
 
 	ui.SystemLog("info", "http-proxy", fmt.Sprintf("Listening on %s", addr))
-	go StartTLSProxy(configs, mux)
+	go StartTLSProxy(ProxyConfigs, mux)
 	go func() {
 		if err := stdhttp.ListenAndServe(addr, mux); err != nil {
 			ui.SystemLog("error", "http-proxy", fmt.Sprintf("Server error: %v", err))
