@@ -11,22 +11,44 @@ import (
 
 const certsPath = "db/certs"
 
+type CertificateSource string
+
+const (
+	SourceCustom CertificateSource = "custom"
+	SourceAuto   CertificateSource = "auto"
+	SourceNone   CertificateSource = "none"
+)
+
 type CertificateInfo struct {
-	Domain      string    `json:"domain"`
-	CertPath    string    `json:"cert_path"`
-	KeyPath     string    `json:"key_path"`
-	IssuerPath  string    `json:"issuer_path"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	DaysLeft    int       `json:"days_left"`
-	AutoManaged bool      `json:"auto_managed"`
+	Domain     string            `json:"domain"`
+	Source     CertificateSource `json:"source"`
+	CertPath   string            `json:"cert_path,omitempty"`
+	KeyPath    string            `json:"key_path,omitempty"`
+	IssuerPath string            `json:"issuer_path,omitempty"`
+	ExpiresAt  time.Time         `json:"expires_at,omitempty"`
+	DaysLeft   int               `json:"days_left,omitempty"`
+	Provider   string            `json:"provider,omitempty"`
+	UseStaging bool              `json:"use_staging,omitempty"`
 }
 
 type certMeta struct {
-	Domain      string    `json:"domain"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	AutoManaged bool      `json:"auto_managed"`
-	Provider    string    `json:"provider,omitempty"`
-	UseStaging  bool      `json:"use_staging,omitempty"`
+	Source     CertificateSource `json:"source"`
+	ExpiresAt  time.Time         `json:"expires_at"`
+	Provider   string            `json:"provider,omitempty"`
+	UseStaging bool              `json:"use_staging,omitempty"`
+}
+
+func getCertMeta(domain string) certMeta {
+	metaPath := filepath.Join(certsPath, "live", domain, "cert.json")
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return certMeta{Source: SourceNone}
+	}
+	var meta certMeta
+	if json.Unmarshal(data, &meta) == nil {
+		return meta
+	}
+	return certMeta{Source: SourceNone}
 }
 
 func LoadCertificate(domain string) (*tls.Certificate, error) {
@@ -61,24 +83,51 @@ func GetCertificateInfo(domain string) (*CertificateInfo, error) {
 		}
 	}
 
-	metaPath := filepath.Join(certsPath, "live", domain, "cert.json")
-	autoManaged := false
-	if metaData, err := os.ReadFile(metaPath); err == nil {
-		var meta certMeta
-		if json.Unmarshal(metaData, &meta) == nil {
-			autoManaged = meta.AutoManaged
+	meta := getCertMeta(domain)
+
+	return &CertificateInfo{
+		Domain:     domain,
+		Source:     meta.Source,
+		CertPath:   certPath,
+		KeyPath:    keyPath,
+		IssuerPath: filepath.Join(certsPath, "live", domain, "issuer.pem"),
+		ExpiresAt:  expiresAt,
+		DaysLeft:   int(time.Until(expiresAt).Hours() / 24),
+		Provider:   meta.Provider,
+		UseStaging: meta.UseStaging,
+	}, nil
+}
+
+func GetCertificateInfoForDomain(domain string, customCertPath, customKeyPath *string) *CertificateInfo {
+	if customCertPath != nil && *customCertPath != "" && customKeyPath != nil && *customKeyPath != "" {
+		cert, err := tls.LoadX509KeyPair(*customCertPath, *customKeyPath)
+		if err == nil {
+			var expiresAt time.Time
+			if len(cert.Certificate) > 0 {
+				if parsed, err := x509.ParseCertificate(cert.Certificate[0]); err == nil {
+					expiresAt = parsed.NotAfter
+				}
+			}
+			return &CertificateInfo{
+				Domain:    domain,
+				Source:    SourceCustom,
+				CertPath:  *customCertPath,
+				KeyPath:   *customKeyPath,
+				ExpiresAt: expiresAt,
+				DaysLeft:  int(time.Until(expiresAt).Hours() / 24),
+			}
 		}
 	}
 
+	autoCert, err := GetCertificateInfo(domain)
+	if err == nil {
+		return autoCert
+	}
+
 	return &CertificateInfo{
-		Domain:      domain,
-		CertPath:    certPath,
-		KeyPath:     keyPath,
-		IssuerPath:  filepath.Join(certsPath, "live", domain, "issuer.pem"),
-		ExpiresAt:   expiresAt,
-		DaysLeft:    int(time.Until(expiresAt).Hours() / 24),
-		AutoManaged: autoManaged,
-	}, nil
+		Domain: domain,
+		Source: SourceNone,
+	}
 }
 
 func ListCertificates() []CertificateInfo {

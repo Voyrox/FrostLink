@@ -117,16 +117,19 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="role-title">
             <div class="role-form">
                 <h2 id="role-title">Create Role</h2>
+                <div class="role-info" id="role-info"><div class="role-details"><span class="role-status none">Define role permissions</span></div></div>
                 <form id="role-form">
                     <input type="hidden" name="originalName" id="role-original-name">
                     <div class="field-row">
-                        <label>
+                        <label class="full-width">
                             <span>Name</span>
-                            <input type="text" name="name" id="role-name" required />
+                            <input type="text" name="name" id="role-name" required placeholder="e.g. Admin">
                         </label>
-                        <label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
                             <span>Description</span>
-                            <input type="text" name="description" id="role-description" />
+                            <input type="text" name="description" id="role-description" placeholder="Role description">
                         </label>
                     </div>
                     <div class="field-row permissions-row">
@@ -135,7 +138,6 @@
                             <span class="hint">Select at least one permission</span>
                         </label>
                         <div class="permissions-checkboxes" id="permissions-checkboxes">
-                            <!-- Checkboxes will be populated dynamically -->
                         </div>
                     </div>
                     <div class="actions-row">
@@ -428,6 +430,66 @@
             loadRoles();
         })();
     </script>
+    <style>
+        .role-form h2 {
+            color: var(--orange);
+        }
+        .role-info {
+            margin-bottom: 1.25rem;
+            padding: 0.75rem 1rem;
+            background: rgba(252, 128, 51, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(252, 128, 51, 0.15);
+        }
+        .role-details {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .role-status {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .role-status.none {
+            color: var(--muted);
+        }
+        .role-status.active {
+            color: #22c55e;
+        }
+        .permissions-label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .permissions-label .hint {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+        .permissions-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .permission-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(252, 128, 51, 0.05);
+            border: 1px solid rgba(252, 128, 51, 0.1);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .permission-checkbox:hover {
+            background: rgba(252, 128, 51, 0.1);
+            border-color: rgba(252, 128, 51, 0.2);
+        }
+        .permission-checkbox input[type="checkbox"] {
+            accent-color: var(--orange);
+        }
+    </style>
 </body>
 
 </html>

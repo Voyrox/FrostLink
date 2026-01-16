@@ -118,34 +118,43 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title">
             <div class="user-form">
                 <h2 id="invite-title">Invite User</h2>
+                <div class="user-info" id="user-info"><div class="user-details"><span class="user-status none">Send an invitation to a new user</span></div></div>
                 <form id="user-form">
                     <div class="field-row">
-                        <label>
+                        <label class="full-width">
                             <span>Username</span>
-                            <input type="text" name="username" required />
-                        </label>
-                        <label>
-                            <span>Email</span>
-                            <input type="email" name="email" required />
-                        </label>
-                        <label>
-                            <span>Password</span>
-                            <input type="password" name="password" required />
+                            <input type="text" name="username" required placeholder="e.g. john.doe">
                         </label>
                     </div>
                     <div class="field-row">
-                        <label>
+                        <label class="full-width">
+                            <span>Email</span>
+                            <input type="email" name="email" required placeholder="john@example.com">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Password</span>
+                            <input type="password" name="password" required placeholder="Initial password">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
                             <span>Role</span>
                             <select name="role" id="user-role"></select>
                         </label>
-                        <label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
                             <span>Access</span>
                             <select name="access_type" id="user-access-type">
                                 <option value="all" selected>All domains</option>
                                 <option value="custom">Custom domains</option>
                             </select>
                         </label>
-                        <label class="domains-field" id="domains-field" hidden>
+                    </div>
+                    <div class="field-row domains-field" id="domains-field" hidden>
+                        <label class="full-width">
                             <span>Allowed domains</span>
                             <select name="domains" id="user-domains" multiple size="4"></select>
                         </label>
@@ -424,6 +433,39 @@
                     loadRoles();
                 })();
     </script>
+    <style>
+        .user-form h2 {
+            color: var(--orange);
+        }
+        .user-info {
+            margin-bottom: 1.25rem;
+            padding: 0.75rem 1rem;
+            background: rgba(252, 128, 51, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(252, 128, 51, 0.15);
+        }
+        .user-details {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .user-status {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .user-status.none {
+            color: var(--muted);
+        }
+        .user-status.active {
+            color: #22c55e;
+        }
+        #user-domains {
+            min-height: 100px;
+        }
+        .domains-field {
+            margin-top: 0;
+        }
+    </style>
 </body>
 
 </html>

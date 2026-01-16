@@ -358,47 +358,237 @@
 
 /* Certificate Modal */
 .page-domains .cert-form {
-    padding: 12px 12px 16px;
-    border-radius: 12px;
-    background: #101119;
-    border: 1px dashed rgba(148, 163, 184, .4);
+    padding: 16px 20px 20px;
+    border-radius: 16px;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .page-domains .cert-form h2 {
-    margin: 0 0 8px;
-    font-size: 1rem;
+    margin: 0 0 16px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-domains .cert-form h2::before {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fbbf24' stroke-width='2'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 .page-domains .cert-info {
-    margin-bottom: 12px;
-    padding: 10px;
-    background: #0c111a;
-    border-radius: 8px;
-    border: 1px solid #141b28;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+    border-radius: 10px;
+    border: 1px solid #21262d;
 }
 
 .page-domains .cert-details {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .page-domains .cert-status {
-    font-weight: 500;
-    color: #10b981;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-domains .cert-status::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
 }
 
 .page-domains .cert-status.none {
     color: #6b7280;
 }
 
+.page-domains .cert-status.none::before {
+    background: #4b5563;
+}
+
+.page-domains .cert-status.custom {
+    color: #3b82f6;
+}
+
+.page-domains .cert-status.custom::before {
+    background: #3b82f6;
+}
+
+.page-domains .cert-status.auto {
+    color: #10b981;
+}
+
+.page-domains .cert-status.auto::before {
+    background: #10b981;
+}
+
+.page-domains .cert-status.expired {
+    color: #ef4444;
+}
+
+.page-domains .cert-status.expired::before {
+    background: #ef4444;
+}
+
+.page-domains .cert-status.expiring {
+    color: #f59e0b;
+}
+
+.page-domains .cert-status.expiring::before {
+    background: #f59e0b;
+}
+
 .page-domains .cert-expiry {
+    font-size: 0.85rem;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-domains .cert-expiry .days {
+    font-weight: 600;
+    color: #d1d5db;
+}
+
+.page-domains .cert-form .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.page-domains .cert-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    flex: 1 1 180px;
     font-size: 0.85rem;
     color: #9ca3af;
 }
 
+.page-domains .cert-form label.full-width {
+    flex: 1 1 100%;
+}
+
+.page-domains .cert-form label span {
+    font-weight: 500;
+    color: #d1d5db;
+}
+
+.page-domains .cert-form input,
+.page-domains .cert-form select {
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.page-domains .cert-form input:focus,
+.page-domains .cert-form select:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.page-domains .cert-form input::placeholder {
+    color: #4b5563;
+}
+
+.page-domains .cert-form input[type="password"] {
+    font-family: monospace;
+    letter-spacing: 0.5px;
+}
+
+.page-domains .cert-form .inline-checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    padding: 8px 0;
+}
+
+.page-domains .cert-form .inline-checkbox input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid #30363d;
+    border-radius: 4px;
+    background: #0d1117;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.page-domains .cert-form .inline-checkbox input[type="checkbox"]:checked {
+    background: #238636;
+    border-color: #238636;
+}
+
+.page-domains .cert-form .inline-checkbox input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.page-domains .cert-form .inline-checkbox span {
+    font-size: 0.875rem;
+    color: #9ca3af;
+}
+
 .page-domains .cert-form .actions-row {
-    gap: 8px;
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid #21262d;
+}
+
+.page-domains .cert-form .btn {
+    padding: 10px 18px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.page-domains .cert-form .btn.primary {
+    background: #238636;
+    border-color: #238636;
+    color: #fff;
+}
+
+.page-domains .cert-form .btn.primary:hover {
+    background: #2ea043;
+    border-color: #2ea043;
 }
 
 .page-domains .cert-form .btn.danger {
@@ -410,4 +600,21 @@
 .page-domains .cert-form .btn.danger:hover {
     background: rgba(239, 68, 68, 0.2);
     border-color: rgba(239, 68, 68, 0.5);
+}
+
+.page-domains .cert-form .btn.ghost {
+    background: transparent;
+    border-color: #30363d;
+    color: #9ca3af;
+}
+
+.page-domains .cert-form .btn.ghost:hover {
+    background: #161b22;
+    border-color: #484f58;
+    color: #d1d5db;
+}
+
+.page-domains .cert-form .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }

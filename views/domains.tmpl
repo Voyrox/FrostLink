@@ -168,50 +168,53 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="domain-modal-title">
             <div class="domain-form">
                 <h2 id="domain-modal-title">Add site</h2>
+                <div class="domain-info" id="domain-info"><div class="domain-details"><span class="domain-status none">Create a new site</span></div></div>
                 <form id="domain-form">
                     <div class="field-row">
-                        <label>
+                        <label class="full-width">
                             <span>Domain</span>
-                            <input type="text" name="domain" required placeholder="example.com" />
+                            <input type="text" name="domain" required placeholder="example.com">
                         </label>
-                        <label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
                             <span>Target</span>
-                            <input type="text" name="target" required placeholder="http://127.0.0.1:8080" />
+                            <input type="text" name="target" required placeholder="http://127.0.0.1:8080">
                         </label>
                     </div>
                     <div class="field-row">
                         <label class="inline-checkbox">
-                            <input type="checkbox" name="allow_http" id="domain-allow-http" checked />
+                            <input type="checkbox" name="allow_http" id="domain-allow-http" checked>
                             <span>Allow HTTP</span>
                         </label>
                         <label class="inline-checkbox">
-                            <input type="checkbox" name="allow_ssl" id="domain-allow-ssl" checked />
+                            <input type="checkbox" name="allow_ssl" id="domain-allow-ssl" checked>
                             <span>Allow SSL</span>
                         </label>
                     </div>
                     <div class="field-row">
                         <label class="full-width">
-                            <span>SSL certificate</span>
+                            <span>Certificate</span>
                             <div class="radio-row">
                                 <label>
-                                    <input type="radio" name="cert_mode" value="generate" checked />
-                                    <span>Generate automatically (coming soon)</span>
+                                    <input type="radio" name="cert_mode" value="generate" checked>
+                                    <span>Generate automatically</span>
                                 </label>
                                 <label>
-                                    <input type="radio" name="cert_mode" value="custom" />
+                                    <input type="radio" name="cert_mode" value="custom">
                                     <span>Custom paths</span>
                                 </label>
                             </div>
                         </label>
                     </div>
                     <div class="field-row ssl-details" id="ssl-details" hidden>
-                        <label>
+                        <label class="full-width">
                             <span>Certificate path</span>
-                            <input type="text" name="cert_path" placeholder="/etc/ssl/example.crt" />
+                            <input type="text" name="cert_path" placeholder="/etc/ssl/example.crt">
                         </label>
-                        <label>
+                        <label class="full-width">
                             <span>Key path</span>
-                            <input type="text" name="key_path" placeholder="/etc/ssl/example.key" />
+                            <input type="text" name="key_path" placeholder="/etc/ssl/example.key">
                         </label>
                     </div>
                     <div class="actions-row">
@@ -227,25 +230,28 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-domain-modal-title">
             <div class="domain-form">
                 <h2 id="edit-domain-modal-title">Edit site</h2>
+                <div class="domain-info" id="edit-domain-info"><div class="domain-details"><span class="domain-status none">Edit site configuration</span></div></div>
                 <form id="edit-domain-form">
-                    <input type="hidden" name="edit_domain" id="edit-domain-name" />
+                    <input type="hidden" name="edit_domain" id="edit-domain-name">
                     <div class="field-row">
-                        <label>
+                        <label class="full-width">
                             <span>Domain</span>
-                            <input type="text" id="edit-domain" disabled placeholder="example.com" />
+                            <input type="text" id="edit-domain" disabled placeholder="example.com">
                         </label>
-                        <label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
                             <span>Target</span>
-                            <input type="text" name="target" id="edit-target" required placeholder="http://127.0.0.1:8080" />
+                            <input type="text" name="target" id="edit-target" required placeholder="http://127.0.0.1:8080">
                         </label>
                     </div>
                     <div class="field-row">
                         <label class="inline-checkbox">
-                            <input type="checkbox" name="allow_http" id="edit-allow-http" />
+                            <input type="checkbox" name="allow_http" id="edit-allow-http">
                             <span>Allow HTTP</span>
                         </label>
                         <label class="inline-checkbox">
-                            <input type="checkbox" name="allow_ssl" id="edit-allow-ssl" />
+                            <input type="checkbox" name="allow_ssl" id="edit-allow-ssl">
                             <span>Allow SSL</span>
                         </label>
                     </div>
@@ -254,24 +260,24 @@
                             <span>Certificate</span>
                             <div class="radio-row">
                                 <label>
-                                    <input type="radio" name="edit_cert_mode" value="generate" id="edit-cert-generate" />
+                                    <input type="radio" name="edit_cert_mode" value="generate" id="edit-cert-generate">
                                     <span>Generate automatically</span>
                                 </label>
                                 <label>
-                                    <input type="radio" name="edit_cert_mode" value="custom" id="edit-cert-custom" />
+                                    <input type="radio" name="edit_cert_mode" value="custom" id="edit-cert-custom">
                                     <span>Custom paths</span>
                                 </label>
                             </div>
                         </label>
                     </div>
-                    <div class="field-row ssl-details" id="edit-ssl-details">
-                        <label>
+                    <div class="field-row ssl-details" id="edit-ssl-details" hidden>
+                        <label class="full-width">
                             <span>Certificate path</span>
-                            <input type="text" name="cert_path" id="edit-cert-path" placeholder="/etc/ssl/example.crt" />
+                            <input type="text" name="cert_path" id="edit-cert-path" placeholder="/etc/ssl/example.crt">
                         </label>
-                        <label>
+                        <label class="full-width">
                             <span>Key path</span>
-                            <input type="text" name="key_path" id="edit-key-path" placeholder="/etc/ssl/example.key" />
+                            <input type="text" name="key_path" id="edit-key-path" placeholder="/etc/ssl/example.key">
                         </label>
                     </div>
                     <div class="actions-row">
@@ -410,7 +416,15 @@
                             tdOut.textContent = formatBytes(cfg.data_out_total || 0);
 
                             const tdSsl = document.createElement('td');
-                            const certStatus = cfg.ssl ? (cfg.auto_cert ? 'Auto' : 'Custom') : 'None';
+                            const isSslEnabled = cfg.SSL === true || cfg.SSL === "true";
+                            let certStatus = 'None';
+                            if (isSslEnabled) {
+                                if (cfg.cert_status === 'auto') {
+                                    certStatus = 'Auto';
+                                } else if (cfg.cert_status === 'custom' || (cfg.pubkey && cfg.pubkey !== '')) {
+                                    certStatus = 'Custom';
+                                }
+                            }
                             const sslBadge = document.createElement('span');
                             sslBadge.className = 'ssl-badge ssl-' + certStatus.toLowerCase();
                             sslBadge.textContent = certStatus;
@@ -784,13 +798,24 @@
                 fetch('/api/certs')
                     .then(r => r.ok ? r.json() : Promise.reject(r))
                     .then(data => {
-                        const certs = (data && data.certs) || [];
+                        const certs = (data && data.certificates) || [];
                         const cert = certs.find(c => c.domain === domain);
                         if (cert) {
-                            const expDate = cert.expiry ? new Date(cert.expiry) : null;
+                            const expDate = cert.expires_at ? new Date(cert.expires_at) : null;
                             const daysLeft = expDate ? Math.max(0, Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24))) : null;
-                            certInfo.innerHTML = '<div class="cert-details"><span class="cert-status">' + (cert.auto ? 'Auto' : 'Custom') + '</span>' +
-                                (daysLeft ? '<span class="cert-expiry">' + daysLeft + ' days remaining</span>' : '') + '</div>';
+                            const sourceLabel = cert.source === 'auto' ? 'Auto' : (cert.source === 'custom' ? 'Custom' : 'Unknown');
+                            let statusClass = cert.source === 'auto' ? 'auto' : (cert.source === 'custom' ? 'custom' : 'none');
+                            let expiryText = '';
+                            if (daysLeft !== null) {
+                                if (daysLeft <= 7) {
+                                    statusClass = 'expired';
+                                } else if (daysLeft <= 30) {
+                                    statusClass = 'expiring';
+                                }
+                                const expStr = expDate ? expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                                expiryText = '<span class="cert-expiry">Expires <span class="days">' + daysLeft + '</span> days' + (expStr ? ' on ' + expStr : '') + '</span>';
+                            }
+                            certInfo.innerHTML = '<div class="cert-details"><span class="cert-status ' + statusClass + '">' + sourceLabel + '</span>' + expiryText + '</div>';
                             certRequestBtn.hidden = true;
                             certRenewBtn.hidden = false;
                             certRevokeBtn.hidden = false;
@@ -802,7 +827,7 @@
                         }
                     })
                     .catch(() => {
-                        certInfo.innerHTML = '';
+                        certInfo.innerHTML = '<div class="cert-details"><span class="cert-status none">Unable to load</span></div>';
                         certRequestBtn.hidden = false;
                         certRenewBtn.hidden = true;
                         certRevokeBtn.hidden = true;
@@ -977,6 +1002,36 @@
             }
         })();
     </script>
+    <style>
+        .domain-form h2 {
+            color: var(--orange);
+        }
+        .domain-info {
+            margin-bottom: 1.25rem;
+            padding: 0.75rem 1rem;
+            background: rgba(252, 128, 51, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(252, 128, 51, 0.15);
+        }
+        .domain-details {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .domain-status {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .domain-status.none {
+            color: var(--muted);
+        }
+        .domain-status.active {
+            color: #22c55e;
+        }
+        .ssl-details label.full-width {
+            margin-top: 0;
+        }
+    </style>
 </body>
 
 </html>

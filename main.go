@@ -363,14 +363,29 @@ func apiProxys(c *gin.Context) {
 	for _, cfg := range configs {
 		hasCustomCert := cfg.SSLCertificate != nil && *cfg.SSLCertificate != ""
 		hasCustomKey := cfg.SSLCertificateKey != nil && *cfg.SSLCertificateKey != ""
+
+		certSource := proxy.SourceNone
+		if cfg.AllowSSL {
+			if hasCustomCert && hasCustomKey {
+				certSource = proxy.SourceCustom
+			} else if proxy.CertificateExists(cfg.Domain) {
+				certSource = proxy.SourceAuto
+			}
+		}
+
+		certInfo := proxy.GetCertificateInfoForDomain(cfg.Domain, cfg.SSLCertificate, cfg.SSLCertificateKey)
+
 		m := map[string]interface{}{
-			"domain":    cfg.Domain,
-			"host":      cfg.Location,
-			"SSL":       cfg.AllowSSL,
-			"HTTP":      cfg.AllowHTTP,
-			"pubkey":    cfg.SSLCertificate,
-			"privkey":   cfg.SSLCertificateKey,
-			"auto_cert": !hasCustomCert && !hasCustomKey,
+			"domain":      cfg.Domain,
+			"host":        cfg.Location,
+			"SSL":         cfg.AllowSSL,
+			"HTTP":        cfg.AllowHTTP,
+			"pubkey":      cfg.SSLCertificate,
+			"privkey":     cfg.SSLCertificateKey,
+			"cert_source": certSource,
+			"cert_status": string(certInfo.Source),
+			"days_left":   certInfo.DaysLeft,
+			"auto_cert":   certInfo.Source == proxy.SourceAuto,
 		}
 
 		online := false
@@ -1337,13 +1352,14 @@ func apiStreamsToggle(c *gin.Context) {
 }
 
 type certInfoResponse struct {
-	Domain      string `json:"domain"`
-	CertPath    string `json:"cert_path"`
-	KeyPath     string `json:"key_path"`
-	IssuerPath  string `json:"issuer_path"`
-	ExpiresAt   string `json:"expires_at"`
-	DaysLeft    int    `json:"days_left"`
-	AutoManaged bool   `json:"auto_managed"`
+	Domain     string                  `json:"domain"`
+	Source     proxy.CertificateSource `json:"source"`
+	CertPath   string                  `json:"cert_path"`
+	KeyPath    string                  `json:"key_path"`
+	IssuerPath string                  `json:"issuer_path"`
+	ExpiresAt  string                  `json:"expires_at"`
+	DaysLeft   int                     `json:"days_left"`
+	Provider   string                  `json:"provider,omitempty"`
 }
 
 func apiCertsList(c *gin.Context) {
@@ -1351,13 +1367,14 @@ func apiCertsList(c *gin.Context) {
 	var out []certInfoResponse
 	for _, cert := range certs {
 		out = append(out, certInfoResponse{
-			Domain:      cert.Domain,
-			CertPath:    cert.CertPath,
-			KeyPath:     cert.KeyPath,
-			IssuerPath:  cert.IssuerPath,
-			ExpiresAt:   cert.ExpiresAt.Format(time.RFC3339),
-			DaysLeft:    cert.DaysLeft,
-			AutoManaged: cert.AutoManaged,
+			Domain:     cert.Domain,
+			Source:     cert.Source,
+			CertPath:   cert.CertPath,
+			KeyPath:    cert.KeyPath,
+			IssuerPath: cert.IssuerPath,
+			ExpiresAt:  cert.ExpiresAt.Format(time.RFC3339),
+			DaysLeft:   cert.DaysLeft,
+			Provider:   cert.Provider,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"certificates": out})

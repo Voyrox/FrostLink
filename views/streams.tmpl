@@ -105,34 +105,35 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stream-modal-title">
             <div class="stream-form">
                 <h2 id="stream-modal-title">Add Stream</h2>
+                <div class="stream-info" id="stream-info"><div class="stream-details"><span class="stream-status none">New stream</span></div></div>
                 <form id="stream-form">
                     <div class="field-row">
                         <label class="full-width">
                             <span>Domain <small class="muted">(optional - leave empty for port forward)</small></span>
-                            <input type="text" name="domain" placeholder="smtp.example.com or *.example.com" />
+                            <input type="text" name="domain" placeholder="smtp.example.com or *.example.com">
                         </label>
                     </div>
                     <div class="field-row">
                         <label>
                             <span>Listen Port</span>
-                            <input type="number" name="listen_port" required placeholder="25, 443, 993..." min="1" max="65535" />
+                            <input type="number" name="listen_port" required placeholder="25, 443, 993..." min="1" max="65535">
                         </label>
                         <label>
                             <span>Upstream</span>
-                            <input type="text" name="upstream" required placeholder="192.168.1.60:25" />
+                            <input type="text" name="upstream" required placeholder="192.168.1.60:25">
                         </label>
                     </div>
-                    <div class="field-row tls-options">
+                    <div class="field-row tls-options" hidden>
                         <label class="full-width">
                             <span>TLS Mode</span>
                             <div class="radio-row">
                                 <label>
-                                    <input type="radio" name="tls_mode" value="pass-through" checked />
-                                    <span>Pass-through (SNI routing)</span>
+                                    <input type="radio" name="tls_mode" value="pass-through" checked>
+                                    <span>Pass-through</span>
                                 </label>
                                 <label>
-                                    <input type="radio" name="tls_mode" value="terminate" />
-                                    <span>Terminate (present cert)</span>
+                                    <input type="radio" name="tls_mode" value="terminate">
+                                    <span>Terminate</span>
                                 </label>
                             </div>
                         </label>
@@ -140,17 +141,17 @@
                     <div class="field-row tls-details" id="tls-paths" hidden>
                         <label class="full-width">
                             <span>Certificate Path</span>
-                            <input type="text" name="cert_file" placeholder="/etc/ssl/certs/stream.crt" />
+                            <input type="text" name="cert_file" placeholder="/etc/ssl/certs/stream.crt">
                         </label>
                         <label class="full-width">
                             <span>Key Path</span>
-                            <input type="text" name="key_file" placeholder="/etc/ssl/private/stream.key" />
+                            <input type="text" name="key_file" placeholder="/etc/ssl/private/stream.key">
                         </label>
                     </div>
                     <div class="field-row">
                         <label>
                             <span>Max Connections</span>
-                            <input type="number" name="max_conns" value="100" placeholder="100" />
+                            <input type="number" name="max_conns" value="100" placeholder="100">
                         </label>
                     </div>
                     <div class="actions-row">
@@ -166,53 +167,54 @@
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-stream-modal-title">
             <div class="stream-form">
                 <h2 id="edit-stream-modal-title">Edit Stream</h2>
+                <div class="stream-info" id="edit-stream-info"><div class="stream-details"><span class="stream-status none">Edit stream</span></div></div>
                 <form id="edit-stream-form">
-                    <input type="hidden" name="edit_id" id="edit-id" />
+                    <input type="hidden" name="edit_id" id="edit-id">
                     <div class="field-row">
                         <label class="full-width">
                             <span>Domain <small class="muted">(optional - leave empty for port forward)</small></span>
-                            <input type="text" id="edit-domain" placeholder="smtp.example.com or *.example.com" />
+                            <input type="text" id="edit-domain" placeholder="smtp.example.com or *.example.com">
                         </label>
                     </div>
                     <div class="field-row">
                         <label>
                             <span>Listen Port</span>
-                            <input type="number" name="listen_port" id="edit-listen-port" required placeholder="25, 443..." min="1" max="65535" />
+                            <input type="number" name="listen_port" id="edit-listen-port" required placeholder="25, 443..." min="1" max="65535">
                         </label>
                         <label>
                             <span>Upstream</span>
-                            <input type="text" name="upstream" id="edit-upstream" required placeholder="192.168.1.60:25" />
+                            <input type="text" name="upstream" id="edit-upstream" required placeholder="192.168.1.60:25">
                         </label>
                     </div>
-                    <div class="field-row tls-options">
+                    <div class="field-row tls-options" hidden>
                         <label class="full-width">
                             <span>TLS Mode</span>
                             <div class="radio-row">
                                 <label>
-                                    <input type="radio" name="edit_tls_mode" value="pass-through" id="edit-tls-pass" />
+                                    <input type="radio" name="edit_tls_mode" value="pass-through" id="edit-tls-pass">
                                     <span>Pass-through</span>
                                 </label>
                                 <label>
-                                    <input type="radio" name="edit_tls_mode" value="terminate" id="edit-tls-term" />
+                                    <input type="radio" name="edit_tls_mode" value="terminate" id="edit-tls-term">
                                     <span>Terminate</span>
                                 </label>
                             </div>
                         </label>
                     </div>
-                    <div class="field-row tls-details" id="edit-tls-paths">
+                    <div class="field-row tls-details" id="edit-tls-paths" hidden>
                         <label class="full-width">
                             <span>Certificate Path</span>
-                            <input type="text" name="cert_file" id="edit-cert-file" placeholder="/etc/ssl/certs/stream.crt" />
+                            <input type="text" name="cert_file" id="edit-cert-file" placeholder="/etc/ssl/certs/stream.crt">
                         </label>
                         <label class="full-width">
                             <span>Key Path</span>
-                            <input type="text" name="key_file" id="edit-key-file" placeholder="/etc/ssl/private/stream.key" />
+                            <input type="text" name="key_file" id="edit-key-file" placeholder="/etc/ssl/private/stream.key">
                         </label>
                     </div>
                     <div class="field-row">
                         <label>
                             <span>Max Connections</span>
-                            <input type="number" name="max_conns" id="edit-max-conns" placeholder="100" />
+                            <input type="number" name="max_conns" id="edit-max-conns" placeholder="100">
                         </label>
                     </div>
                     <div class="actions-row">
@@ -244,6 +246,35 @@
         .page-streams .badge.domain {
             background: rgba(168, 85, 247, 0.15);
             color: #a855f7;
+        }
+        .stream-form h2 {
+            color: var(--orange);
+        }
+        .stream-info {
+            margin-bottom: 1.25rem;
+            padding: 0.75rem 1rem;
+            background: rgba(252, 128, 51, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(252, 128, 51, 0.15);
+        }
+        .stream-details {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .stream-status {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+        .stream-status.none {
+            color: var(--muted);
+        }
+        .stream-status.active {
+            color: #22c55e;
+        }
+        .stream-status.disabled {
+            color: #ef4444;
         }
     </style>
 

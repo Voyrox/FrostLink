@@ -284,12 +284,11 @@ func saveCertificate(dataPath, domain string, certs *certificate.Resource) (stri
 		return "", err
 	}
 
-	meta := acmeCertMeta{
-		Domain:      domain,
-		ExpiresAt:   time.Now().Add(90 * 24 * time.Hour),
-		AutoManaged: true,
-		Provider:    "cloudflare",
-		UseStaging:  false,
+	meta := certMeta{
+		Source:     SourceAuto,
+		ExpiresAt:  time.Now().Add(90 * 24 * time.Hour),
+		Provider:   "cloudflare",
+		UseStaging: false,
 	}
 	metaData, _ := json.MarshalIndent(meta, "", "  ")
 	os.WriteFile(filepath.Join(domainPath, "cert.json"), metaData, 0600)
@@ -300,14 +299,6 @@ func saveCertificate(dataPath, domain string, certs *certificate.Resource) (stri
 func sanitizeEmail(email string) string {
 	email = filepath.Clean(email)
 	return email
-}
-
-type acmeCertMeta struct {
-	Domain      string    `json:"domain"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	AutoManaged bool      `json:"auto_managed"`
-	Provider    string    `json:"provider,omitempty"`
-	UseStaging  bool      `json:"use_staging,omitempty"`
 }
 
 func GetDNSProvider(provider string, credentials map[string]string) (interface{}, error) {
