@@ -5,3 +5,8 @@ curl -vk --resolve dev.ewenmacculloch.com:8443:127.0.0.1 https://dev.ewenmaccull
 source .venv/bin/activate
 
 https://lite.ip2location.com/database-download
+
+sudo nano /etc/hosts
+127.0.0.1 dev.ewenmacculloch.com
+
+
