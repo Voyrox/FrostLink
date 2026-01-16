@@ -1510,20 +1510,24 @@ func ExchangeOAuthCode(provider IdentityProvider, code, redirectURI string) (*OA
 		return nil, errors.New("provider does not support token exchange")
 	}
 
-	data := map[string]string{
-		"grant_type":    "authorization_code",
-		"code":          code,
-		"redirect_uri":  redirectURI,
-		"client_id":     provider.ClientID,
-		"client_secret": provider.ClientSecret,
+	data := url.Values{
+		"grant_type":   {"authorization_code"},
+		"code":         {code},
+		"redirect_uri": {redirectURI},
 	}
 
-	formData := make(url.Values)
-	for k, v := range data {
-		formData.Set(k, v)
-	}
+	credentials := provider.ClientID + ":" + provider.ClientSecret
+	encoded := base64.StdEncoding.EncodeToString([]byte(credentials))
 
-	resp, err := http.PostForm(provider.TokenEndpoint, formData)
+	req, err := http.NewRequest("POST", provider.TokenEndpoint, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Basic "+encoded)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}

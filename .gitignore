@@ -22,3 +22,5 @@ db/certs
 SparkProxy
 *.json
 db/users.json
+db/*.json
+/db/*.json
