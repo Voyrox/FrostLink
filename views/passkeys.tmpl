@@ -375,7 +375,7 @@
                         const host = window.location.hostname;
                         const rpID = host || 'sparkproxy.local';
 
-                        const userID = base64ToArrayBuffer(data.response.user_id);
+                        const userID = base64ToArrayBuffer(data.response.userId);
                         const challenge = base64ToArrayBuffer(data.response.challenge);
 
                         const excludeCredentials = [];
@@ -403,7 +403,7 @@
                             user: {
                                 id: userID,
                                 name: data.response.username,
-                                displayName: data.response.display_name || data.response.username
+                                displayName: data.response.displayName || data.response.username
                             },
                             pubKeyCredParams: [
                                 { type: 'public-key', alg: -7 },

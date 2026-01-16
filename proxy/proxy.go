@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
@@ -14,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -404,11 +407,64 @@ var (
 
 	authSessionsMu sync.RWMutex
 	authSessions   = make(map[string]authSession)
+
+	sharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
 )
 
 type authSession struct {
 	Domain  string    `json:"domain"`
 	Expires time.Time `json:"expires"`
+}
+
+func generateSharedToken(username, domain string, expires time.Time) string {
+	if len(sharedSecret) == 0 {
+		sharedSecret = []byte("sparkproxy-shared-secret-change-in-production")
+	}
+	data := fmt.Sprintf("%s|%s|%d", username, domain, expires.Unix())
+	h := hmac.New(sha256.New, sharedSecret)
+	h.Write([]byte(data))
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	token := base64.RawURLEncoding.EncodeToString([]byte(data)) + "." + sig
+	return token
+}
+
+func verifySharedToken(token, domain string) (username string, valid bool) {
+	if len(sharedSecret) == 0 {
+		sharedSecret = []byte("sparkproxy-shared-secret-change-in-production")
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
+		return "", false
+	}
+	data, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", false
+	}
+	expectedSig := parts[1]
+	h := hmac.New(sha256.New, sharedSecret)
+	h.Write(data)
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	if !hmac.Equal([]byte(expectedSig), []byte(sig)) {
+		return "", false
+	}
+	parts2 := strings.Split(string(data), "|")
+	if len(parts2) != 3 {
+		return "", false
+	}
+	username = parts2[0]
+	storedDomain := parts2[1]
+	expiresUnix := parts2[2]
+	if !strings.EqualFold(storedDomain, domain) {
+		return "", false
+	}
+	expiresTime, err := strconv.ParseInt(expiresUnix, 10, 64)
+	if err != nil {
+		return "", false
+	}
+	if time.Now().Unix() > expiresTime {
+		return "", false
+	}
+	return username, true
 }
 
 func loadDomainAuth() {
@@ -476,26 +532,33 @@ func SetDomainAuth(domain string, require bool) error {
 func isAuthorizedForDomain(domain string, r *stdhttp.Request) bool {
 	cookie, err := r.Cookie("sp_auth")
 	if err != nil || cookie == nil || cookie.Value == "" {
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: no cookie, domain=%s, err=%v", domain, err))
 		return false
 	}
 	token := cookie.Value
 	now := time.Now()
 
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: checking token=%s, domain=%s", token, domain))
+
 	authSessionsMu.RLock()
 	s, ok := authSessions[token]
 	authSessionsMu.RUnlock()
 	if !ok {
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: token not found in sessions"))
 		return false
 	}
 	if !strings.EqualFold(s.Domain, strings.TrimSpace(domain)) {
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: domain mismatch: %s != %s", s.Domain, domain))
 		return false
 	}
 	if now.After(s.Expires) {
 		authSessionsMu.Lock()
 		delete(authSessions, token)
 		authSessionsMu.Unlock()
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: session expired"))
 		return false
 	}
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("isAuthorizedForDomain: authorized!"))
 	return true
 }
 
@@ -558,12 +621,33 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		renderAuthLoginPage(w, domain, redirect, "")
 	case stdhttp.MethodPost:
 		if err := r.ParseForm(); err != nil {
+			ui.SystemLog("error", "domain-auth", fmt.Sprintf("parse form error: %v", err))
 			renderAuthLoginPage(w, domain, redirect, "Invalid form data")
 			return
 		}
+
 		username := strings.TrimSpace(r.FormValue("username"))
 		password := strings.TrimSpace(r.FormValue("password"))
+
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("POST: username=%s, form_domain=%s, form_redirect=%s, url_domain=%s, url_redirect=%s",
+			username, r.FormValue("domain"), r.FormValue("redirect"), domain, redirect))
+
+		domain = strings.TrimSpace(r.FormValue("domain"))
+		if domain == "" {
+			domain = strings.TrimSpace(r.URL.Query().Get("domain"))
+		}
+		redirect = strings.TrimSpace(r.FormValue("redirect"))
+		if redirect == "" {
+			redirect = r.URL.Query().Get("redirect")
+		}
+		if redirect == "" {
+			redirect = "/"
+		}
+
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("login attempt: domain=%s, username=%s", domain, username))
+
 		if username == "" || password == "" {
+			ui.SystemLog("info", "domain-auth", fmt.Sprintf("login failed: missing credentials"))
 			renderAuthLoginPage(w, domain, redirect, "Username and password are required")
 			return
 		}
@@ -575,22 +659,30 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			return
 		}
 		if !ok {
+			ui.SystemLog("info", "domain-auth", fmt.Sprintf("login failed: invalid credentials for user=%s", username))
 			renderAuthLoginPage(w, domain, redirect, "Invalid credentials")
 			return
 		}
 
-		setAuthSession(w, domain, redirect)
+		ui.SystemLog("info", "domain-auth", fmt.Sprintf("login success: user=%s, domain=%s", username, domain))
+		setAuthSession(w, r, domain, redirect, username)
 	default:
 		w.WriteHeader(stdhttp.StatusMethodNotAllowed)
 	}
 }
 
-func setAuthSession(w stdhttp.ResponseWriter, domain, redirect string) {
+func setAuthSession(w stdhttp.ResponseWriter, r *stdhttp.Request, domain, redirect, username string) {
 	token := uuid.NewString()
 	expires := time.Now().Add(24 * time.Hour)
 	authSessionsMu.Lock()
 	authSessions[token] = authSession{Domain: strings.ToLower(domain), Expires: expires}
 	authSessionsMu.Unlock()
+
+	sharedToken := generateSharedToken(username, domain, expires)
+
+	isSecure := r.TLS != nil
+
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("setAuthSession: token=%s, domain=%s, redirect=%s, username=%s, secure=%v", token, domain, redirect, username, isSecure))
 
 	cookie := &stdhttp.Cookie{
 		Name:     "sp_auth",
@@ -598,12 +690,25 @@ func setAuthSession(w stdhttp.ResponseWriter, domain, redirect string) {
 		Path:     "/",
 		Expires:  expires,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecure,
 		SameSite: stdhttp.SameSiteLaxMode,
 	}
 	stdhttp.SetCookie(w, cookie)
 
-	stdhttp.Redirect(w, nil, redirect, stdhttp.StatusFound)
+	sharedCookie := &stdhttp.Cookie{
+		Name:     "sp_auth_shared",
+		Value:    sharedToken,
+		Path:     "/",
+		Expires:  expires,
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: stdhttp.SameSiteLaxMode,
+	}
+	stdhttp.SetCookie(w, sharedCookie)
+
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("setAuthSession: cookies set: sp_auth=%s, sp_auth_shared=%s", token, sharedToken))
+
+	stdhttp.Redirect(w, r, redirect, stdhttp.StatusFound)
 }
 
 func handlePasskeyCheck(w stdhttp.ResponseWriter, username string) {
@@ -766,6 +871,8 @@ func handlePasskeyAuthentication(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		var req struct {
 			Username          string `json:"username"`
 			AuthenticatorData string `json:"authenticator_data"`
+			Domain            string `json:"domain"`
+			Redirect          string `json:"redirect"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(stdhttp.StatusBadRequest)
@@ -793,13 +900,13 @@ func handlePasskeyAuthentication(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			core.UpdatePasskeySignCount(credentialID, signCount)
 		}
 
-		domain := strings.TrimSpace(r.URL.Query().Get("domain"))
-		redirect := r.URL.Query().Get("redirect")
+		domain := strings.TrimSpace(req.Domain)
+		redirect := req.Redirect
 		if redirect == "" {
 			redirect = "/"
 		}
 
-		setAuthSession(w, domain, redirect)
+		setAuthSession(w, r, domain, redirect, req.Username)
 		return
 	}
 
@@ -817,6 +924,8 @@ func verifyCredentialsWithAPI(username, password string) (bool, error) {
 	}
 	authURL.Path = strings.TrimRight(authURL.Path, "/") + "/api/login"
 
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("verifyCredentials: calling %s", authURL.String()))
+
 	payload := map[string]string{
 		"username": username,
 		"password": password,
@@ -828,16 +937,22 @@ func verifyCredentialsWithAPI(username, password string) (bool, error) {
 
 	resp, err := stdhttp.Post(authURL.String(), "application/json", strings.NewReader(string(data)))
 	if err != nil {
+		ui.SystemLog("error", "domain-auth", fmt.Sprintf("verifyCredentials: request failed: %v", err))
 		return false, err
 	}
 	defer resp.Body.Close()
+
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("verifyCredentials: response status=%d", resp.StatusCode))
 
 	var out struct {
 		Valid bool `json:"valid"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		ui.SystemLog("error", "domain-auth", fmt.Sprintf("verifyCredentials: decode failed: %v", err))
 		return false, err
 	}
+
+	ui.SystemLog("info", "domain-auth", fmt.Sprintf("verifyCredentials: result=%v", out.Valid))
 	return out.Valid, nil
 }
 
@@ -878,7 +993,9 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
         {{ if .Error }}<div class="error">{{ .Error }}</div>{{ end }}
         
         <div id="password-section">
-            <form method="post" id="password-form">
+            <form method="post" id="password-form" action="/_auth/login?domain={{ .Domain }}&redirect={{ .Redirect }}">
+                <input type="hidden" name="domain" id="form-domain" value="{{ .Domain }}">
+                <input type="hidden" name="redirect" id="form-redirect" value="{{ .Redirect }}">
                 <label for="username">Username or email</label>
                 <input id="username" name="username" type="text" autocomplete="username" required />
                 <label for="password">Password</label>
@@ -998,7 +1115,9 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
                         username: currentUsername,
                         authenticator_data: arrayBufferToBase64URL(authData),
                         signature: arrayBufferToBase64URL(signature),
-                        challenge: data.session_challenge
+                        challenge: data.session_challenge,
+                        domain: new URLSearchParams(window.location.search).get('domain') || '',
+                        redirect: new URLSearchParams(window.location.search).get('redirect') || '/'
                     })
                 });
                 const completeData = await completeResp.json();
@@ -1030,7 +1149,7 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
                     throw new Error('WebAuthn is not supported in this browser');
                 }
 
-                const userID = base64ToArrayBuffer(data.response.user_id);
+                const userID = base64ToArrayBuffer(data.response.userId);
                 const challenge = base64ToArrayBuffer(data.response.challenge);
                 
                 const excludeCredentials = (data.response.credentials || []).map(cred => ({
@@ -1048,7 +1167,7 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
                     user: {
                         id: userID,
                         name: data.response.username,
-                        displayName: data.response.display_name || data.response.username
+                        displayName: data.response.displayName || data.response.username
                     },
                     pubKeyCredParams: data.response.pubKeyCredParams.map(p => ({
                         type: p.type,
@@ -1093,6 +1212,10 @@ var authLoginTpl = template.Must(template.New("domain-auth-login").Parse(`<!doct
         document.getElementById('password-form').addEventListener('submit', function(e) {
             currentUsername = usernameInput.value.trim();
             localStorage.setItem('last_username', currentUsername);
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            document.getElementById('form-domain').value = urlParams.get('domain') || '';
+            document.getElementById('form-redirect').value = urlParams.get('redirect') || '/';
         });
 
         if (localStorage.getItem('last_username')) {

@@ -20,3 +20,4 @@ Cargo.lock
 *.conf
 db/certs
 SparkProxy
+*.json

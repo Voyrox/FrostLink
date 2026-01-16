@@ -1,12 +1,15 @@
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"html/template"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +20,47 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+var mainSharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
+
+func mainVerifySharedToken(token, domain string) (username string, valid bool) {
+	if len(mainSharedSecret) == 0 {
+		mainSharedSecret = []byte("sparkproxy-shared-secret-change-in-production")
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
+		return "", false
+	}
+	data, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", false
+	}
+	expectedSig := parts[1]
+	h := hmac.New(sha256.New, mainSharedSecret)
+	h.Write(data)
+	sig := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	if !hmac.Equal([]byte(expectedSig), []byte(sig)) {
+		return "", false
+	}
+	parts2 := strings.Split(string(data), "|")
+	if len(parts2) != 3 {
+		return "", false
+	}
+	username = parts2[0]
+	storedDomain := parts2[1]
+	expiresUnix := parts2[2]
+	if !strings.EqualFold(storedDomain, domain) {
+		return "", false
+	}
+	expiresTime, err := strconv.ParseInt(expiresUnix, 10, 64)
+	if err != nil {
+		return "", false
+	}
+	if time.Now().Unix() > expiresTime {
+		return "", false
+	}
+	return username, true
+}
 
 func isHTTPS(c *gin.Context) bool {
 	return c.Request.URL.Scheme == "https" || c.GetHeader("X-Forwarded-Proto") == "https"
@@ -144,18 +188,29 @@ func authRequired() gin.HandlerFunc {
 func apiAuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sid, err := c.Cookie("session")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			c.Abort()
+		if err == nil && sid != "" && core.ValidateSession(sid) {
+			c.Set("session_id", sid)
+			c.Next()
 			return
 		}
-		if !core.ValidateSession(sid) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
-			c.Abort()
-			return
+
+		spAuthShared, err := c.Cookie("sp_auth_shared")
+		if err == nil && spAuthShared != "" {
+			domain := c.Request.Host
+			if i := strings.IndexByte(domain, ':'); i > -1 {
+				domain = domain[:i]
+			}
+			username, valid := mainVerifySharedToken(spAuthShared, domain)
+			if valid {
+				c.Set("session_id", spAuthShared)
+				c.Set("username", username)
+				c.Next()
+				return
+			}
 		}
-		c.Set("session_id", sid)
-		c.Next()
+
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.Abort()
 	}
 }
 
