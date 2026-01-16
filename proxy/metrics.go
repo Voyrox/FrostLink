@@ -47,6 +47,14 @@ var (
 		[]string{"domain"},
 	)
 
+	RateLimitHitsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "sparkproxy_rate_limit_hits_total",
+			Help: "Total number of rate limit hits",
+		},
+		[]string{"domain"},
+	)
+
 	ActiveDomains = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "sparkproxy_active_domains",
@@ -80,6 +88,10 @@ func ObserveDuration(domain string, durationSeconds float64) {
 
 func IncFirewallBlocks(domain string) {
 	FirewallBlocksTotal.WithLabelValues(domain).Inc()
+}
+
+func IncRateLimitHits(domain string) {
+	RateLimitHitsTotal.WithLabelValues(domain).Inc()
 }
 
 func SetActiveDomains(count int) {

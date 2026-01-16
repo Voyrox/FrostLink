@@ -19,11 +19,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"SparkProxy/core"
 	"SparkProxy/ui"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/oschwald/geoip2-golang"
 )
@@ -106,6 +108,42 @@ var (
 type ipRange struct {
 	network *net.IPNet
 	country string
+}
+
+type UpstreamPool struct {
+	upstreams []string
+	index     uint32
+	mu        sync.RWMutex
+}
+
+func NewUpstreamPool(location string) *UpstreamPool {
+	upstreams := []string{}
+	for _, u := range strings.Split(location, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			upstreams = append(upstreams, u)
+		}
+	}
+	return &UpstreamPool{
+		upstreams: upstreams,
+		index:     0,
+	}
+}
+
+func (p *UpstreamPool) Next() string {
+	if len(p.upstreams) == 0 {
+		return ""
+	}
+	idx := atomic.AddUint32(&p.index, 1) - 1
+	return p.upstreams[idx%uint32(len(p.upstreams))]
+}
+
+func (p *UpstreamPool) GetAll() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	copyUpstreams := make([]string, len(p.upstreams))
+	copy(copyUpstreams, p.upstreams)
+	return copyUpstreams
 }
 
 func clientIP(r *stdhttp.Request) string {
@@ -439,6 +477,21 @@ func itoa(i int) string {
 	return string(rune('0'+i/1000%10)) + string(rune('0'+i/100%10)) + string(rune('0'+i/10%10)) + string(rune('0'+i%10))
 }
 
+func serveRateLimitExceeded(w stdhttp.ResponseWriter, domain string, rl RateLimitConfig) {
+	tpl := template.Must(template.ParseFiles("./views/rate-limit.tmpl"))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rl.RequestsPerSecond))
+	w.Header().Set("X-RateLimit-Remaining", "0")
+	w.Header().Set("Retry-After", "1")
+	w.WriteHeader(stdhttp.StatusTooManyRequests)
+	tpl.Execute(w, gin.H{
+		"Domain":     domain,
+		"Limit":      rl.RequestsPerSecond,
+		"Period":     "second",
+		"RetryAfter": 1,
+	})
+}
+
 func StartProxy(configs []core.Config) error {
 	initAnalyticsPersistence()
 	go cleanupVerifiedCookies()
@@ -492,13 +545,30 @@ func StartProxy(configs []core.Config) error {
 			return
 		}
 
-		upstream := cfg.Location
-		if upstream == "" {
-			w.WriteHeader(stdhttp.StatusBadGateway)
-			_, _ = w.Write([]byte("Upstream not configured"))
+		rateLimiter := GetRateLimiter()
+		if !rateLimiter.Allow(cfg.Domain, ip, RateLimitConfig{
+			Enabled:           cfg.RateLimit.Enabled,
+			RequestsPerSecond: cfg.RateLimit.RequestsPerSecond,
+			Burst:             cfg.RateLimit.Burst,
+		}) {
+			IncRateLimitHits(cfg.Domain)
+			serveRateLimitExceeded(w, cfg.Domain, RateLimitConfig{
+				Enabled:           cfg.RateLimit.Enabled,
+				RequestsPerSecond: cfg.RateLimit.RequestsPerSecond,
+				Burst:             cfg.RateLimit.Burst,
+			})
 			return
 		}
 
+		upstreamPool := NewUpstreamPool(cfg.Location)
+		upstreams := upstreamPool.GetAll()
+		if len(upstreams) == 0 {
+			w.WriteHeader(stdhttp.StatusBadGateway)
+			_, _ = w.Write([]byte("No upstreams configured"))
+			return
+		}
+
+		upstream := upstreamPool.Next()
 		targetURL, err := url.Parse("http://" + strings.TrimSpace(upstream))
 		if err != nil {
 			w.WriteHeader(stdhttp.StatusBadGateway)

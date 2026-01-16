@@ -301,6 +301,7 @@ func main() {
 		apiRead.GET("/domains/:domain/analytics", apiDomainAnalytics)
 		apiRead.GET("/domains/:domain/profiler", apiDomainProfilerStatus)
 		apiRead.GET("/domains/:domain/under-attack", apiUnderAttackStatus)
+		apiRead.GET("/domains/:domain/rate-limit", apiDomainRateLimitStatus)
 		apiRead.GET("/logs", apiLogs)
 		apiRead.GET("/users", apiUsersList)
 		apiRead.GET("/users/me", apiUsersMe)
@@ -337,6 +338,7 @@ func main() {
 		apiWrite.PUT("/domains/:domain/auth", apiDomainAuthUpdate)
 		apiWrite.PUT("/domains/:domain/profiler", apiDomainProfilerToggle)
 		apiWrite.PUT("/domains/:domain/under-attack", apiUnderAttackToggle)
+		apiWrite.PUT("/domains/:domain/rate-limit", apiDomainRateLimitUpdate)
 		apiWrite.POST("/domains", apiDomainsCreate)
 		apiWrite.PUT("/domains/:domain", apiDomainsUpdate)
 		apiWrite.DELETE("/domains/:domain", apiDomainsDelete)
@@ -439,6 +441,19 @@ type firewallIPBanRequest struct {
 type firewallCountryBanRequest struct {
 	Country   string   `json:"country"`
 	Countries []string `json:"countries"`
+}
+
+type rateLimitRequest struct {
+	Enabled           bool `json:"enabled"`
+	RequestsPerSecond int  `json:"requests_per_second"`
+	Burst             int  `json:"burst"`
+}
+
+type rateLimitResponse struct {
+	Domain           string `json:"domain"`
+	RateLimitEnabled bool   `json:"rate_limit_enabled"`
+	RateLimitRPS     int    `json:"rate_limit_requests_per_second"`
+	RateLimitBurst   int    `json:"rate_limit_burst"`
 }
 
 func apiLogin(c *gin.Context) {
@@ -1085,12 +1100,13 @@ func apiDomainsCreate(c *gin.Context) {
 }
 
 type updateDomainRequest struct {
-	Target   string `json:"target"`
-	HTTP     bool   `json:"http"`
-	SSL      bool   `json:"ssl"`
-	CertMode string `json:"cert_mode"`
-	CertPath string `json:"cert_path"`
-	KeyPath  string `json:"key_path"`
+	Target    string               `json:"target"`
+	HTTP      bool                 `json:"http"`
+	SSL       bool                 `json:"ssl"`
+	CertMode  string               `json:"cert_mode"`
+	CertPath  string               `json:"cert_path"`
+	KeyPath   string               `json:"key_path"`
+	RateLimit core.RateLimitConfig `json:"rate_limit"`
 }
 
 func apiDomainsUpdate(c *gin.Context) {
@@ -1115,7 +1131,7 @@ func apiDomainsUpdate(c *gin.Context) {
 		keyPath = req.KeyPath
 	}
 
-	err := core.UpdateDomain(domain, req.Target, req.SSL, req.HTTP, certPath, keyPath)
+	err := core.UpdateDomain(domain, req.Target, req.SSL, req.HTTP, certPath, keyPath, req.RateLimit)
 	if err != nil {
 		if os.IsNotExist(err) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
@@ -2951,5 +2967,73 @@ func apiOAuthLinkCallback(c *gin.Context) {
 		"ActivePage":   "linked-accounts",
 		"ToastMessage": fmt.Sprintf("Successfully linked %s account", provider.Name),
 		"Redirect":     "/linked-accounts",
+	})
+}
+
+func apiDomainRateLimitStatus(c *gin.Context) {
+	domain := c.Param("domain")
+	if strings.TrimSpace(domain) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	cfg, ok := core.GetDomainConfig(domain)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rateLimitResponse{
+		Domain:           cfg.Domain,
+		RateLimitEnabled: cfg.RateLimit.Enabled,
+		RateLimitRPS:     cfg.RateLimit.RequestsPerSecond,
+		RateLimitBurst:   cfg.RateLimit.Burst,
+	})
+}
+
+func apiDomainRateLimitUpdate(c *gin.Context) {
+	domain := c.Param("domain")
+	if strings.TrimSpace(domain) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+
+	cfg, ok := core.GetDomainConfig(domain)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "domain not found"})
+		return
+	}
+
+	var req rateLimitRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	if req.RequestsPerSecond < 1 {
+		req.RequestsPerSecond = 10
+	}
+	if req.Burst < 1 {
+		req.Burst = 20
+	}
+
+	cfg.RateLimit = core.RateLimitConfig{
+		Enabled:           req.Enabled,
+		RequestsPerSecond: req.RequestsPerSecond,
+		Burst:             req.Burst,
+	}
+
+	if err := core.WriteConfig("./domains", cfg); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write config"})
+		return
+	}
+
+	proxy.GetRateLimiter().Reset()
+
+	c.JSON(http.StatusOK, rateLimitResponse{
+		Domain:           cfg.Domain,
+		RateLimitEnabled: cfg.RateLimit.Enabled,
+		RateLimitRPS:     cfg.RateLimit.RequestsPerSecond,
+		RateLimitBurst:   cfg.RateLimit.Burst,
 	})
 }
