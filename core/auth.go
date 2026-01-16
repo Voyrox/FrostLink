@@ -7,6 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,14 +27,21 @@ const csrfPath = "db/csrf.json"
 const tokensPath = "db/api_tokens.json"
 const rolesPath = "db/roles.json"
 
+type IdentityProviderLink struct {
+	ProviderID   string `json:"provider_id"`
+	ProviderName string `json:"provider_name"`
+	Email        string `json:"email"`
+	LinkedAt     string `json:"linked_at"`
+}
+
 type User struct {
-	Username          string   `json:"username"`
-	Email             string   `json:"email"`
-	PasswordHash      string   `json:"password_hash"`
-	IdentityProvider  string   `json:"identity_provider"`
-	Role              string   `json:"role"`
-	AccessType        string   `json:"access_type"`
-	AllowedDomainList []string `json:"domains"`
+	Username          string                 `json:"username"`
+	Email             string                 `json:"email"`
+	PasswordHash      string                 `json:"password_hash"`
+	IdentityProviders []IdentityProviderLink `json:"identity_providers"`
+	Role              string                 `json:"role"`
+	AccessType        string                 `json:"access_type"`
+	AllowedDomainList []string               `json:"domains"`
 }
 
 type userFile struct {
@@ -129,7 +140,7 @@ func CreateUser(username, email, password, roleName, accessType string, domains 
 		Username:          username,
 		Email:             email,
 		PasswordHash:      string(hash),
-		IdentityProvider:  "Local",
+		IdentityProviders: []IdentityProviderLink{},
 		Role:              roleName,
 		AccessType:        accessType,
 		AllowedDomainList: allowed,
@@ -182,6 +193,111 @@ func AuthenticateUser(username, password string) (*User, bool) {
 		return &copy, true
 	}
 	return nil, false
+}
+
+func IsProviderLinkedToUser(username, providerID string) bool {
+	loadUsers()
+	usersMu.RLock()
+	defer usersMu.RUnlock()
+	for _, u := range users {
+		if u.Username != username {
+			continue
+		}
+		for _, p := range u.IdentityProviders {
+			if p.ProviderID == providerID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func LinkIdentityProviderToUser(username string, provider IdentityProvider, email string) error {
+	loadUsers()
+	usersMu.Lock()
+	defer usersMu.Unlock()
+
+	for i := range users {
+		if users[i].Username != username {
+			continue
+		}
+		for _, p := range users[i].IdentityProviders {
+			if p.ProviderID == provider.ID {
+				return errors.New("provider already linked")
+			}
+		}
+		users[i].IdentityProviders = append(users[i].IdentityProviders, IdentityProviderLink{
+			ProviderID:   provider.ID,
+			ProviderName: provider.Name,
+			Email:        email,
+			LinkedAt:     time.Now().Format(time.RFC3339),
+		})
+		return saveUsers()
+	}
+	return errors.New("user not found")
+}
+
+func UnlinkIdentityProviderFromUser(username, providerID string) error {
+	loadUsers()
+	usersMu.Lock()
+	defer usersMu.Unlock()
+
+	for i := range users {
+		if users[i].Username != username {
+			continue
+		}
+		linked := users[i].IdentityProviders
+		idx := -1
+		for j, p := range linked {
+			if p.ProviderID == providerID {
+				idx = j
+				break
+			}
+		}
+		if idx == -1 {
+			return errors.New("provider not linked to user")
+		}
+		users[i].IdentityProviders = append(linked[:idx], linked[idx+1:]...)
+		return saveUsers()
+	}
+	return errors.New("user not found")
+}
+
+func GetUserLinkedProviders(username string) []IdentityProviderLink {
+	loadUsers()
+	usersMu.RLock()
+	defer usersMu.RUnlock()
+	for _, u := range users {
+		if u.Username == username {
+			return u.IdentityProviders
+		}
+	}
+	return nil
+}
+
+func GetUserByEmailWithProvider(email, providerID string) (*User, bool) {
+	if email == "" {
+		return nil, false
+	}
+	loadUsers()
+	usersMu.RLock()
+	defer usersMu.RUnlock()
+	for _, u := range users {
+		if !strings.EqualFold(u.Email, email) {
+			continue
+		}
+		for _, p := range u.IdentityProviders {
+			if p.ProviderID == providerID {
+				copy := u
+				copy.PasswordHash = ""
+				return &copy, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func MigrateSingleIdentityProvider() {
 }
 
 type Session struct {
@@ -1319,4 +1435,102 @@ func DeletePasskeyCredentialsByUser(username string) error {
 	}
 	passkeys = newCreds
 	return savePasskeys()
+}
+
+type OAuthToken struct {
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type OAuthUserInfo struct {
+	ID       string `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Avatar   string `json:"avatar"`
+}
+
+func GetUserByEmail(email string) (*User, bool) {
+	if email == "" {
+		return nil, false
+	}
+	loadUsers()
+	usersMu.RLock()
+	defer usersMu.RUnlock()
+	for _, u := range users {
+		if strings.EqualFold(u.Email, email) {
+			copy := u
+			copy.PasswordHash = ""
+			return &copy, true
+		}
+	}
+	return nil, false
+}
+
+func ExchangeOAuthCode(provider IdentityProvider, code, redirectURI string) (*OAuthToken, error) {
+	if provider.TokenEndpoint == "" {
+		return nil, errors.New("provider does not support token exchange")
+	}
+
+	data := map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          code,
+		"redirect_uri":  redirectURI,
+		"client_id":     provider.ClientID,
+		"client_secret": provider.ClientSecret,
+	}
+
+	formData := make(url.Values)
+	for k, v := range data {
+		formData.Set(k, v)
+	}
+
+	resp, err := http.PostForm(provider.TokenEndpoint, formData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange code: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+	}
+
+	var token OAuthToken
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return nil, fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	return &token, nil
+}
+
+func FetchOAuthUserInfo(provider IdentityProvider, accessToken string) (*OAuthUserInfo, error) {
+	userInfoURL := fmt.Sprintf("https://discord.com/api/users/@me")
+
+	req, err := http.NewRequest("GET", userInfoURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get user info: %s", string(body))
+	}
+
+	var userInfo OAuthUserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		return nil, fmt.Errorf("failed to decode user info: %w", err)
+	}
+
+	return &userInfo, nil
 }

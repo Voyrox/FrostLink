@@ -21,3 +21,4 @@ Cargo.lock
 db/certs
 SparkProxy
 *.json
+db/users.json

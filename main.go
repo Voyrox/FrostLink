@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -236,6 +237,9 @@ func main() {
 		public.POST("/login", loginPost)
 		public.POST("/api/login", apiLogin)
 		public.POST("/api/logout", apiLogout)
+		public.GET("/auth/oauth/:provider_id", apiOAuthLogin)
+		public.GET("/_auth/oauth/callback/:provider_id", apiOAuthCallback)
+		public.GET("/_auth/oauth/link/:provider_id", apiOAuthLinkCallback)
 	}
 
 	dashboard := r.Group("/")
@@ -262,6 +266,9 @@ func main() {
 		dashboard.GET("/settings", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "settings", gin.H{"ActivePage": "settings"})
 		})
+		dashboard.GET("/linked-accounts", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "linked-accounts", gin.H{"ActivePage": "linked-accounts"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -287,6 +294,7 @@ func main() {
 		apiRead.GET("/identity-providers", apiIdentityProvidersList)
 		apiRead.GET("/passkeys", apiPasskeysList)
 		apiRead.GET("/settings", apiSettingsGet)
+		apiRead.GET("/users/me/identity-providers", apiUserIdentityProvidersList)
 	}
 
 	apiWrite := r.Group("/api")
@@ -322,6 +330,8 @@ func main() {
 		apiWrite.POST("/identity-providers", apiIdentityProvidersCreate)
 		apiWrite.DELETE("/identity-providers/:id", apiIdentityProvidersDelete)
 		apiWrite.POST("/identity-providers/:id/toggle", apiIdentityProvidersToggle)
+		apiWrite.POST("/users/me/identity-providers/:provider_id/link", apiUserIdentityProviderLinkStart)
+		apiWrite.DELETE("/users/me/identity-providers/:provider_id", apiUserIdentityProviderUnlink)
 		apiWrite.PUT("/settings", apiSettingsUpdate)
 		apiWrite.POST("/settings/reset", apiSettingsReset)
 	}
@@ -799,12 +809,12 @@ func apiUsersList(c *gin.Context) {
 	var out []map[string]interface{}
 	for _, u := range users {
 		out = append(out, map[string]interface{}{
-			"username":          u.Username,
-			"email":             u.Email,
-			"identity_provider": u.IdentityProvider,
-			"role":              u.Role,
-			"access_type":       u.AccessType,
-			"domains":           u.AllowedDomainList,
+			"username":           u.Username,
+			"email":              u.Email,
+			"identity_providers": u.IdentityProviders,
+			"role":               u.Role,
+			"access_type":        u.AccessType,
+			"domains":            u.AllowedDomainList,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"users": out})
@@ -845,12 +855,12 @@ func apiUsersCreate(c *gin.Context) {
 	}
 	core.LogAudit("user_create", u.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users", "success", map[string]string{"email": u.Email, "role": u.Role})
 	c.JSON(http.StatusOK, gin.H{"user": map[string]interface{}{
-		"username":          u.Username,
-		"email":             u.Email,
-		"identity_provider": u.IdentityProvider,
-		"role":              u.Role,
-		"access_type":       u.AccessType,
-		"domains":           u.AllowedDomainList,
+		"username":           u.Username,
+		"email":              u.Email,
+		"identity_providers": u.IdentityProviders,
+		"role":               u.Role,
+		"access_type":        u.AccessType,
+		"domains":            u.AllowedDomainList,
 	}})
 }
 
@@ -1628,9 +1638,132 @@ func apiCertsDelete(c *gin.Context) {
 	if err := proxy.ReloadCertificate(domain); err != nil {
 		ui.SystemLog("warn", "certs", fmt.Sprintf("Failed to clear certificate cache for %s: %v", domain, err))
 	}
+}
 
-	core.LogAudit("cert_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/certs/"+domain, "success", map[string]string{"domain": domain})
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+func apiOAuthLogin(c *gin.Context) {
+	providerID := c.Param("provider_id")
+	if providerID == "" {
+		c.Redirect(http.StatusFound, "/login")
+		return
+	}
+
+	provider, ok := core.GetIdentityProvider(providerID)
+	if !ok || !provider.Enabled {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth provider not found or disabled",
+		})
+		return
+	}
+
+	state := uuid.New().String()
+	c.SetCookie("oauth_state", state, 600, "/", "", isHTTPS(c), true)
+
+	callbackURL := fmt.Sprintf("http://%s/_auth/oauth/callback/%s", c.Request.Host, providerID)
+	if isHTTPS(c) {
+		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/callback/%s", c.Request.Host, providerID)
+	}
+
+	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=identify%%20email&state=%s",
+		provider.AuthEndpoint,
+		url.QueryEscape(provider.ClientID),
+		url.QueryEscape(callbackURL),
+		state)
+
+	c.Redirect(http.StatusFound, authURL)
+}
+
+func apiOAuthCallback(c *gin.Context) {
+	providerID := c.Param("provider_id")
+	if providerID == "" {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth callback failed: invalid provider",
+		})
+		return
+	}
+
+	code := c.Query("code")
+	state := c.Query("state")
+	errorParam := c.Query("error")
+
+	if errorParam != "" {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth authentication was cancelled or failed",
+		})
+		return
+	}
+
+	if code == "" || state == "" {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth callback failed: missing parameters",
+		})
+		return
+	}
+
+	storedState, err := c.Cookie("oauth_state")
+	if err != nil || storedState == "" || storedState != state {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth callback failed: invalid state parameter",
+		})
+		return
+	}
+
+	provider, ok := core.GetIdentityProvider(providerID)
+	if !ok || !provider.Enabled {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth provider not found or disabled",
+		})
+		return
+	}
+
+	callbackURL := fmt.Sprintf("http://%s/_auth/oauth/callback/%s", c.Request.Host, providerID)
+	if isHTTPS(c) {
+		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/callback/%s", c.Request.Host, providerID)
+	}
+
+	token, err := core.ExchangeOAuthCode(provider, code, callbackURL)
+	if err != nil {
+		ui.SystemLog("error", "oauth", fmt.Sprintf("OAuth token exchange failed: %v", err))
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "OAuth authentication failed",
+		})
+		return
+	}
+
+	userInfo, err := core.FetchOAuthUserInfo(provider, token.AccessToken)
+	if err != nil {
+		ui.SystemLog("error", "oauth", fmt.Sprintf("OAuth user info fetch failed: %v", err))
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": "Failed to get user information",
+		})
+		return
+	}
+
+	user, found := core.GetUserByEmailWithProvider(userInfo.Email, providerID)
+	if !found {
+		c.HTML(http.StatusOK, "login", gin.H{
+			"ToastMessage": fmt.Sprintf("User with email %s is not registered. Please contact an administrator.", userInfo.Email),
+		})
+		return
+	}
+
+	ip := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
+	core.RevokeSessionsByUser(user.Username)
+	role := user.Role
+	if role == "" {
+		role = "Member"
+	}
+	sid := core.CreateSession(user.Username, role, ip, userAgent)
+	csrfToken := core.GenerateCSRFToken(sid)
+	setSessionCookie(c, sid)
+	setCSRFCookie(c, csrfToken)
+	core.LogAudit("oauth_login", user.Username, ip, userAgent, "/_auth/oauth/callback/"+providerID, "success", map[string]string{"provider": provider.Name})
+
+	c.HTML(http.StatusOK, "login", gin.H{
+		"ToastMessage": "Logged in successfully, redirecting…",
+		"Redirect":     "/dashboard",
+	})
 }
 
 type identityProviderResponse struct {
@@ -2129,4 +2262,214 @@ func apiSettingsReset(c *gin.Context) {
 		os.Unsetenv(env)
 	}
 	apiSettingsGet(c)
+}
+
+func apiUserIdentityProvidersList(c *gin.Context) {
+	sid, _ := c.Get("session_id")
+	if sid == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	s, ok := core.GetSession(sid.(string))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		return
+	}
+
+	linkedProviders := core.GetUserLinkedProviders(s.Username)
+	c.JSON(http.StatusOK, gin.H{"providers": linkedProviders})
+}
+
+func apiUserIdentityProviderLinkStart(c *gin.Context) {
+	sid, _ := c.Get("session_id")
+	if sid == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	s, ok := core.GetSession(sid.(string))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		return
+	}
+
+	providerID := c.Param("provider_id")
+	if providerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider_id is required"})
+		return
+	}
+
+	provider, ok := core.GetIdentityProvider(providerID)
+	if !ok || !provider.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider not found or disabled"})
+		return
+	}
+
+	if core.IsProviderLinkedToUser(s.Username, providerID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider already linked"})
+		return
+	}
+
+	linkState := fmt.Sprintf("%s:%s", sid.(string), uuid.New().String())
+	c.SetCookie("link_state", linkState, 600, "/", "", isHTTPS(c), true)
+
+	callbackURL := fmt.Sprintf("http://%s/_auth/oauth/link/%s", c.Request.Host, providerID)
+	if isHTTPS(c) {
+		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/link/%s", c.Request.Host, providerID)
+	}
+
+	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=identify%%20email&state=%s",
+		provider.AuthEndpoint,
+		url.QueryEscape(provider.ClientID),
+		url.QueryEscape(callbackURL),
+		url.QueryEscape(linkState))
+
+	c.Redirect(http.StatusFound, authURL)
+}
+
+func apiUserIdentityProviderUnlink(c *gin.Context) {
+	sid, _ := c.Get("session_id")
+	if sid == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	s, ok := core.GetSession(sid.(string))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		return
+	}
+
+	providerID := c.Param("provider_id")
+	if providerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider_id is required"})
+		return
+	}
+
+	err := core.UnlinkIdentityProviderFromUser(s.Username, providerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	core.LogAudit("identity_provider_unlink", s.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/api/users/me/identity-providers/"+providerID, "success", map[string]string{"provider_id": providerID})
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func apiOAuthLinkCallback(c *gin.Context) {
+	providerID := c.Param("provider_id")
+	if providerID == "" {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth link failed: invalid provider",
+		})
+		return
+	}
+
+	code := c.Query("code")
+	state := c.Query("state")
+	errorParam := c.Query("error")
+
+	if errorParam != "" {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth linking was cancelled or failed",
+		})
+		return
+	}
+
+	if code == "" || state == "" {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth link failed: missing parameters",
+		})
+		return
+	}
+
+	linkState, err := c.Cookie("link_state")
+	if err != nil || linkState == "" {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth link failed: invalid link state",
+		})
+		return
+	}
+
+	parts := strings.SplitN(linkState, ":", 2)
+	if len(parts) != 2 {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth link failed: invalid link state format",
+		})
+		return
+	}
+
+	sessionID := parts[0]
+	storedState := parts[1]
+
+	if storedState != state {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth link failed: state mismatch",
+		})
+		return
+	}
+
+	s, ok := core.GetSession(sessionID)
+	if !ok {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth link failed: session not found",
+		})
+		return
+	}
+
+	provider, ok := core.GetIdentityProvider(providerID)
+	if !ok || !provider.Enabled {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "Provider not found or disabled",
+		})
+		return
+	}
+
+	callbackURL := fmt.Sprintf("http://%s/_auth/oauth/link/%s", c.Request.Host, providerID)
+	if isHTTPS(c) {
+		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/link/%s", c.Request.Host, providerID)
+	}
+
+	token, err := core.ExchangeOAuthCode(provider, code, callbackURL)
+	if err != nil {
+		ui.SystemLog("error", "oauth-link", fmt.Sprintf("OAuth token exchange failed: %v", err))
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "OAuth linking failed",
+		})
+		return
+	}
+
+	userInfo, err := core.FetchOAuthUserInfo(provider, token.AccessToken)
+	if err != nil {
+		ui.SystemLog("error", "oauth-link", fmt.Sprintf("OAuth user info fetch failed: %v", err))
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": "Failed to get user information",
+		})
+		return
+	}
+
+	err = core.LinkIdentityProviderToUser(s.Username, provider, userInfo.Email)
+	if err != nil {
+		c.HTML(http.StatusOK, "linked-accounts", gin.H{
+			"ActivePage":   "linked-accounts",
+			"ToastMessage": err.Error(),
+		})
+		return
+	}
+
+	core.LogAudit("identity_provider_link", s.Username, c.ClientIP(), c.GetHeader("User-Agent"), "/_auth/oauth/link/"+providerID, "success", map[string]string{"provider": provider.Name, "email": userInfo.Email})
+
+	c.HTML(http.StatusOK, "linked-accounts", gin.H{
+		"ActivePage":   "linked-accounts",
+		"ToastMessage": fmt.Sprintf("Successfully linked %s account", provider.Name),
+		"Redirect":     "/linked-accounts",
+	})
 }
