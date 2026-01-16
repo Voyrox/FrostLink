@@ -178,7 +178,7 @@
                 fetch('/api/rate-limits')
                     .then(r => r.ok ? r.json() : Promise.reject(r.status))
                     .then(data => {
-                        allDomains = data && data.domains ? data.domains : [];
+                        allDomains = data && data.rate_limits ? data.rate_limits : [];
                         filterAndRender();
                     })
                     .catch(err => {
