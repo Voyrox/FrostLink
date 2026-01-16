@@ -523,6 +523,7 @@ func apiProxys(c *gin.Context) {
 		m["online"] = online
 
 		m["require_auth"] = proxy.GetDomainAuth(cfg.Domain)
+		m["under_attack_enabled"] = proxy.IsUnderAttackMode(cfg.Domain)
 		if ps, ok := stats[cfg.Domain]; ok {
 			m["data_in_total"] = ps.DataInTotal
 			m["data_out_total"] = ps.DataOutTotal

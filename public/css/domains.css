@@ -221,6 +221,32 @@
     color: #9ca3af;
 }
 
+.page-domains .attack-toggle {
+    appearance: none;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    background: #1f2933;
+    color: #e5e7eb;
+    cursor: pointer;
+    min-width: 52px;
+    text-align: center;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.page-domains .attack-toggle.enabled {
+    background: #065f46;
+    border-color: #10b981;
+    color: #d1fae5;
+}
+
+.page-domains .attack-toggle.disabled {
+    background: #111827;
+    border-color: #374151;
+    color: #9ca3af;
+}
+
 /* Modal for adding domains */
 .page-domains .modal-backdrop {
     position: fixed;
