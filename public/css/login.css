@@ -184,6 +184,95 @@ input:focus {
     background: transparent
 }
 
+.oauth-providers {
+    margin-bottom: 1.25rem;
+}
+
+.oauth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.oauth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+}
+
+.oauth-btn.google {
+    background: #fff;
+    border-color: #dadce0;
+    color: #3c4043;
+}
+
+.oauth-btn.google:hover {
+    background: #f8f9fa;
+    border-color: #d2d3d4;
+}
+
+.oauth-btn.oauth {
+    background: var(--card);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.oauth-btn.oauth:hover {
+    background: #1a1f2e;
+    border-color: var(--muted);
+}
+
+.oauth-btn svg {
+    flex-shrink: 0;
+}
+
+.fingerprint-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.5rem 0;
+}
+
+.fingerprint-icon {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(252, 128, 51, 0.1), rgba(252, 128, 51, 0.05));
+    border: 2px solid rgba(252, 128, 51, 0.2);
+    border-radius: 50%;
+    margin-bottom: 1rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(252, 128, 51, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 0 12px rgba(252, 128, 51, 0);
+    }
+}
+
+.fingerprint-icon svg {
+    color: var(--orange);
+}
+
+.fingerprint-container p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.back-btn {
+    margin-top: 0.5rem;
+}
+
 @media (max-width:420px) {
     .card {
         padding: 18px

@@ -1,0 +1,367 @@
+/* Identity Providers page (scoped) */
+.page-identity-providers .app {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0
+}
+
+.page-identity-providers .content {
+    padding: 24px
+}
+
+.page-identity-providers .page-header h1 {
+    margin: 0 0 6px
+}
+
+.page-identity-providers .page-header .subtitle {
+    margin: 0 0 16px
+}
+
+.page-identity-providers .panel {
+    background: #12121acc;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow)
+}
+
+/* Toolbar */
+.page-identity-providers .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px
+}
+
+.page-identity-providers .toolbar .left,
+.page-identity-providers .toolbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.page-identity-providers .provider-stats {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+/* Buttons (scoped to identity-providers page) */
+.page-identity-providers .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: .95rem;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease
+}
+
+.page-identity-providers .btn:hover {
+    background: #121a28;
+    border-color: #1f2937
+}
+
+.page-identity-providers .btn:active {
+    transform: translateY(1px)
+}
+
+.page-identity-providers .btn.ghost {
+    background: transparent
+}
+
+.page-identity-providers .btn.small {
+    padding: 8px 10px;
+    font-size: .9rem;
+    border-radius: 8px
+}
+
+.page-identity-providers .btn .icon {
+    display: inline-flex;
+    color: var(--muted)
+}
+
+.page-identity-providers .btn .icon.orange {
+    color: var(--orange)
+}
+
+.page-identity-providers .btn.primary {
+    background: #238636;
+    border-color: #238636;
+    color: #fff;
+}
+
+.page-identity-providers .btn.primary:hover {
+    background: #2ea043;
+    border-color: #2ea043;
+}
+
+.page-identity-providers .btn.danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.page-identity-providers .btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Table */
+.page-identity-providers .table-wrap {
+    overflow: auto;
+    border-radius: 12px;
+}
+
+.page-identity-providers .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 680px;
+    background: transparent
+}
+
+.page-identity-providers .table thead th {
+    position: sticky;
+    top: 0;
+    background: #0e1420;
+    color: var(--text);
+    text-align: left;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-identity-providers .table thead .th {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px
+}
+
+.page-identity-providers .table thead .icon {
+    color: var(--muted)
+}
+
+.page-identity-providers .table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.page-identity-providers .table tbody tr:hover {
+    background: #0c111a
+}
+
+.page-identity-providers .status {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #4b5563;
+    margin-right: 8px
+}
+
+.page-identity-providers .status.online {
+    background: #08bf47
+}
+
+.page-identity-providers .actions-col {
+    text-align: right;
+    width: 1%
+}
+
+.page-identity-providers .actions {
+    text-align: right
+}
+
+.page-identity-providers .provider-type-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: rgba(34, 211, 238, 0.1);
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: #22d3ee;
+}
+
+/* Modal */
+.page-identity-providers .modal-backdrop {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: rgba(10, 10, 15, 0.96);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+}
+
+.page-identity-providers .modal-backdrop[hidden] {
+    display: none;
+}
+
+.page-identity-providers .modal-backdrop .modal {
+    width: 100%;
+    max-width: 640px;
+    padding: 4px;
+}
+
+.page-identity-providers .provider-form,
+.page-identity-providers .callback-form {
+    padding: 16px 20px 20px;
+    border-radius: 16px;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.page-identity-providers .provider-form h2,
+.page-identity-providers .callback-form h2 {
+    margin: 0 0 16px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-identity-providers .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.page-identity-providers .provider-form label,
+.page-identity-providers .callback-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    flex: 1 1 180px;
+    font-size: 0.85rem;
+    color: #9ca3af;
+}
+
+.page-identity-providers .provider-form label.full-width,
+.page-identity-providers .callback-form label.full-width {
+    flex: 1 1 100%;
+}
+
+.page-identity-providers .provider-form label span,
+.page-identity-providers .callback-form label span {
+    font-weight: 500;
+    color: #d1d5db;
+}
+
+.page-identity-providers .provider-form input,
+.page-identity-providers .provider-form select,
+.page-identity-providers .callback-form input,
+.page-identity-providers .callback-form select {
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.page-identity-providers .provider-form input:focus,
+.page-identity-providers .provider-form select:focus,
+.page-identity-providers .callback-form input:focus,
+.page-identity-providers .callback-form select:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.page-identity-providers .provider-form input::placeholder,
+.page-identity-providers .callback-form input::placeholder {
+    color: #4b5563;
+}
+
+.page-identity-providers .provider-form input[type="password"],
+.page-identity-providers .callback-form input[type="password"] {
+    font-family: monospace;
+    letter-spacing: 0.5px;
+}
+
+.page-identity-providers .provider-config {
+    margin: 12px 0;
+    padding: 14px;
+    background: rgba(34, 211, 238, 0.05);
+    border: 1px solid rgba(34, 211, 238, 0.1);
+    border-radius: 10px;
+}
+
+.page-identity-providers .provider-config h4 {
+    margin: 0 0 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-identity-providers .provider-config p {
+    margin: 0 0 12px;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.page-identity-providers .actions-row {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid #21262d;
+}
+
+.page-identity-providers .callback-info {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+    border-radius: 10px;
+    border: 1px solid #21262d;
+}
+
+.page-identity-providers .callback-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-identity-providers .callback-status {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #9ca3af;
+}
+
+.page-identity-providers .callback-url-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.page-identity-providers .callback-url-box input {
+    flex: 1;
+    font-family: monospace;
+    font-size: 0.85rem;
+    padding: 10px 12px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    color: var(--text);
+}
+
+.page-identity-providers .callback-url-box input:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}

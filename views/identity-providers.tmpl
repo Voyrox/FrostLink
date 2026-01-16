@@ -1,0 +1,419 @@
+{{ define "identity-providers" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • Identity Providers</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/identity-providers.css" />
+</head>
+
+<body class="page-identity-providers">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">Identity Providers</h1>
+                <p class="subtitle">Configure OAuth2/OIDC providers for user authentication</p>
+            </header>
+
+            <section class="panel" aria-label="Identity Providers Panel">
+                <div class="toolbar">
+                    <div class="left">
+                        <div class="provider-stats">
+                            <span id="total-providers">0</span> configured providers
+                        </div>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button" id="refresh-providers-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2" />
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn ghost" type="button" id="open-provider-modal">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Create Provider</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+                                                <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+                                                <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
+                                                <path d="M2 12a10 10 0 0 1 18-6"/>
+                                                <path d="M2 16h.01"/>
+                                                <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+                                                <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
+                                                <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
+                                                <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
+                                            </svg>
+                                        </span> Name</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2"/>
+                                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2"/>
+                                            </svg>
+                                        </span> Type</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span> Status</span></th>
+                                <th scope="col" class="actions-col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="providers-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="modal-backdrop" id="provider-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="provider-modal-title">
+            <div class="provider-form">
+                <h2 id="provider-modal-title">Create Identity Provider</h2>
+                <form id="provider-form">
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Display Name</span>
+                            <input type="text" name="name" id="provider-name" required placeholder="e.g. Google, Okta, Azure AD">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Provider Type</span>
+                            <select name="provider_type" id="provider-type" required>
+                                <option value="google">Google OAuth2</option>
+                                <option value="oidc">Generic OIDC</option>
+                                <option value="oauth2">Generic OAuth2</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="google-config" class="provider-config" hidden>
+                        <div class="field-row">
+                            <label class="full-width">
+                                <span>Google OAuth2 Client ID</span>
+                                <input type="text" name="google_client_id" id="google-client-id" placeholder="your-app.apps.googleusercontent.com">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="full-width">
+                                <span>Google OAuth2 Client Secret</span>
+                                <input type="password" name="google_client_secret" id="google-client-secret" placeholder="GOCSPX-xxxxxxxxxxxxx">
+                            </label>
+                        </div>
+                    </div>
+                    <div id="oauth-config" class="provider-config" hidden>
+                        <div class="field-row">
+                            <label class="full-width">
+                                <span>OAuth2 Client ID</span>
+                                <input type="text" name="client_id" id="oauth-client-id" placeholder="The OAuth2 client ID from the identity provider">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="full-width">
+                                <span>OAuth2 Client Secret</span>
+                                <input type="password" name="client_secret" id="oauth-client-secret" placeholder="The OAuth2 client secret from the identity provider">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="full-width">
+                                <span>Authorization Endpoint URL</span>
+                                <input type="url" name="auth_endpoint" id="oauth-auth-endpoint" placeholder="https://provider.com/oauth2/authorize">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="full-width">
+                                <span>Token Endpoint URL</span>
+                                <input type="url" name="token_endpoint" id="oauth-token-endpoint" placeholder="https://provider.com/oauth2/token">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="actions-row">
+                        <button class="btn primary" type="submit">Create Provider</button>
+                        <button class="btn ghost" type="button" id="provider-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="callback-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="callback-modal-title">
+            <div class="callback-form">
+                <h2 id="callback-modal-title">Callback URL</h2>
+                <div class="callback-info">
+                    <div class="callback-details">
+                        <span class="callback-status info">Configure this URL in your identity provider</span>
+                    </div>
+                </div>
+                <div class="callback-url-box">
+                    <input type="text" id="callback-url" readonly>
+                    <button type="button" class="btn ghost" id="copy-callback-btn">Copy</button>
+                </div>
+                <div class="actions-row">
+                    <button class="btn primary" type="button" id="callback-done-btn">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const tableBody = document.getElementById('providers-table-body');
+            const providerModal = document.getElementById('provider-modal');
+            const providerForm = document.getElementById('provider-form');
+            const providerCancelBtn = document.getElementById('provider-cancel-btn');
+            const callbackModal = document.getElementById('callback-modal');
+            const callbackUrlInput = document.getElementById('callback-url');
+            const providerTypeSelect = document.getElementById('provider-type');
+            const googleConfig = document.getElementById('google-config');
+            const oauthConfig = document.getElementById('oauth-config');
+
+            function updateProviderConfig() {
+                const type = providerTypeSelect.value;
+                googleConfig.hidden = type !== 'google';
+                oauthConfig.hidden = type === 'google';
+            }
+
+            if (providerTypeSelect) {
+                providerTypeSelect.addEventListener('change', updateProviderConfig);
+                updateProviderConfig();
+            }
+
+            function render() {
+                fetch('/api/identity-providers')
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        const providers = (data && data.providers) || [];
+                        tableBody.innerHTML = '';
+
+                        document.getElementById('total-providers').textContent = providers.length;
+
+                        providers.forEach(p => {
+                            const tr = document.createElement('tr');
+
+                            const tdName = document.createElement('td');
+                            tdName.textContent = p.name || p.provider_type;
+
+                            const tdType = document.createElement('td');
+                            const typeLabel = p.provider_type === 'google' ? 'Google OAuth2' :
+                                             p.provider_type === 'oidc' ? 'OIDC' : 'OAuth2';
+                            tdType.innerHTML = '<span class="provider-type-badge">' + typeLabel + '</span>';
+
+                            const tdStatus = document.createElement('td');
+                            const statusSpan = document.createElement('span');
+                            statusSpan.className = 'status' + (p.enabled ? ' online' : '');
+                            tdStatus.appendChild(statusSpan);
+                            tdStatus.appendChild(document.createTextNode(' ' + (p.enabled ? 'Active' : 'Disabled')));
+
+                            const tdActions = document.createElement('td');
+                            tdActions.className = 'actions';
+
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.className = 'btn small ghost';
+                            toggleBtn.type = 'button';
+                            toggleBtn.textContent = p.enabled ? 'Disable' : 'Enable';
+                            toggleBtn.addEventListener('click', function() {
+                                fetch('/api/identity-providers/' + p.id + '/toggle', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ enabled: !p.enabled })
+                                })
+                                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                                    .then(function() {
+                                        showToast('Provider ' + (p.enabled ? 'disabled' : 'enabled'));
+                                        render();
+                                    })
+                                    .catch(function(err) {
+                                        console.error('Failed to toggle provider', err);
+                                        showToast('Failed to toggle provider');
+                                    });
+                            });
+
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'btn small ghost danger';
+                            deleteBtn.type = 'button';
+                            deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+                            deleteBtn.title = 'Delete';
+                            deleteBtn.addEventListener('click', function() {
+                                if (confirm('Delete identity provider "' + p.name + '"?')) {
+                                    fetch('/api/identity-providers/' + p.id, { method: 'DELETE' })
+                                        .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                                        .then(function() {
+                                            showToast('Provider deleted');
+                                            render();
+                                        })
+                                        .catch(function(err) {
+                                            console.error('Failed to delete provider', err);
+                                            showToast('Failed to delete provider');
+                                        });
+                                }
+                            });
+
+                            tdActions.appendChild(toggleBtn);
+                            tdActions.appendChild(deleteBtn);
+
+                            tr.appendChild(tdName);
+                            tr.appendChild(tdType);
+                            tr.appendChild(tdStatus);
+                            tr.appendChild(tdActions);
+
+                            tableBody.appendChild(tr);
+                        });
+
+                        if (providers.length === 0) {
+                            const tr = document.createElement('tr');
+                            const td = document.createElement('td');
+                            td.colSpan = 4;
+                            td.textContent = 'No identity providers configured';
+                            td.className = 'muted';
+                            tr.appendChild(td);
+                            tableBody.appendChild(tr);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to load identity providers', err);
+                        showToast('Failed to load identity providers');
+                    });
+            }
+
+            render();
+
+            const refreshBtn = document.getElementById('refresh-providers-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    render();
+                });
+            }
+
+            function openProviderModal() {
+                if (!providerModal) return;
+                providerModal.hidden = false;
+            }
+
+            function closeProviderModal() {
+                if (!providerModal) return;
+                providerModal.hidden = true;
+                if (providerForm) {
+                    providerForm.reset();
+                }
+                updateProviderConfig();
+            }
+
+            if (providerCancelBtn) {
+                providerCancelBtn.addEventListener('click', function() {
+                    closeProviderModal();
+                });
+            }
+
+            if (providerModal) {
+                providerModal.addEventListener('click', function(e) {
+                    if (e.target === providerModal) {
+                        closeProviderModal();
+                    }
+                });
+            }
+
+            const openProviderBtn = document.getElementById('open-provider-modal');
+            if (openProviderBtn) {
+                openProviderBtn.addEventListener('click', function() {
+                    openProviderModal();
+                });
+            }
+
+            if (providerForm) {
+                providerForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(providerForm);
+                    const data = {
+                        name: formData.get('name'),
+                        provider_type: formData.get('provider_type')
+                    };
+
+                    if (data.provider_type === 'google') {
+                        data.client_id = formData.get('google_client_id');
+                        data.client_secret = formData.get('google_client_secret');
+                    } else {
+                        data.client_id = formData.get('client_id');
+                        data.client_secret = formData.get('client_secret');
+                        data.auth_endpoint = formData.get('auth_endpoint');
+                        data.token_endpoint = formData.get('token_endpoint');
+                    }
+
+                    fetch('/api/identity-providers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    })
+                        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                        .then(function(result) {
+                            if (!result.ok || (result.data && result.data.error)) {
+                                throw new Error((result.data && result.data.error) || 'Failed to create provider');
+                            }
+                            closeProviderModal();
+                            showToast('Identity provider created');
+                            if (result.data && result.data.callback_url) {
+                                callbackUrlInput.value = result.data.callback_url;
+                                callbackModal.hidden = false;
+                            }
+                            render();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to create provider', err);
+                            showToast('Failed to create provider: ' + err.message);
+                        });
+                });
+            }
+
+            const copyCallbackBtn = document.getElementById('copy-callback-btn');
+            if (copyCallbackBtn) {
+                copyCallbackBtn.addEventListener('click', function() {
+                    callbackUrlInput.select();
+                    document.execCommand('copy');
+                    showToast('Callback URL copied to clipboard');
+                });
+            }
+
+            const callbackDoneBtn = document.getElementById('callback-done-btn');
+            if (callbackDoneBtn) {
+                callbackDoneBtn.addEventListener('click', function() {
+                    callbackModal.hidden = true;
+                });
+            }
+
+            if (callbackModal) {
+                callbackModal.addEventListener('click', function(e) {
+                    if (e.target === callbackModal) {
+                        callbackModal.hidden = true;
+                    }
+                });
+            }
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

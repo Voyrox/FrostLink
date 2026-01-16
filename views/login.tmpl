@@ -15,24 +15,17 @@
             <div class="powered">Powered by <strong>SparkProxy</strong></div>
 
             <main class="card" role="main" aria-labelledby="auth-title">
-                <h1 id="auth-title">Authentication required</h1>
-                <p class="subtitle">Choose your preferred method to log into SparkProxy</p>
+                <h1 id="auth-title">Log into SparkProxy</h1>
 
-                <div class="segmented" role="tablist" aria-label="Authentication method">
-                    <div class="segmented-track">
-                        <button class="segment is-active" role="tab" aria-selected="true" data-target="user" data-index="0">User</button>
-                        <button class="segment" role="tab" aria-selected="false" data-target="pin" data-index="1">PIN</button>
-                        <button class="segment" role="tab" aria-selected="false" data-target="passkey" data-index="2">Security key</button>
-                        <span class="segment-indicator" aria-hidden="true"></span>
-                    </div>
+                <div class="oauth-providers" id="oauth-providers">
                 </div>
 
                 <form id="panel-user" class="panel is-active" autocomplete="on" novalidate method="post" action="/login">
                     <label for="email">Email</label>
-                    <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" required />
+                    <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" required>
 
                     <label for="password">Password</label>
-                    <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+                    <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
 
                     <div class="row between">
                         <a class="link" href="#" aria-label="Forgot your password?">Forgot your password?</a>
@@ -42,67 +35,91 @@
                     <button type="button" class="btn ghost" id="btn-passkey">Continue with security key</button>
                 </form>
 
-                <form id="panel-pin" class="panel" autocomplete="off" hidden>
-                    <label for="pin">PIN</label>
-                    <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="Enter PIN" />
-                    <button type="submit" class="btn primary">Continue</button>
-                </form>
-
                 <div id="panel-passkey" class="panel" hidden>
-                    <p>Use your device security key to continue.</p>
-                    <button class="btn primary" type="button">Continue with security key</button>
+                    <div class="fingerprint-container">
+                        <div class="fingerprint-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke-opacity="0.3"/>
+                                <path d="M12 6c-2.5 0-4.5 1.5-5.5 3.5 1 2 2.5 3.5 4 4.5 1-.5 2.5-1.5 3.5-1.5s2.5 1 3.5 1.5c1.5-1 3-2.5 4-4.5-1-2-3-3.5-5.5-3.5z" stroke-opacity="0.5"/>
+                                <path d="M8 10c.5-1 1.5-2 3-2s2.5 1 3 2c.5-1 1.5-2 3-2" stroke-opacity="0.7"/>
+                                <path d="M7 12c1-1 2.5-1.5 4-1.5s3 .5 4 1.5" stroke-opacity="0.9"/>
+                                <path d="M6 14c1.5-1 3-1.5 5-1.5s3.5.5 5 1.5"/>
+                            </svg>
+                        </div>
+                        <p>Use your fingerprint, face, or security key to continue</p>
+                    </div>
+                    <button class="btn primary" type="button">Authenticate with Passkey</button>
+                    <button type="button" class="btn ghost back-btn" id="btn-back-user">Back to password</button>
                 </div>
             </main>
         </div>
 
         <script>
             (function () {
-                const track = document.querySelector('.segmented-track');
-                const indicator = document.querySelector('.segment-indicator');
-                const tabs = Array.from(document.querySelectorAll('.segment'));
                 const panels = {
                     user: document.getElementById('panel-user'),
-                    pin: document.getElementById('panel-pin'),
                     passkey: document.getElementById('panel-passkey'),
                 };
 
-                function activate(index) {
-                    tabs.forEach((t, i) => {
-                        const active = i === index;
-                        t.classList.toggle('is-active', active);
-                        t.setAttribute('aria-selected', String(active));
-                    });
-
-                    const target = tabs[index].dataset.target;
+                function showPanel(name) {
                     Object.entries(panels).forEach(([key, el]) => {
-                        const show = key === target;
+                        const show = key === name;
                         el.hidden = !show;
                         el.classList.toggle('is-active', show);
                     });
-
-                    const width = track.getBoundingClientRect().width / tabs.length;
-                    indicator.style.transform = `translateX(${index * width}px)`;
-                    indicator.style.width = `${width}px`;
                 }
-
-                function initIndicator() {
-                    const activeIdx = tabs.findIndex((t) => t.classList.contains('is-active')) || 0;
-                    const width = track.getBoundingClientRect().width / tabs.length;
-                    indicator.style.width = `${width}px`;
-                    indicator.style.transform = `translateX(${activeIdx * width}px)`;
-                }
-
-                tabs.forEach((tab, i) => {
-                    tab.addEventListener('click', () => activate(i));
-                });
-
-                window.addEventListener('resize', initIndicator);
-                initIndicator();
 
                 const passkeyBtn = document.getElementById('btn-passkey');
                 if (passkeyBtn) {
-                    passkeyBtn.addEventListener('click', () => activate(2));
+                    passkeyBtn.addEventListener('click', () => showPanel('passkey'));
                 }
+
+                const backBtn = document.getElementById('btn-back-user');
+                if (backBtn) {
+                    backBtn.addEventListener('click', () => showPanel('user'));
+                }
+
+                function loadOAuthProviders() {
+                    const container = document.getElementById('oauth-providers');
+                    if (!container) return;
+
+                    fetch('/api/identity-providers')
+                        .then(r => r.ok ? r.json() : Promise.reject(r))
+                        .then(data => {
+                            const providers = (data && data.providers) || [];
+                            const enabledProviders = providers.filter(p => p.enabled);
+
+                            if (enabledProviders.length === 0) {
+                                container.innerHTML = '';
+                                return;
+                            }
+
+                            let html = '<div class="oauth-buttons">';
+                            enabledProviders.forEach(p => {
+                                const providerClass = p.provider_type === 'google' ? 'google' : 'oauth';
+                                const providerName = p.name || p.provider_type.charAt(0).toUpperCase() + p.provider_type.slice(1);
+                                html += '<button type="button" class="btn oauth-btn ' + providerClass + '" data-provider-id="' + p.id + '">';
+                                if (p.provider_type === 'google') {
+                                    html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>';
+                                }
+                                html += '<span>Continue with ' + providerName + '</span></button>';
+                            });
+                            html += '</div>';
+                            container.innerHTML = html;
+
+                            container.querySelectorAll('.oauth-btn').forEach(btn => {
+                                btn.addEventListener('click', function() {
+                                    const providerId = this.dataset.providerId;
+                                    window.location.href = '/auth/oauth/' + providerId;
+                                });
+                            });
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to load OAuth providers', err);
+                        });
+                }
+
+                loadOAuthProviders();
             })();
         </script>
         <script>

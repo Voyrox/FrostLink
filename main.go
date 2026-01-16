@@ -196,6 +196,9 @@ func main() {
 		dashboard.GET("/api-tokens", func(c *gin.Context) { c.HTML(http.StatusOK, "api-tokens", gin.H{"ActivePage": "api-tokens"}) })
 		dashboard.GET("/streams", func(c *gin.Context) { c.HTML(http.StatusOK, "streams", gin.H{"ActivePage": "streams"}) })
 		dashboard.GET("/sidebar", func(c *gin.Context) { c.HTML(http.StatusOK, "sidebar", gin.H{"ActivePage": ""}) })
+		dashboard.GET("/identity-providers", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "identity-providers", gin.H{"ActivePage": "identity-providers"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -216,6 +219,7 @@ func main() {
 		apiRead.GET("/streams", apiStreamsList)
 		apiRead.GET("/streams/stats", apiStreamsStats)
 		apiRead.GET("/certs", apiCertsList)
+		apiRead.GET("/identity-providers", apiIdentityProvidersList)
 	}
 
 	apiWrite := r.Group("/api")
@@ -243,6 +247,9 @@ func main() {
 		apiWrite.POST("/certs/request", apiCertsRequest)
 		apiWrite.POST("/certs/:domain/renew", apiCertsRenew)
 		apiWrite.DELETE("/certs/:domain", apiCertsDelete)
+		apiWrite.POST("/identity-providers", apiIdentityProvidersCreate)
+		apiWrite.DELETE("/identity-providers/:id", apiIdentityProvidersDelete)
+		apiWrite.POST("/identity-providers/:id/toggle", apiIdentityProvidersToggle)
 	}
 
 	apiTokens := r.Group("/api/tokens")
@@ -1533,4 +1540,97 @@ func apiCertsDelete(c *gin.Context) {
 
 	core.LogAudit("cert_delete", "admin", c.ClientIP(), c.GetHeader("User-Agent"), "/api/certs/"+domain, "success", map[string]string{"domain": domain})
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type identityProviderResponse struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ProviderType string `json:"provider_type"`
+	Enabled      bool   `json:"enabled"`
+	CreatedAt    string `json:"created_at"`
+}
+
+func apiIdentityProvidersList(c *gin.Context) {
+	providers := core.ListIdentityProviders()
+	var out []identityProviderResponse
+	for _, p := range providers {
+		out = append(out, identityProviderResponse{
+			ID:           p.ID,
+			Name:         p.Name,
+			ProviderType: p.ProviderType,
+			Enabled:      p.Enabled,
+			CreatedAt:    p.CreatedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"providers": out})
+}
+
+type createIdentityProviderRequest struct {
+	Name          string `json:"name"`
+	ProviderType  string `json:"provider_type"`
+	ClientID      string `json:"client_id,omitempty"`
+	ClientSecret  string `json:"client_secret,omitempty"`
+	AuthEndpoint  string `json:"auth_endpoint,omitempty"`
+	TokenEndpoint string `json:"token_endpoint,omitempty"`
+}
+
+func apiIdentityProvidersCreate(c *gin.Context) {
+	var req createIdentityProviderRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	p, err := core.CreateIdentityProvider(req.Name, req.ProviderType, req.ClientID, req.ClientSecret, req.AuthEndpoint, req.TokenEndpoint)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	callbackURL := fmt.Sprintf("%s/_auth/oauth/callback/%s", c.Request.URL.Scheme+"://"+c.Request.Host, p.ID)
+	c.JSON(http.StatusOK, gin.H{
+		"provider": identityProviderResponse{
+			ID:           p.ID,
+			Name:         p.Name,
+			ProviderType: p.ProviderType,
+			Enabled:      p.Enabled,
+			CreatedAt:    p.CreatedAt,
+		},
+		"callback_url": callbackURL,
+	})
+}
+
+func apiIdentityProvidersDelete(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	if err := core.DeleteIdentityProvider(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type toggleIdentityProviderRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+func apiIdentityProvidersToggle(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	var req toggleIdentityProviderRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if err := core.ToggleIdentityProvider(id, req.Enabled); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "enabled": req.Enabled})
 }
