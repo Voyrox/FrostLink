@@ -2722,10 +2722,12 @@ func apiOAuthLinkCallback(c *gin.Context) {
 
 	sessionID := parts[0]
 	storedState := parts[1]
-	fmt.Printf("DEBUG apiOAuthLinkCallback: sessionID=%s storedState=%s state=%s\n", sessionID, storedState, state)
+	decodedState, _ := url.QueryUnescape(state)
+	fmt.Printf("DEBUG apiOAuthLinkCallback: sessionID=%s storedState=%s state=%s decodedState=%s\n", sessionID, storedState, state, decodedState)
 
-	if storedState != state {
-		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - state mismatch\n")
+	stateParts := strings.SplitN(decodedState, ":", 2)
+	if len(stateParts) != 2 || storedState != stateParts[1] {
+		fmt.Printf("DEBUG apiOAuthLinkCallback: FAIL - state mismatch stored=%s stateUUID=%s\n", storedState, stateParts[1])
 		c.HTML(http.StatusOK, "linked-accounts", gin.H{
 			"ActivePage":   "linked-accounts",
 			"ToastMessage": "OAuth link failed: state mismatch",
