@@ -1234,6 +1234,16 @@ func CreateIdentityProvider(name, providerType, clientID, clientSecret, authEndp
 		return IdentityProvider{}, errors.New("Google Client ID is required")
 	}
 
+	// Set default endpoints for Google
+	if providerType == "google" {
+		if authEndpoint == "" {
+			authEndpoint = "https://accounts.google.com/o/oauth2/v2/auth"
+		}
+		if tokenEndpoint == "" {
+			tokenEndpoint = "https://oauth2.googleapis.com/token"
+		}
+	}
+
 	loadProviders()
 	providersMu.Lock()
 	defer providersMu.Unlock()
@@ -1533,7 +1543,12 @@ func ExchangeOAuthCode(provider IdentityProvider, code, redirectURI string) (*OA
 }
 
 func FetchOAuthUserInfo(provider IdentityProvider, accessToken string) (*OAuthUserInfo, error) {
-	userInfoURL := fmt.Sprintf("https://discord.com/api/users/@me")
+	var userInfoURL string
+	if provider.ProviderType == "google" {
+		userInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
+	} else {
+		userInfoURL = "https://discord.com/api/users/@me"
+	}
 
 	req, err := http.NewRequest("GET", userInfoURL, nil)
 	if err != nil {
@@ -1554,10 +1569,36 @@ func FetchOAuthUserInfo(provider IdentityProvider, accessToken string) (*OAuthUs
 		return nil, fmt.Errorf("failed to get user info: %s", string(body))
 	}
 
-	var userInfo OAuthUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("DEBUG FetchOAuthUserInfo: provider=%s raw response=%s\n", provider.ProviderType, string(body))
+
+	var rawData map[string]interface{}
+	if err := json.Unmarshal(body, &rawData); err != nil {
 		return nil, fmt.Errorf("failed to decode user info: %w", err)
 	}
 
+	var userInfo OAuthUserInfo
+	if provider.ProviderType == "google" {
+		userInfo.ID = getStringFromMap(rawData, "id")
+		userInfo.Email = getStringFromMap(rawData, "email")
+		userInfo.Username = getStringFromMap(rawData, "name")
+		userInfo.Avatar = getStringFromMap(rawData, "picture")
+	} else {
+		userInfo.ID = getStringFromMap(rawData, "id")
+		userInfo.Email = getStringFromMap(rawData, "email")
+		userInfo.Username = getStringFromMap(rawData, "username")
+		userInfo.Avatar = getStringFromMap(rawData, "avatar")
+	}
+
+	fmt.Printf("DEBUG FetchOAuthUserInfo: extracted email=%s username=%s\n", userInfo.Email, userInfo.Username)
 	return &userInfo, nil
+}
+
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }

@@ -237,7 +237,7 @@ func main() {
 		public.POST("/login", loginPost)
 		public.POST("/api/login", apiLogin)
 		public.POST("/api/logout", apiLogout)
-		public.GET("/auth/oauth/:provider_id", apiOAuthLogin)
+		public.GET("/_auth/oauth/:provider_id", apiOAuthLogin)
 		public.GET("/_auth/oauth/callback/:provider_id", apiOAuthCallback)
 		public.GET("/_auth/oauth/link/:provider_id", apiOAuthLinkCallback)
 	}
@@ -1839,12 +1839,15 @@ func apiCertsDelete(c *gin.Context) {
 
 func apiOAuthLogin(c *gin.Context) {
 	providerID := c.Param("provider_id")
+	fmt.Printf("DEBUG apiOAuthLogin: providerID=%s path=%s\n", providerID, c.Request.URL.Path)
 	if providerID == "" {
+		fmt.Printf("DEBUG apiOAuthLogin: providerID is empty, redirecting to /login\n")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
 
 	provider, ok := core.GetIdentityProvider(providerID)
+	fmt.Printf("DEBUG apiOAuthLogin: providerID=%s ok=%v enabled=%v\n", providerID, ok, provider.Enabled)
 	if !ok || !provider.Enabled {
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": "OAuth provider not found or disabled",
@@ -1860,10 +1863,22 @@ func apiOAuthLogin(c *gin.Context) {
 		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/callback/%s", c.Request.Host, providerID)
 	}
 
-	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=identify%%20email&state=%s",
+	var scope string
+	if provider.ProviderType == "google" || strings.Contains(provider.AuthEndpoint, "google") {
+		scope = "https://www.googleapis.com/auth/userinfo.email%20https://www.googleapis.com/auth/userinfo.profile"
+	} else if strings.Contains(provider.AuthEndpoint, "discord.com") {
+		scope = "identify%20email"
+	} else if provider.ProviderType == "oidc" {
+		scope = "openid%20profile%20email"
+	} else {
+		scope = ""
+	}
+
+	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		provider.AuthEndpoint,
 		url.QueryEscape(provider.ClientID),
 		url.QueryEscape(callbackURL),
+		scope,
 		state)
 
 	c.Redirect(http.StatusFound, authURL)
@@ -1935,12 +1950,21 @@ func apiOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	user, found := core.GetUserByEmailWithProvider(userInfo.Email, providerID)
+	fmt.Printf("DEBUG OAuth login: email=%s username=%s\n", userInfo.Email, userInfo.Username)
+
+	user, found := core.GetUserByEmail(userInfo.Email)
 	if !found {
 		c.HTML(http.StatusOK, "login", gin.H{
 			"ToastMessage": fmt.Sprintf("User with email %s is not registered. Please contact an administrator.", userInfo.Email),
 		})
 		return
+	}
+
+	fmt.Printf("DEBUG OAuth login: found user %s, auto-linking provider %s\n", user.Username, providerID)
+
+	err = core.LinkIdentityProviderToUser(user.Username, provider, userInfo.Email)
+	if err != nil {
+		ui.SystemLog("error", "oauth", fmt.Sprintf("Failed to link provider: %v", err))
 	}
 
 	ip := c.ClientIP()
@@ -2082,6 +2106,7 @@ func apiIdentityProvidersCreate(c *gin.Context) {
 	}
 
 	callbackURL := fmt.Sprintf("%s/_auth/oauth/callback/%s", c.Request.URL.Scheme+"://"+c.Request.Host, p.ID)
+	linkCallbackURL := fmt.Sprintf("%s/_auth/oauth/link/%s", c.Request.URL.Scheme+"://"+c.Request.Host, p.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"provider": identityProviderResponse{
 			ID:           p.ID,
@@ -2090,7 +2115,8 @@ func apiIdentityProvidersCreate(c *gin.Context) {
 			Enabled:      p.Enabled,
 			CreatedAt:    p.CreatedAt,
 		},
-		"callback_url": callbackURL,
+		"callback_url":      callbackURL,
+		"link_callback_url": linkCallbackURL,
 	})
 }
 
@@ -2587,14 +2613,23 @@ func apiUserIdentityProviderLinkStart(c *gin.Context) {
 		callbackURL = fmt.Sprintf("https://%s/_auth/oauth/link/%s", c.Request.Host, providerID)
 	}
 
-	parts := strings.SplitN(linkState, ":", 2)
-	storedState := parts[1]
+	var scope string
+	if provider.ProviderType == "google" || strings.Contains(provider.AuthEndpoint, "google") {
+		scope = "https://www.googleapis.com/auth/userinfo.email%20https://www.googleapis.com/auth/userinfo.profile"
+	} else if strings.Contains(provider.AuthEndpoint, "discord.com") {
+		scope = "identify%20email"
+	} else if provider.ProviderType == "oidc" {
+		scope = "openid%20profile%20email"
+	} else {
+		scope = ""
+	}
 
-	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=identify%%20email&state=%s",
+	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
 		provider.AuthEndpoint,
 		url.QueryEscape(provider.ClientID),
 		url.QueryEscape(callbackURL),
-		url.QueryEscape(storedState))
+		scope,
+		linkState)
 
 	c.Redirect(http.StatusFound, authURL)
 }

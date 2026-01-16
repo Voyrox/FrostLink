@@ -365,3 +365,19 @@
     border-color: rgba(59, 130, 246, 0.6);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
+
+.page-identity-providers .callback-url-row {
+    margin-bottom: 16px;
+}
+
+.page-identity-providers .callback-url-row:last-of-type {
+    margin-bottom: 20px;
+}
+
+.page-identity-providers .callback-url-row label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #9ca3af;
+    margin-bottom: 6px;
+}

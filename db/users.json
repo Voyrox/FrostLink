@@ -40,6 +40,22 @@
       "role": "Owner",
       "access_type": "all",
       "domains": null
+    },
+    {
+      "username": "ewen2",
+      "email": "ewen2076@gmail.com",
+      "password_hash": "$2a$10$USpSuGItMCHhDaQwQag5HuJunV4AV4CtzDPf/EVPyxI69eZr2a6ki",
+      "identity_providers": [
+        {
+          "provider_id": "36832da1-c802-4451-8e1b-bb2d6cdde929",
+          "provider_name": "Google",
+          "email": "ewen2076@gmail.com",
+          "linked_at": "2026-01-16T22:44:08+11:00"
+        }
+      ],
+      "role": "Owner",
+      "access_type": "all",
+      "domains": null
     }
   ]
 }

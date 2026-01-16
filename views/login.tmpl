@@ -227,7 +227,7 @@
                             container.querySelectorAll('.oauth-btn').forEach(btn => {
                                 btn.addEventListener('click', function() {
                                     const providerId = this.dataset.providerId;
-                                    window.location.href = '/auth/oauth/' + providerId;
+                                    window.location.href = '/_auth/oauth/' + providerId;
                                 });
                             });
                         })

@@ -163,15 +163,25 @@
     <div class="modal-backdrop" id="callback-modal" hidden>
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="callback-modal-title">
             <div class="callback-form">
-                <h2 id="callback-modal-title">Callback URL</h2>
+                <h2 id="callback-modal-title">Callback URLs</h2>
                 <div class="callback-info">
                     <div class="callback-details">
-                        <span class="callback-status info">Configure this URL in your identity provider</span>
+                        <span class="callback-status info">Configure both URLs in your identity provider</span>
                     </div>
                 </div>
-                <div class="callback-url-box">
-                    <input type="text" id="callback-url" readonly>
-                    <button type="button" class="btn ghost" id="copy-callback-btn">Copy</button>
+                <div class="callback-url-row">
+                    <label>For Login:</label>
+                    <div class="callback-url-box">
+                        <input type="text" id="callback-url" readonly>
+                        <button type="button" class="btn ghost" id="copy-callback-btn">Copy</button>
+                    </div>
+                </div>
+                <div class="callback-url-row">
+                    <label>For Account Linking:</label>
+                    <div class="callback-url-box">
+                        <input type="text" id="link-callback-url" readonly>
+                        <button type="button" class="btn ghost" id="copy-link-callback-btn">Copy</button>
+                    </div>
                 </div>
                 <div class="actions-row">
                     <button class="btn primary" type="button" id="callback-done-btn">Done</button>
@@ -377,6 +387,7 @@
                             showToast('Identity provider created');
                             if (result.data && result.data.callback_url) {
                                 callbackUrlInput.value = result.data.callback_url;
+                                document.getElementById('link-callback-url').value = result.data.link_callback_url || '';
                                 callbackModal.hidden = false;
                             }
                             render();
@@ -394,6 +405,16 @@
                     callbackUrlInput.select();
                     document.execCommand('copy');
                     showToast('Callback URL copied to clipboard');
+                });
+            }
+
+            const copyLinkCallbackBtn = document.getElementById('copy-link-callback-btn');
+            if (copyLinkCallbackBtn) {
+                copyLinkCallbackBtn.addEventListener('click', function() {
+                    const linkUrlInput = document.getElementById('link-callback-url');
+                    linkUrlInput.select();
+                    document.execCommand('copy');
+                    showToast('Link callback URL copied to clipboard');
                 });
             }
 
