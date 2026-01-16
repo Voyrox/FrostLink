@@ -162,6 +162,17 @@
     background: #0c111a
 }
 
+.page-domains .table tbody tr:hover .domain-link {
+    color: #22d3ee;
+}
+
+.page-domains .domain-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.15s ease;
+}
+
 .page-domains .status {
     display: inline-block;
     width: 10px;
@@ -350,6 +361,30 @@
     background: rgba(107, 114, 128, 0.15);
     color: #9ca3af;
     border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+.page-domains .ssl-badge.detected {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.page-domains .ssl-badge.invalid {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.page-domains .ssl-badge.expired {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.page-domains .ssl-badge.expiring {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 .page-domains .ssl-lock-btn {
@@ -617,4 +652,17 @@
 .page-domains .cert-form .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.page-domains .ssl-scan-btn {
+    margin-right: 4px;
+}
+
+.page-domains .ssl-scan-btn .spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }

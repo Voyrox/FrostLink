@@ -372,7 +372,13 @@
                             const tr = document.createElement('tr');
 
                             const tdName = document.createElement('td');
-                            tdName.textContent = cfg.domain || cfg.host || '';
+                            const domainLink = document.createElement('a');
+                            domainLink.href = '/domains/' + encodeURIComponent(cfg.domain);
+                            domainLink.className = 'domain-link';
+                            domainLink.textContent = cfg.domain || cfg.host || '';
+                            domainLink.style.color = 'inherit';
+                            domainLink.style.textDecoration = 'none';
+                            tdName.appendChild(domainLink);
 
                             const tdOnline = document.createElement('td');
                             const statusSpan = document.createElement('span');
@@ -415,18 +421,19 @@
 
                             const tdSsl = document.createElement('td');
                             const isSslEnabled = cfg.SSL === true || cfg.SSL === "true";
-                            let certStatus = 'None';
-                            if (isSslEnabled) {
-                                if (cfg.cert_status === 'auto') {
-                                    certStatus = 'Auto';
-                                } else if (cfg.cert_status === 'custom' || (cfg.pubkey && cfg.pubkey !== '')) {
-                                    certStatus = 'Custom';
-                                }
-                            }
+
                             const sslBadge = document.createElement('span');
-                            sslBadge.className = 'ssl-badge ssl-' + certStatus.toLowerCase();
-                            sslBadge.textContent = certStatus;
+                            sslBadge.className = 'ssl-badge ssl-none';
+                            sslBadge.textContent = 'None';
                             tdSsl.appendChild(sslBadge);
+
+                            const sslScanBtn = document.createElement('button');
+                            sslScanBtn.className = 'btn small ghost ssl-scan-btn';
+                            sslScanBtn.type = 'button';
+                            sslScanBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+                            sslScanBtn.title = 'Scan for certificate';
+                            tdSsl.appendChild(sslScanBtn);
+
                             const sslBtn = document.createElement('button');
                             sslBtn.className = 'btn small ghost ssl-lock-btn';
                             sslBtn.type = 'button';
@@ -436,6 +443,68 @@
                                 openCertModal(cfg.domain);
                             });
                             tdSsl.appendChild(sslBtn);
+
+                            if (isSslEnabled) {
+                                fetch('/api/certs/' + encodeURIComponent(cfg.domain) + '/verify')
+                                    .then(r => r.ok ? r.json() : null)
+                                    .then(data => {
+                                        if (!data) return;
+                                        let status = 'None';
+                                        let cssClass = 'none';
+                                        let tooltip = '';
+
+                                        if (data.custom_cert_configured && data.custom_cert_valid) {
+                                            status = 'Custom';
+                                            cssClass = 'custom';
+                                        } else if (data.custom_cert_configured && !data.custom_cert_valid) {
+                                            status = 'Invalid';
+                                            cssClass = 'invalid';
+                                            tooltip = data.custom_cert_error || 'Custom cert invalid';
+                                        } else if (data.auto_detected && data.auto_detected_valid) {
+                                            status = 'Detected';
+                                            cssClass = 'detected';
+                                            if (data.auto_detected_path) {
+                                                tooltip = data.auto_detected_path;
+                                            }
+                                        } else if (data.acme_exists) {
+                                            status = 'Auto';
+                                            cssClass = 'auto';
+                                        }
+
+                                        if (data.effective_cert_info && data.effective_cert_info.expires_at) {
+                                            const expDate = new Date(data.effective_cert_info.expires_at);
+                                            const daysLeft = Math.max(0, Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24)));
+                                            if (daysLeft <= 7) {
+                                                cssClass = 'expired';
+                                            } else if (daysLeft <= 30) {
+                                                cssClass = 'expiring';
+                                            }
+                                        }
+
+                                        sslBadge.className = 'ssl-badge ssl-' + cssClass;
+                                        sslBadge.textContent = status;
+                                        if (tooltip) {
+                                            sslBadge.title = tooltip;
+                                        }
+                                    })
+                                    .catch(() => {});
+                            }
+
+                            sslScanBtn.addEventListener('click', function() {
+                                sslScanBtn.disabled = true;
+                                sslScanBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+                                fetch('/api/certs/' + encodeURIComponent(cfg.domain) + '/verify')
+                                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                                    .then(data => {
+                                        showToast('Certificate scan complete');
+                                        render();
+                                    })
+                                    .catch(err => {
+                                        console.error('Scan failed', err);
+                                        showToast('Scan failed');
+                                        render();
+                                    });
+                            });
 
                             const tdActions = document.createElement('td');
                             tdActions.className = 'actions';

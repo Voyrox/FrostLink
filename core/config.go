@@ -1,6 +1,8 @@
 package core
 
 import (
+	"crypto/tls"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -179,22 +181,79 @@ func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFi
 	return WriteConfig(".", cfg)
 }
 
+func ValidateCertificatePaths(certPath, keyPath string) error {
+	if certPath == "" || keyPath == "" {
+		return fmt.Errorf("certificate or key path is empty")
+	}
+
+	certStat, err := os.Stat(certPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("certificate file does not exist: %s", certPath)
+		}
+		return fmt.Errorf("cannot access certificate file: %w", err)
+	}
+	if certStat.IsDir() {
+		return fmt.Errorf("certificate path is a directory: %s", certPath)
+	}
+
+	keyStat, err := os.Stat(keyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("key file does not exist: %s", keyPath)
+		}
+		return fmt.Errorf("cannot access key file: %w", err)
+	}
+	if keyStat.IsDir() {
+		return fmt.Errorf("key path is a directory: %s", keyPath)
+	}
+
+	_, err = tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return fmt.Errorf("failed to load certificate pair: %w", err)
+	}
+
+	return nil
+}
+
 func UpdateDomainCertPaths(domain string, certFile, keyFile string) error {
 	cfg, ok := GetDomainConfig(domain)
 	if !ok {
 		return os.ErrNotExist
 	}
 
-	if certFile != "" {
-		s := strings.TrimSpace(certFile)
-		cfg.SSLCertificate = &s
-	}
-	if keyFile != "" {
-		s := strings.TrimSpace(keyFile)
-		cfg.SSLCertificateKey = &s
+	fmt.Printf("DEBUG UpdateDomainCertPaths: domain=%s, certFile=%s, keyFile=%s\n", domain, certFile, keyFile)
+
+	if certFile != "" && keyFile != "" {
+		fmt.Printf("DEBUG: Validating certificate paths...\n")
+		if err := ValidateCertificatePaths(certFile, keyFile); err != nil {
+			fmt.Printf("DEBUG: Validation failed: %v\n", err)
+			return err
+		}
+		fmt.Printf("DEBUG: Validation passed\n")
+		certTrimmed := strings.TrimSpace(certFile)
+		keyTrimmed := strings.TrimSpace(keyFile)
+		cfg.SSLCertificate = &certTrimmed
+		cfg.SSLCertificateKey = &keyTrimmed
+	} else {
+		if certFile != "" {
+			s := strings.TrimSpace(certFile)
+			cfg.SSLCertificate = &s
+		}
+		if keyFile != "" {
+			s := strings.TrimSpace(keyFile)
+			cfg.SSLCertificateKey = &s
+		}
 	}
 
-	return WriteConfig(".", cfg)
+	fmt.Printf("DEBUG: Writing config...\n")
+	if err := WriteConfig(".", cfg); err != nil {
+		fmt.Printf("DEBUG: WriteConfig failed: %v\n", err)
+		return err
+	}
+	fmt.Printf("DEBUG: Config written successfully\n")
+
+	return nil
 }
 
 func DeleteDomain(domain string) error {

@@ -79,6 +79,36 @@ func GetCertificate(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		return cert, nil
 	}
 
+	certMu.RLock()
+	cfg, ok := core.GetDomainConfig(name)
+	certMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("no certificate for %s", name)
+	}
+
+	if cfg.SSLCertificate != nil && cfg.SSLCertificateKey != nil &&
+		*cfg.SSLCertificate != "" && *cfg.SSLCertificateKey != "" {
+		if ValidateCertificatePaths(*cfg.SSLCertificate, *cfg.SSLCertificateKey) == nil {
+			cert, err := loadCertAndKey(*cfg.SSLCertificate, *cfg.SSLCertificateKey)
+			if err == nil {
+				certMu.Lock()
+				staticCerts[name] = cert
+				certMu.Unlock()
+				return cert, nil
+			}
+		}
+
+		if certPath, keyPath, found, err := AutoDetectAndAdopt(name); err == nil && found {
+			cert, err := loadCertAndKey(certPath, keyPath)
+			if err == nil {
+				certMu.Lock()
+				staticCerts[name] = cert
+				certMu.Unlock()
+				return cert, nil
+			}
+		}
+	}
+
 	return nil, fmt.Errorf("no certificate for %s", name)
 }
 

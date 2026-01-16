@@ -1,0 +1,626 @@
+{{ define "streams" }}
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <title>SparkProxy • TCP Streams</title>
+    <link rel="stylesheet" href="/css/global.css" />
+    <link rel="stylesheet" href="/css/sidebar.css" />
+    <link rel="stylesheet" href="/css/streams.css" />
+</head>
+
+<body class="page-streams">
+    <div class="app">
+        {{ template "sidebar" . }}
+        {{ template "notifications" . }}
+
+        <main class="content" role="main" aria-labelledby="page-title">
+            <header class="page-header">
+                <h1 id="page-title">TCP Streams</h1>
+                <p class="subtitle">Configure TCP stream proxies for SMTP, IMAP, and other TCP services</p>
+            </header>
+
+            <section class="panel" aria-label="Streams Panel">
+                <div class="toolbar">
+                    <div class="left">
+                        <div class="stats-summary">
+                            <span id="total-streams">0</span> streams,
+                            <span id="active-connections">0</span> active connections
+                        </div>
+                    </div>
+                    <div class="right">
+                        <button class="btn ghost" type="button" id="refresh-streams-btn">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2" />
+                                    <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn ghost" type="button" id="open-stream-modal">
+                            <span class="icon orange" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </span>
+                            <span>Add Stream</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table" role="grid">
+                        <thead>
+                            <tr>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span> Domain</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                                <path d="M21 3v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                            </svg>
+                                        </span> Listen Port</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M21 12a9 9 0 1 1-9-9" stroke="currentColor" stroke-width="2"/>
+                                                <path d="M21 21v-4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                            </svg>
+                                        </span> Upstream</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span> TLS Mode</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                                <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                            </svg>
+                                        </span> Status</span></th>
+                                <th scope="col"><span class="th"><span class="icon" aria-hidden="true">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                                <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+                                            </svg>
+                                        </span> Connections</span></th>
+                                <th scope="col" class="actions-col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="streams-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="modal-backdrop" id="stream-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stream-modal-title">
+            <div class="stream-form">
+                <h2 id="stream-modal-title">Add Stream</h2>
+                <div class="stream-info" id="stream-info"><div class="stream-details"><span class="stream-status none">New stream</span></div></div>
+                <form id="stream-form">
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Domain <small class="muted">(optional - leave empty for port forward)</small></span>
+                            <input type="text" name="domain" placeholder="smtp.example.com or *.example.com">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label>
+                            <span>Listen Port</span>
+                            <input type="number" name="listen_port" required placeholder="25, 443, 993..." min="1" max="65535">
+                        </label>
+                        <label>
+                            <span>Upstream</span>
+                            <input type="text" name="upstream" required placeholder="192.168.1.60:25">
+                        </label>
+                    </div>
+                    <div class="field-row tls-options" hidden>
+                        <label class="full-width">
+                            <span>TLS Mode</span>
+                            <div class="radio-row">
+                                <label>
+                                    <input type="radio" name="tls_mode" value="pass-through" checked>
+                                    <span>Pass-through</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="tls_mode" value="terminate">
+                                    <span>Terminate</span>
+                                </label>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="field-row tls-details" id="tls-paths" hidden>
+                        <label class="full-width">
+                            <span>Certificate Path</span>
+                            <input type="text" name="cert_file" placeholder="/etc/ssl/certs/stream.crt">
+                        </label>
+                        <label class="full-width">
+                            <span>Key Path</span>
+                            <input type="text" name="key_file" placeholder="/etc/ssl/private/stream.key">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label>
+                            <span>Max Connections</span>
+                            <input type="number" name="max_conns" value="100" placeholder="100">
+                        </label>
+                    </div>
+                    <div class="actions-row">
+                        <button class="btn primary" type="submit">Create Stream</button>
+                        <button class="btn ghost" type="button" id="stream-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="edit-stream-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-stream-modal-title">
+            <div class="stream-form">
+                <h2 id="edit-stream-modal-title">Edit Stream</h2>
+                <div class="stream-info" id="edit-stream-info"><div class="stream-details"><span class="stream-status none">Edit stream</span></div></div>
+                <form id="edit-stream-form">
+                    <input type="hidden" name="edit_id" id="edit-id">
+                    <div class="field-row">
+                        <label class="full-width">
+                            <span>Domain <small class="muted">(optional - leave empty for port forward)</small></span>
+                            <input type="text" id="edit-domain" placeholder="smtp.example.com or *.example.com">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label>
+                            <span>Listen Port</span>
+                            <input type="number" name="listen_port" id="edit-listen-port" required placeholder="25, 443..." min="1" max="65535">
+                        </label>
+                        <label>
+                            <span>Upstream</span>
+                            <input type="text" name="upstream" id="edit-upstream" required placeholder="192.168.1.60:25">
+                        </label>
+                    </div>
+                    <div class="field-row tls-options" hidden>
+                        <label class="full-width">
+                            <span>TLS Mode</span>
+                            <div class="radio-row">
+                                <label>
+                                    <input type="radio" name="edit_tls_mode" value="pass-through" id="edit-tls-pass">
+                                    <span>Pass-through</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="edit_tls_mode" value="terminate" id="edit-tls-term">
+                                    <span>Terminate</span>
+                                </label>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="field-row tls-details" id="edit-tls-paths" hidden>
+                        <label class="full-width">
+                            <span>Certificate Path</span>
+                            <input type="text" name="cert_file" id="edit-cert-file" placeholder="/etc/ssl/certs/stream.crt">
+                        </label>
+                        <label class="full-width">
+                            <span>Key Path</span>
+                            <input type="text" name="key_file" id="edit-key-file" placeholder="/etc/ssl/private/stream.key">
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label>
+                            <span>Max Connections</span>
+                            <input type="number" name="max_conns" id="edit-max-conns" placeholder="100">
+                        </label>
+                    </div>
+                    <div class="actions-row">
+                        <button class="btn primary" type="submit">Save Changes</button>
+                        <button class="btn ghost" type="button" id="edit-stream-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .page-streams .muted {
+            color: var(--muted);
+            font-weight: normal;
+        }
+        .page-streams .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .page-streams .badge.port-forward {
+            background: rgba(34, 211, 238, 0.15);
+            color: #22d3ee;
+        }
+        .page-streams .badge.domain {
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+        }
+        .stream-form h2 {
+            color: var(--orange);
+        }
+        .stream-info {
+            margin-bottom: 1.25rem;
+            padding: 0.75rem 1rem;
+            background: rgba(252, 128, 51, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(252, 128, 51, 0.15);
+        }
+        .stream-details {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .stream-status {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+        .stream-status.none {
+            color: var(--muted);
+        }
+        .stream-status.active {
+            color: #22c55e;
+        }
+        .stream-status.disabled {
+            color: #ef4444;
+        }
+    </style>
+
+    <script>
+        (function () {
+            const tableBody = document.getElementById('streams-table-body');
+            const streamModal = document.getElementById('stream-modal');
+            const streamForm = document.getElementById('stream-form');
+            const streamCancelBtn = document.getElementById('stream-cancel-btn');
+            const editStreamModal = document.getElementById('edit-stream-modal');
+            const editStreamForm = document.getElementById('edit-stream-form');
+            const editStreamCancelBtn = document.getElementById('edit-stream-cancel-btn');
+            const tlsModeRadios = document.querySelectorAll('input[name="tls_mode"]');
+            const editTLSModeRadios = document.querySelectorAll('input[name="edit_tls_mode"]');
+            const tlsPaths = document.getElementById('tls-paths');
+            const editTLSPaths = document.getElementById('edit-tls-paths');
+            const tlsOptions = document.querySelectorAll('.tls-options');
+
+            function formatBytes(bytes) {
+                if (!bytes || bytes <= 0) return '0 B';
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                let i = 0;
+                let value = bytes;
+                while (value >= 1024 && i < units.length - 1) {
+                    value /= 1024;
+                    i++;
+                }
+                return value.toFixed(1) + ' ' + units[i];
+            }
+
+            function updateTLSDetails() {
+                const domainInput = streamForm.querySelector('input[name="domain"]');
+                const hasDomain = domainInput && domainInput.value.trim() !== '';
+                const tlsDetails = document.getElementById('tls-paths');
+                tlsOptions.forEach(el => el.hidden = !hasDomain);
+                if (tlsDetails) tlsDetails.hidden = !hasDomain;
+            }
+
+            function updateEditTLSDetails() {
+                const domainInput = editStreamForm.querySelector('input[id="edit-domain"]');
+                const hasDomain = domainInput && domainInput.value.trim() !== '';
+                tlsOptions.forEach(el => el.hidden = !hasDomain);
+                if (editTLSPaths) editTLSPaths.hidden = !hasDomain;
+            }
+
+            function render() {
+                fetch('/api/streams')
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        const streams = (data && data.streams) || [];
+                        const stats = (data && data.stats) || {};
+                        tableBody.innerHTML = '';
+
+                        let totalConns = 0;
+
+                        streams.forEach(s => {
+                            const st = stats[s.id] || {};
+                            totalConns += st.active_conns || 0;
+
+                            const tr = document.createElement('tr');
+
+                            const tdDomain = document.createElement('td');
+                            if (s.domain) {
+                                tdDomain.innerHTML = s.domain + '<span class="badge domain">SNI</span>';
+                            } else {
+                                tdDomain.innerHTML = '—<span class="badge port-forward">Port Forward</span>';
+                            }
+
+                            const tdListenPort = document.createElement('td');
+                            tdListenPort.textContent = s.listen_port;
+
+                            const tdUpstream = document.createElement('td');
+                            tdUpstream.textContent = s.upstream;
+
+                            const tdTLS = document.createElement('td');
+                            if (s.domain && s.tls_mode) {
+                                tdTLS.textContent = s.tls_mode === 'pass-through' ? 'Pass-through' : 'Terminate';
+                            } else {
+                                tdTLS.textContent = '—';
+                            }
+
+                            const tdStatus = document.createElement('td');
+                            const statusSpan = document.createElement('span');
+                            statusSpan.className = 'status' + (s.enabled ? ' online' : '');
+                            tdStatus.appendChild(statusSpan);
+                            tdStatus.appendChild(document.createTextNode(' ' + (s.enabled ? 'Active' : 'Disabled')));
+
+                            const tdConns = document.createElement('td');
+                            tdConns.textContent = st.active_conns || 0;
+
+                            const tdActions = document.createElement('td');
+                            tdActions.className = 'actions';
+
+                            const editBtn = document.createElement('button');
+                            editBtn.className = 'btn small ghost';
+                            editBtn.type = 'button';
+                            editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+                            editBtn.title = 'Edit';
+                            editBtn.addEventListener('click', function() {
+                                openEditStreamModal(s);
+                            });
+
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'btn small ghost danger';
+                            deleteBtn.type = 'button';
+                            deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+                            deleteBtn.title = 'Delete';
+                            deleteBtn.addEventListener('click', function() {
+                                const displayName = s.domain || 'Port ' + s.listen_port;
+                                if (confirm('Delete stream "' + displayName + '"?')) {
+                                    fetch('/api/streams/' + s.id, { method: 'DELETE' })
+                                        .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                                        .then(function() {
+                                            showToast('Stream deleted');
+                                            render();
+                                        })
+                                        .catch(function(err) {
+                                            console.error('Failed to delete stream', err);
+                                            showToast('Failed to delete stream');
+                                        });
+                                }
+                            });
+
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.className = 'btn small ghost';
+                            toggleBtn.type = 'button';
+                            toggleBtn.textContent = s.enabled ? 'Disable' : 'Enable';
+                            toggleBtn.addEventListener('click', function() {
+                                fetch('/api/streams/' + s.id + '/toggle', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ enabled: !s.enabled })
+                                })
+                                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+                                    .then(function() {
+                                        showToast('Stream ' + (s.enabled ? 'disabled' : 'enabled'));
+                                        render();
+                                    })
+                                    .catch(function(err) {
+                                        console.error('Failed to toggle stream', err);
+                                        showToast('Failed to toggle stream');
+                                    });
+                            });
+
+                            tdActions.appendChild(editBtn);
+                            tdActions.appendChild(deleteBtn);
+                            tdActions.appendChild(toggleBtn);
+
+                            tr.appendChild(tdDomain);
+                            tr.appendChild(tdListenPort);
+                            tr.appendChild(tdUpstream);
+                            tr.appendChild(tdTLS);
+                            tr.appendChild(tdStatus);
+                            tr.appendChild(tdConns);
+                            tr.appendChild(tdActions);
+
+                            tableBody.appendChild(tr);
+                        });
+
+                        document.getElementById('total-streams').textContent = streams.length;
+                        document.getElementById('active-connections').textContent = totalConns;
+                    })
+                    .catch(err => {
+                        console.error('Failed to load streams', err);
+                        showToast('Failed to load streams');
+                    });
+            }
+
+            render();
+
+            document.getElementById('refresh-streams-btn').addEventListener('click', render);
+
+            const domainInput = streamForm.querySelector('input[name="domain"]');
+            if (domainInput) {
+                domainInput.addEventListener('input', updateTLSDetails);
+            }
+            updateTLSDetails();
+
+            const editDomainInput = editStreamForm.querySelector('input[id="edit-domain"]');
+            if (editDomainInput) {
+                editDomainInput.addEventListener('input', updateEditTLSDetails);
+            }
+            updateEditTLSDetails();
+
+            function openStreamModal() {
+                if (streamModal) streamModal.hidden = false;
+            }
+
+            function closeStreamModal() {
+                if (streamModal) {
+                    streamModal.hidden = true;
+                    if (streamForm) streamForm.reset();
+                }
+                updateTLSDetails();
+            }
+
+            if (streamCancelBtn) {
+                streamCancelBtn.addEventListener('click', closeStreamModal);
+            }
+
+            if (streamModal) {
+                streamModal.addEventListener('click', function(e) {
+                    if (e.target === streamModal) closeStreamModal();
+                });
+            }
+
+            document.getElementById('open-stream-modal').addEventListener('click', openStreamModal);
+
+            if (streamForm) {
+                streamForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(streamForm);
+                    const domain = String(formData.get('domain') || '').trim();
+                    const listenPort = parseInt(formData.get('listen_port') || '0');
+                    const upstream = String(formData.get('upstream') || '').trim();
+                    const tlsMode = String(formData.get('tls_mode') || 'pass-through');
+                    const certFile = String(formData.get('cert_file') || '').trim();
+                    const keyFile = String(formData.get('key_file') || '').trim();
+                    const maxConns = parseInt(formData.get('max_conns') || '100');
+
+                    if (!listenPort || !upstream) {
+                        showToast('Listen port and upstream are required');
+                        return;
+                    }
+
+                    if (domain && tlsMode === 'terminate' && (!certFile || !keyFile)) {
+                        showToast('Certificate and key paths are required for TLS terminate mode');
+                        return;
+                    }
+
+                    fetch('/api/streams', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            domain: domain,
+                            listen_port: listenPort,
+                            upstream: upstream,
+                            tls_mode: domain ? tlsMode : '',
+                            cert_file: (domain && tlsMode === 'terminate') ? certFile : undefined,
+                            key_file: (domain && tlsMode === 'terminate') ? keyFile : undefined,
+                            max_conns: maxConns,
+                            enabled: true
+                        })
+                    })
+                        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                        .then(function(result) {
+                            if (!result.ok || (result.data && result.data.error)) {
+                                throw new Error((result.data && result.data.error) || 'Failed to create stream');
+                            }
+                            closeStreamModal();
+                            showToast('Stream created');
+                            render();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to create stream', err);
+                            showToast('Failed to create stream: ' + err.message);
+                        });
+                });
+            }
+
+            function openEditStreamModal(s) {
+                if (!editStreamModal) return;
+                document.getElementById('edit-id').value = s.id;
+                document.getElementById('edit-domain').value = s.domain || '';
+                document.getElementById('edit-listen-port').value = s.listen_port;
+                document.getElementById('edit-upstream').value = s.upstream;
+                document.getElementById('edit-cert-file').value = s.cert_file || '';
+                document.getElementById('edit-key-file').value = s.key_file || '';
+                document.getElementById('edit-max-conns').value = s.max_conns || 100;
+
+                if (!s.domain) {
+                    document.getElementById('edit-tls-pass').checked = true;
+                } else if (s.tls_mode === 'pass-through') {
+                    document.getElementById('edit-tls-pass').checked = true;
+                } else {
+                    document.getElementById('edit-tls-term').checked = true;
+                }
+                updateEditTLSDetails();
+                editStreamModal.hidden = false;
+            }
+
+            function closeEditStreamModal() {
+                if (!editStreamModal) return;
+                editStreamModal.hidden = true;
+            }
+
+            if (editStreamCancelBtn) {
+                editStreamCancelBtn.addEventListener('click', closeEditStreamModal);
+            }
+
+            if (editStreamModal) {
+                editStreamModal.addEventListener('click', function(e) {
+                    if (e.target === editStreamModal) closeEditStreamModal();
+                });
+            }
+
+            if (editStreamForm) {
+                editStreamForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(editStreamForm);
+                    const id = String(formData.get('edit_id') || '').trim();
+                    const domain = String(formData.get('edit_domain') || '').trim();
+                    const listenPort = parseInt(formData.get('listen_port') || '0');
+                    const upstream = String(formData.get('upstream') || '').trim();
+                    const certFile = String(formData.get('cert_file') || '').trim();
+                    const keyFile = String(formData.get('key_file') || '').trim();
+                    const maxConns = parseInt(formData.get('max_conns') || '0');
+                    const tlsMode = document.querySelector('input[name="edit_tls_mode"]:checked')?.value || 'pass-through';
+
+                    if (!listenPort || !upstream) {
+                        showToast('Listen port and upstream are required');
+                        return;
+                    }
+
+                    fetch('/api/streams/' + id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            domain: domain,
+                            listen_port: listenPort,
+                            upstream: upstream,
+                            tls_mode: domain ? tlsMode : '',
+                            cert_file: (domain && tlsMode === 'terminate') ? certFile : undefined,
+                            key_file: (domain && tlsMode === 'terminate') ? keyFile : undefined,
+                            max_conns: maxConns,
+                            enabled: true
+                        })
+                    })
+                        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+                        .then(function(result) {
+                            if (!result.ok || (result.data && result.data.error)) {
+                                throw new Error((result.data && result.data.error) || 'Failed to update stream');
+                            }
+                            closeEditStreamModal();
+                            showToast('Stream updated');
+                            render();
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to update stream', err);
+                            showToast('Failed to update stream: ' + err.message);
+                        });
+                });
+            }
+        })();
+    </script>
+</body>
+
+</html>
+{{ end }}

@@ -20,10 +20,16 @@ import (
 	"github.com/go-acme/lego/v4/registration"
 )
 
+func getCertsPath() string {
+	if p := os.Getenv("SP_CERTS_PATH"); p != "" {
+		return p
+	}
+	return "/etc/letsencrypt"
+}
+
 const (
 	acmeProdURL    = "https://acme-v02.api.letsencrypt.org/directory"
 	acmeStagingURL = "https://acme-staging-v02.api.letsencrypt.org/directory"
-	accountsPath   = "db/certs/accounts"
 )
 
 type ACMEClient struct {
@@ -177,6 +183,7 @@ func (c *ACMEClient) ObtainCertificate(domain string) (*ACMECertificate, error) 
 }
 
 func (c *ACMEClient) RenewCertificate(domain string) (*ACMECertificate, error) {
+	certsPath := getCertsPath()
 	certPath := filepath.Join(certsPath, "live", domain, "cert.pem")
 	keyPath := filepath.Join(certsPath, "live", domain, "privkey.pem")
 	issuerPath := filepath.Join(certsPath, "live", domain, "issuer.pem")
@@ -227,7 +234,7 @@ func (c *ACMEClient) RenewCertificate(domain string) (*ACMECertificate, error) {
 }
 
 func loadOrCreateAccountKey(dataPath string, email string) (crypto.PrivateKey, error) {
-	accountDir := filepath.Join(accountsPath, sanitizeEmail(email))
+	accountDir := filepath.Join(getCertsPath(), "accounts", sanitizeEmail(email))
 	keyPath := filepath.Join(accountDir, "account.key")
 
 	if _, err := os.Stat(keyPath); err == nil {
@@ -255,7 +262,7 @@ func loadOrCreateAccountKey(dataPath string, email string) (crypto.PrivateKey, e
 }
 
 func saveAccountRegistration(dataPath string, email string, reg *registration.Resource) {
-	accountDir := filepath.Join(accountsPath, sanitizeEmail(email))
+	accountDir := filepath.Join(getCertsPath(), "accounts", sanitizeEmail(email))
 	os.MkdirAll(accountDir, 0700)
 
 	regData := map[string]interface{}{
@@ -266,22 +273,26 @@ func saveAccountRegistration(dataPath string, email string, reg *registration.Re
 }
 
 func saveCertificate(dataPath, domain string, certs *certificate.Resource) (string, error) {
+	certsPath := getCertsPath()
 	domainPath := filepath.Join(certsPath, "live", domain)
-	os.MkdirAll(domainPath, 0700)
+
+	if err := os.MkdirAll(domainPath, 0700); err != nil {
+		return tryFallbackSave(domain, certs, err)
+	}
 
 	certPath := filepath.Join(domainPath, "cert.pem")
 	if err := os.WriteFile(certPath, certs.Certificate, 0600); err != nil {
-		return "", err
+		return tryFallbackSave(domain, certs, err)
 	}
 
 	keyPath := filepath.Join(domainPath, "privkey.pem")
 	if err := os.WriteFile(keyPath, certs.PrivateKey, 0600); err != nil {
-		return "", err
+		return tryFallbackSave(domain, certs, err)
 	}
 
 	issuerPath := filepath.Join(domainPath, "issuer.pem")
 	if err := os.WriteFile(issuerPath, certs.IssuerCertificate, 0600); err != nil {
-		return "", err
+		return tryFallbackSave(domain, certs, err)
 	}
 
 	meta := certMeta{
@@ -292,6 +303,39 @@ func saveCertificate(dataPath, domain string, certs *certificate.Resource) (stri
 	}
 	metaData, _ := json.MarshalIndent(meta, "", "  ")
 	os.WriteFile(filepath.Join(domainPath, "cert.json"), metaData, 0600)
+
+	return certPath, nil
+}
+
+func tryFallbackSave(domain string, certs *certificate.Resource, primaryErr error) (string, error) {
+	fallbackPath := filepath.Join("db/certs", "live", domain)
+	if err := os.MkdirAll(fallbackPath, 0700); err != nil {
+		return "", fmt.Errorf("primary (%s) and fallback (db/certs) both failed: %v", primaryErr, err)
+	}
+
+	certPath := filepath.Join(fallbackPath, "cert.pem")
+	if err := os.WriteFile(certPath, certs.Certificate, 0600); err != nil {
+		return "", fmt.Errorf("primary (%s) and fallback failed: %v", primaryErr, err)
+	}
+
+	keyPath := filepath.Join(fallbackPath, "privkey.pem")
+	if err := os.WriteFile(keyPath, certs.PrivateKey, 0600); err != nil {
+		return "", fmt.Errorf("primary (%s) and fallback failed: %v", primaryErr, err)
+	}
+
+	issuerPath := filepath.Join(fallbackPath, "issuer.pem")
+	if err := os.WriteFile(issuerPath, certs.IssuerCertificate, 0600); err != nil {
+		return "", fmt.Errorf("primary (%s) and fallback failed: %v", primaryErr, err)
+	}
+
+	meta := certMeta{
+		Source:     SourceAuto,
+		ExpiresAt:  time.Now().Add(90 * 24 * time.Hour),
+		Provider:   "cloudflare",
+		UseStaging: false,
+	}
+	metaData, _ := json.MarshalIndent(meta, "", "  ")
+	os.WriteFile(filepath.Join(fallbackPath, "cert.json"), metaData, 0600)
 
 	return certPath, nil
 }
