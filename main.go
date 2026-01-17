@@ -317,6 +317,60 @@ func main() {
 		apiRead.GET("/passkeys", apiPasskeysList)
 		apiRead.GET("/settings", apiSettingsGet)
 		apiRead.GET("/users/me/identity-providers", apiUserIdentityProvidersList)
+		apiRead.GET("/logs", func(c *gin.Context) {
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+
+			result := core.GetRequestLogsPaginated(page, limit)
+			c.JSON(http.StatusOK, gin.H{
+				"logs": result.Logs,
+				"pagination": gin.H{
+					"page":        result.Page,
+					"limit":       result.Limit,
+					"total":       result.Total,
+					"total_pages": result.TotalPages,
+				},
+			})
+		})
+		apiRead.GET("/analytics", func(c *gin.Context) {
+			stats := proxy.GetDomainStats()
+
+			totalRequests := int64(0)
+			totalBlocked := int64(0)
+			domains := []map[string]interface{}{}
+
+			for _, s := range stats {
+				totalRequests += s.TotalRequests
+				domains = append(domains, map[string]interface{}{
+					"domain":         s.Domain,
+					"total_requests": s.TotalRequests,
+					"data_in":        s.DataInTotal,
+					"data_out":       s.DataOutTotal,
+					"last_ip":        s.LastIP,
+					"last_country":   s.LastCountry,
+					"last_path":      s.LastPath,
+				})
+			}
+
+			logs := core.GetRequestLogs()
+			for _, log := range logs {
+				if log.Action != "Allow" {
+					totalBlocked++
+				}
+			}
+
+			blockedPct := 0.0
+			if totalRequests > 0 {
+				blockedPct = float64(totalBlocked) / float64(totalRequests) * 100
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"total_requests":     totalRequests,
+				"total_blocked":      totalBlocked,
+				"blocked_percentage": blockedPct,
+				"domains":            domains,
+			})
+		})
 	}
 
 	apiWrite := r.Group("/api")
