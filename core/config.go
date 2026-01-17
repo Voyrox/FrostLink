@@ -9,20 +9,17 @@ import (
 	"strings"
 )
 
-type RateLimitConfig struct {
-	Enabled           bool `json:"enabled"`
-	RequestsPerSecond int  `json:"requests_per_second"`
-	Burst             int  `json:"burst"`
+type Config struct {
+	Domain            string  `json:"domain"`
+	Location          string  `json:"host"`
+	AllowSSL          bool    `json:"SSL"`
+	AllowHTTP         bool    `json:"HTTP"`
+	SSLCertificate    *string `json:"pubkey"`
+	SSLCertificateKey *string `json:"privkey"`
 }
 
-type Config struct {
-	Domain            string          `json:"domain"`
-	Location          string          `json:"host"`
-	AllowSSL          bool            `json:"SSL"`
-	AllowHTTP         bool            `json:"HTTP"`
-	SSLCertificate    *string         `json:"pubkey"`
-	SSLCertificateKey *string         `json:"privkey"`
-	RateLimit         RateLimitConfig `json:"rate_limit"`
+func ptr(s string) *string {
+	return &s
 }
 
 func ReadConfigs(dir string) []Config {
@@ -42,70 +39,49 @@ func ReadConfigs(dir string) []Config {
 		if err != nil {
 			continue
 		}
-		domain, location, ssl, httpOk, pub, priv, rateLimit, ok := ParseConfig(string(b))
+		cfg, ok := ParseConfig(string(b))
 		if !ok {
 			continue
 		}
-		cfgs = append(cfgs, Config{Domain: domain, Location: location, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pub, SSLCertificateKey: priv, RateLimit: rateLimit})
+		cfgs = append(cfgs, cfg)
 	}
 	return cfgs
 }
 
-func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP bool, pub, priv *string, rateLimit RateLimitConfig, ok bool) {
+func ParseConfig(content string) (cfg Config, ok bool) {
 	lines := strings.Split(content, "\n")
 	var d, l string
 	var sslPtr, httpPtr *bool
 	var pubStr, privStr *string
-	rateLimit = RateLimitConfig{Enabled: false, RequestsPerSecond: 10, Burst: 20}
-	var inRateLimit bool
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "rate_limit:") {
-			inRateLimit = true
-			continue
-		}
-		if inRateLimit {
-			if line == "}" {
-				inRateLimit = false
-				continue
-			}
-			if strings.HasPrefix(line, "enabled:") {
-				v := strings.TrimPrefix(line, "enabled:")
-				v = strings.TrimSpace(v)
-				rateLimit.Enabled = v == "true" || v == "1"
-			} else if strings.HasPrefix(line, "requests_per_second:") {
-				v := strings.TrimPrefix(line, "requests_per_second:")
-				v = strings.TrimSpace(v)
-				fmt.Sscanf(v, "%d", &rateLimit.RequestsPerSecond)
-			} else if strings.HasPrefix(line, "burst:") {
-				v := strings.TrimPrefix(line, "burst:")
-				v = strings.TrimSpace(v)
-				fmt.Sscanf(v, "%d", &rateLimit.Burst)
-			}
-			continue
-		}
-		if strings.HasPrefix(line, "domain: ") {
-			d = strings.TrimPrefix(line, "domain: ")
-		} else if strings.HasPrefix(line, "location: ") {
-			l = strings.TrimPrefix(line, "location: ")
-		} else if strings.HasPrefix(line, "AllowSSL: ") {
-			v := strings.TrimPrefix(line, "AllowSSL: ")
+		if strings.HasPrefix(line, "domain:") {
+			d = strings.TrimPrefix(line, "domain:")
+			d = strings.TrimSpace(d)
+		} else if strings.HasPrefix(line, "location:") {
+			l = strings.TrimPrefix(line, "location:")
+			l = strings.TrimSpace(l)
+		} else if strings.HasPrefix(line, "AllowSSL:") {
+			v := strings.TrimPrefix(line, "AllowSSL:")
+			v = strings.TrimSpace(v)
 			b := v == "true" || v == "1"
 			sslPtr = &b
-		} else if strings.HasPrefix(line, "AllowHTTP: ") {
-			v := strings.TrimPrefix(line, "AllowHTTP: ")
+		} else if strings.HasPrefix(line, "AllowHTTP:") {
+			v := strings.TrimPrefix(line, "AllowHTTP:")
+			v = strings.TrimSpace(v)
 			b := v == "true" || v == "1"
 			httpPtr = &b
-		} else if strings.HasPrefix(line, "ssl_certificate: ") {
-			s := strings.TrimPrefix(line, "ssl_certificate: ")
-			pubStr = &s
-		} else if strings.HasPrefix(line, "ssl_certificate_key: ") {
-			s := strings.TrimPrefix(line, "ssl_certificate_key: ")
-			privStr = &s
+		} else if strings.HasPrefix(line, "ssl_certificate:") {
+			s := strings.TrimPrefix(line, "ssl_certificate:")
+			pubStr = ptr(strings.TrimSpace(s))
+		} else if strings.HasPrefix(line, "ssl_certificate_key:") {
+			s := strings.TrimPrefix(line, "ssl_certificate_key:")
+			privStr = ptr(strings.TrimSpace(s))
 		}
 	}
 	if d == "" || l == "" {
-		return "", "", false, true, nil, nil, RateLimitConfig{}, false
+		return Config{}, false
 	}
 	ssl := false
 	if sslPtr != nil {
@@ -115,10 +91,10 @@ func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP b
 	if httpPtr != nil {
 		httpOk = *httpPtr
 	}
-	if ssl && (pubStr == nil || privStr == nil) {
-		return "", "", false, true, nil, nil, RateLimitConfig{}, false
+	if ssl && (pubStr == nil || *pubStr == "") {
+		return Config{}, false
 	}
-	return d, l, ssl, httpOk, pubStr, privStr, rateLimit, true
+	return Config{Domain: d, Location: l, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pubStr, SSLCertificateKey: privStr}, true
 }
 
 func WriteConfig(dir string, cfg Config) error {
@@ -151,13 +127,6 @@ func WriteConfig(dir string, cfg Config) error {
 		b.WriteString("        AllowHTTP: false\n")
 	}
 	b.WriteString("    }\n")
-
-	b.WriteString("    rate_limit: {\n")
-	b.WriteString(fmt.Sprintf("        enabled: %v\n", cfg.RateLimit.Enabled))
-	b.WriteString(fmt.Sprintf("        requests_per_second: %d\n", cfg.RateLimit.RequestsPerSecond))
-	b.WriteString(fmt.Sprintf("        burst: %d\n", cfg.RateLimit.Burst))
-	b.WriteString("    }\n")
-
 	b.WriteString("}\n\n")
 
 	pub := ""
@@ -192,14 +161,14 @@ func GetDomainConfig(domain string) (Config, bool) {
 	if err != nil {
 		return Config{}, false
 	}
-	d, l, ssl, httpOk, pub, priv, rateLimit, ok := ParseConfig(string(b))
+	cfg, ok := ParseConfig(string(b))
 	if !ok {
 		return Config{}, false
 	}
-	return Config{Domain: d, Location: l, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pub, SSLCertificateKey: priv, RateLimit: rateLimit}, true
+	return cfg, true
 }
 
-func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFile, keyFile string, rateLimit RateLimitConfig) error {
+func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFile, keyFile string) error {
 	cfg, ok := GetDomainConfig(domain)
 	if !ok {
 		return os.ErrNotExist
@@ -208,7 +177,6 @@ func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFi
 	cfg.Location = strings.TrimSpace(target)
 	cfg.AllowSSL = allowSSL
 	cfg.AllowHTTP = allowHTTP
-	cfg.RateLimit = rateLimit
 
 	if certFile != "" {
 		s := strings.TrimSpace(certFile)

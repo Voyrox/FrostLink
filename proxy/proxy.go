@@ -25,7 +25,6 @@ import (
 	"SparkProxy/core"
 	"SparkProxy/ui"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/oschwald/geoip2-golang"
 )
@@ -109,8 +108,7 @@ var (
 
 func ReloadConfigs() {
 	ProxyConfigs = core.ReadConfigs("./domains")
-	GetRateLimiter().Reset()
-	ui.SystemLog("info", "proxy", "Configs reloaded, rate limiter reset")
+	ui.SystemLog("info", "proxy", "Configs reloaded")
 }
 
 type ipRange struct {
@@ -485,21 +483,6 @@ func itoa(i int) string {
 	return string(rune('0'+i/1000%10)) + string(rune('0'+i/100%10)) + string(rune('0'+i/10%10)) + string(rune('0'+i%10))
 }
 
-func serveRateLimitExceeded(w stdhttp.ResponseWriter, domain string, rl RateLimitConfig) {
-	tpl := template.Must(template.ParseFiles("./views/rate-limit.tmpl"))
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rl.RequestsPerSecond))
-	w.Header().Set("X-RateLimit-Remaining", "0")
-	w.Header().Set("Retry-After", "1")
-	w.WriteHeader(stdhttp.StatusTooManyRequests)
-	tpl.Execute(w, gin.H{
-		"Domain":     domain,
-		"Limit":      rl.RequestsPerSecond,
-		"Period":     "second",
-		"RetryAfter": 1,
-	})
-}
-
 func StartProxy() error {
 	initAnalyticsPersistence()
 	go cleanupVerifiedCookies()
@@ -552,21 +535,6 @@ func StartProxy() error {
 
 		if GetDomainAuth(cfg.Domain) && !isAuthorizedForDomain(cfg.Domain, r) {
 			redirectToAuthLogin(w, r, cfg)
-			return
-		}
-
-		rateLimiter := GetRateLimiter()
-		if !rateLimiter.Allow(cfg.Domain, ip, RateLimitConfig{
-			Enabled:           cfg.RateLimit.Enabled,
-			RequestsPerSecond: cfg.RateLimit.RequestsPerSecond,
-			Burst:             cfg.RateLimit.Burst,
-		}) {
-			IncRateLimitHits(cfg.Domain)
-			serveRateLimitExceeded(w, cfg.Domain, RateLimitConfig{
-				Enabled:           cfg.RateLimit.Enabled,
-				RequestsPerSecond: cfg.RateLimit.RequestsPerSecond,
-				Burst:             cfg.RateLimit.Burst,
-			})
 			return
 		}
 
