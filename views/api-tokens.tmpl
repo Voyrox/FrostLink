@@ -284,7 +284,10 @@
                     revokeBtn.textContent = 'Revoke';
                     revokeBtn.addEventListener('click', function() {
                         if (!confirm('Revoke token "' + token.name + '"? This action cannot be undone.')) return;
-                        fetch('/api/tokens/' + encodeURIComponent(token.id), { method: 'DELETE' })
+                        fetch('/api/tokens/' + encodeURIComponent(token.id), {
+                            method: 'DELETE',
+                            headers: { 'X-CSRF-Token': getCSRFToken() }
+                        })
                             .then(function(r) { return r.json(); })
                             .then(function(data) {
                                 if (data && data.error) {
@@ -359,18 +362,26 @@
                 });
             });
 
+            function getCSRFToken() {
+                const match = document.cookie.match(/csrf_token=([^;]+)/);
+                return match ? match[1] : '';
+            }
+
             if (createForm) {
                 createForm.addEventListener('submit', function(e) {
                     e.preventDefault();
                     const formData = new FormData(createForm);
                     const data = {
                         name: formData.get('name'),
-                        permission: formData.get('permission'),
+                        permissions: formData.get('permission'),
                         expiration: parseInt(formData.get('expiration')) || 0
                     };
                     fetch('/api/tokens', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCSRFToken()
+                        },
                         body: JSON.stringify(data)
                     })
                         .then(function(r) { return r.json(); })

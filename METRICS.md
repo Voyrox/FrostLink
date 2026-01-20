@@ -50,6 +50,12 @@ scrape_configs:
 |--------|------|--------|-------------|
 | `sparkproxy_firewall_blocks_total` | counter | domain | Firewall blocked requests |
 
+### Rate Limiting Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `sparkproxy_rate_limit_hits_total` | counter | domain | Total number of rate limit hits (429 responses) |
+
 ### System Metrics
 
 | Metric | Type | Description |
@@ -87,6 +93,12 @@ rate(sparkproxy_request_duration_seconds_sum[5m]) / rate(sparkproxy_request_dura
 
 ```promql
 rate(sparkproxy_firewall_blocks_total[5m])
+```
+
+### Rate limit hits
+
+```promql
+rate(sparkproxy_rate_limit_hits_total[5m])  # rate of 429s
 ```
 
 ### Traffic volume

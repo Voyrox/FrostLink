@@ -18,6 +18,10 @@ type Config struct {
 	SSLCertificateKey *string `json:"privkey"`
 }
 
+func ptr(s string) *string {
+	return &s
+}
+
 func ReadConfigs(dir string) []Config {
 	entries, err := ioutil.ReadDir(dir)
 	if err != nil {
@@ -35,44 +39,49 @@ func ReadConfigs(dir string) []Config {
 		if err != nil {
 			continue
 		}
-		domain, location, ssl, httpOk, pub, priv, ok := ParseConfig(string(b))
+		cfg, ok := ParseConfig(string(b))
 		if !ok {
 			continue
 		}
-		cfgs = append(cfgs, Config{Domain: domain, Location: location, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pub, SSLCertificateKey: priv})
+		cfgs = append(cfgs, cfg)
 	}
 	return cfgs
 }
 
-func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP bool, pub, priv *string, ok bool) {
+func ParseConfig(content string) (cfg Config, ok bool) {
 	lines := strings.Split(content, "\n")
 	var d, l string
 	var sslPtr, httpPtr *bool
 	var pubStr, privStr *string
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "domain: ") {
-			d = strings.TrimPrefix(line, "domain: ")
-		} else if strings.HasPrefix(line, "location: ") {
-			l = strings.TrimPrefix(line, "location: ")
-		} else if strings.HasPrefix(line, "AllowSSL: ") {
-			v := strings.TrimPrefix(line, "AllowSSL: ")
+		if strings.HasPrefix(line, "domain:") {
+			d = strings.TrimPrefix(line, "domain:")
+			d = strings.TrimSpace(d)
+		} else if strings.HasPrefix(line, "location:") {
+			l = strings.TrimPrefix(line, "location:")
+			l = strings.TrimSpace(l)
+		} else if strings.HasPrefix(line, "AllowSSL:") {
+			v := strings.TrimPrefix(line, "AllowSSL:")
+			v = strings.TrimSpace(v)
 			b := v == "true" || v == "1"
 			sslPtr = &b
-		} else if strings.HasPrefix(line, "AllowHTTP: ") {
-			v := strings.TrimPrefix(line, "AllowHTTP: ")
+		} else if strings.HasPrefix(line, "AllowHTTP:") {
+			v := strings.TrimPrefix(line, "AllowHTTP:")
+			v = strings.TrimSpace(v)
 			b := v == "true" || v == "1"
 			httpPtr = &b
-		} else if strings.HasPrefix(line, "ssl_certificate: ") {
-			s := strings.TrimPrefix(line, "ssl_certificate: ")
-			pubStr = &s
-		} else if strings.HasPrefix(line, "ssl_certificate_key: ") {
-			s := strings.TrimPrefix(line, "ssl_certificate_key: ")
-			privStr = &s
+		} else if strings.HasPrefix(line, "ssl_certificate:") {
+			s := strings.TrimPrefix(line, "ssl_certificate:")
+			pubStr = ptr(strings.TrimSpace(s))
+		} else if strings.HasPrefix(line, "ssl_certificate_key:") {
+			s := strings.TrimPrefix(line, "ssl_certificate_key:")
+			privStr = ptr(strings.TrimSpace(s))
 		}
 	}
 	if d == "" || l == "" {
-		return "", "", false, true, nil, nil, false
+		return Config{}, false
 	}
 	ssl := false
 	if sslPtr != nil {
@@ -82,10 +91,10 @@ func ParseConfig(content string) (domain, location string, allowSSL, allowHTTP b
 	if httpPtr != nil {
 		httpOk = *httpPtr
 	}
-	if ssl && (pubStr == nil || privStr == nil) {
-		return "", "", false, true, nil, nil, false
+	if ssl && (pubStr == nil || *pubStr == "") {
+		return Config{}, false
 	}
-	return d, l, ssl, httpOk, pubStr, privStr, true
+	return Config{Domain: d, Location: l, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pubStr, SSLCertificateKey: privStr}, true
 }
 
 func WriteConfig(dir string, cfg Config) error {
@@ -152,11 +161,11 @@ func GetDomainConfig(domain string) (Config, bool) {
 	if err != nil {
 		return Config{}, false
 	}
-	d, l, ssl, httpOk, pub, priv, ok := ParseConfig(string(b))
+	cfg, ok := ParseConfig(string(b))
 	if !ok {
 		return Config{}, false
 	}
-	return Config{Domain: d, Location: l, AllowSSL: ssl, AllowHTTP: httpOk, SSLCertificate: pub, SSLCertificateKey: priv}, true
+	return cfg, true
 }
 
 func UpdateDomain(domain string, target string, allowSSL, allowHTTP bool, certFile, keyFile string) error {

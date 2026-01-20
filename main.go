@@ -94,6 +94,11 @@ func csrfMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		if authType, exists := c.Get("auth_type"); exists && authType == "api_token" {
+			c.Next()
+			return
+		}
+
 		sid, err := c.Cookie("session")
 		if err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "csrf: no session"})
@@ -192,7 +197,7 @@ func authRequired() gin.HandlerFunc {
 	}
 }
 
-func apiAuthRequired() gin.HandlerFunc {
+func apiReadAuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sid, err := c.Cookie("session")
 		if err == nil && sid != "" && core.ValidateSession(sid) {
@@ -216,9 +221,86 @@ func apiAuthRequired() gin.HandlerFunc {
 			}
 		}
 
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+				token := parts[1]
+				domain := extractDomain(c)
+				if tokenObj, valid := core.ValidateAPIToken(token, "read", domain); valid {
+					c.Set("api_token_id", tokenObj.ID)
+					c.Set("api_token_name", tokenObj.Name)
+					c.Set("auth_type", "api_token")
+					c.Next()
+					return
+				}
+				if tokenObj, valid := core.ValidateAPIToken(token, "write", domain); valid {
+					c.Set("api_token_id", tokenObj.ID)
+					c.Set("api_token_name", tokenObj.Name)
+					c.Set("auth_type", "api_token")
+					c.Next()
+					return
+				}
+			}
+		}
+
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		c.Abort()
 	}
+}
+
+func apiWriteAuthRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sid, err := c.Cookie("session")
+		if err == nil && sid != "" && core.ValidateSession(sid) {
+			c.Set("session_id", sid)
+			c.Next()
+			return
+		}
+
+		spAuthShared, err := c.Cookie("sp_auth_shared")
+		if err == nil && spAuthShared != "" {
+			domain := c.Request.Host
+			if i := strings.IndexByte(domain, ':'); i > -1 {
+				domain = domain[:i]
+			}
+			username, valid := mainVerifySharedToken(spAuthShared, domain)
+			if valid {
+				c.Set("session_id", spAuthShared)
+				c.Set("username", username)
+				c.Next()
+				return
+			}
+		}
+
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+				token := parts[1]
+				domain := extractDomain(c)
+				if tokenObj, valid := core.ValidateAPIToken(token, "write", domain); valid {
+					c.Set("api_token_id", tokenObj.ID)
+					c.Set("api_token_name", tokenObj.Name)
+					c.Set("auth_type", "api_token")
+					core.UpdateAPITokenLastUsed(tokenObj.ID)
+					c.Next()
+					return
+				}
+			}
+		}
+
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.Abort()
+	}
+}
+
+func extractDomain(c *gin.Context) string {
+	domain := c.Request.Host
+	if i := strings.IndexByte(domain, ':'); i > -1 {
+		domain = domain[:i]
+	}
+	return domain
 }
 
 func main() {
@@ -282,6 +364,9 @@ func main() {
 		dashboard.GET("/linked-accounts", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "linked-accounts", gin.H{"ActivePage": "linked-accounts"})
 		})
+		dashboard.GET("/rate-limits", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "rate-limits", gin.H{"ActivePage": "rate-limits"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -290,7 +375,7 @@ func main() {
 
 	apiRead := r.Group("/api")
 	apiRead.GET("/identity-providers/public", apiIdentityProvidersList)
-	apiRead.Use(apiAuthRequired())
+	apiRead.Use(apiReadAuthRequired())
 	{
 		apiRead.GET("/dashboard", apiDashboard)
 		apiRead.GET("/system", apiSystem)
@@ -300,8 +385,7 @@ func main() {
 		apiRead.GET("/domains/:domain/logs", apiDomainLogs)
 		apiRead.GET("/domains/:domain/analytics", apiDomainAnalytics)
 		apiRead.GET("/domains/:domain/profiler", apiDomainProfilerStatus)
-		apiRead.GET("/domains/:domain/under-attack", apiUnderAttackStatus)
-		apiRead.GET("/logs", apiLogs)
+
 		apiRead.GET("/users", apiUsersList)
 		apiRead.GET("/users/me", apiUsersMe)
 		apiRead.GET("/roles", apiRolesList)
@@ -315,10 +399,64 @@ func main() {
 		apiRead.GET("/passkeys", apiPasskeysList)
 		apiRead.GET("/settings", apiSettingsGet)
 		apiRead.GET("/users/me/identity-providers", apiUserIdentityProvidersList)
+		apiRead.GET("/logs", func(c *gin.Context) {
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+
+			result := core.GetRequestLogsPaginated(page, limit)
+			c.JSON(http.StatusOK, gin.H{
+				"logs": result.Logs,
+				"pagination": gin.H{
+					"page":        result.Page,
+					"limit":       result.Limit,
+					"total":       result.Total,
+					"total_pages": result.TotalPages,
+				},
+			})
+		})
+		apiRead.GET("/analytics", func(c *gin.Context) {
+			stats := proxy.GetDomainStats()
+
+			totalRequests := int64(0)
+			totalBlocked := int64(0)
+			domains := []map[string]interface{}{}
+
+			for _, s := range stats {
+				totalRequests += s.TotalRequests
+				domains = append(domains, map[string]interface{}{
+					"domain":         s.Domain,
+					"total_requests": s.TotalRequests,
+					"data_in":        s.DataInTotal,
+					"data_out":       s.DataOutTotal,
+					"last_ip":        s.LastIP,
+					"last_country":   s.LastCountry,
+					"last_path":      s.LastPath,
+				})
+			}
+
+			logs := core.GetRequestLogs()
+			for _, log := range logs {
+				if log.Action != "Allow" {
+					totalBlocked++
+				}
+			}
+
+			blockedPct := 0.0
+			if totalRequests > 0 {
+				blockedPct = float64(totalBlocked) / float64(totalRequests) * 100
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"total_requests":     totalRequests,
+				"total_blocked":      totalBlocked,
+				"blocked_percentage": blockedPct,
+				"domains":            domains,
+			})
+		})
 	}
 
 	apiWrite := r.Group("/api")
-	apiWrite.Use(apiAuthRequired(), csrfMiddleware())
+	apiWrite.Use(apiWriteAuthRequired(), csrfMiddleware())
 	{
 		apiWrite.POST("/passkeys/register/start", apiPasskeyRegistrationStart)
 		apiWrite.POST("/passkeys/register/complete", apiPasskeyRegistrationComplete)
@@ -362,8 +500,8 @@ func main() {
 	apiTokens := r.Group("/api/tokens")
 	{
 		apiTokens.GET("", apiTokensList)
-		apiTokens.POST("", apiAuthRequired(), csrfMiddleware(), apiTokensCreate)
-		apiTokens.DELETE("/:id", apiAuthRequired(), csrfMiddleware(), apiTokensRevoke)
+		apiTokens.POST("", apiWriteAuthRequired(), csrfMiddleware(), apiTokensCreate)
+		apiTokens.DELETE("/:id", apiWriteAuthRequired(), csrfMiddleware(), apiTokensRevoke)
 	}
 
 	prometheusRegistry := prometheus.NewRegistry()
@@ -380,7 +518,7 @@ func main() {
 	go func() {
 		cfgs := core.ReadConfigs("./domains")
 		proxy.SetActiveDomains(len(cfgs))
-		if err := proxy.StartProxy(cfgs); err != nil {
+		if err := proxy.StartProxy(); err != nil {
 			ui.SystemLog("error", "proxy", fmt.Sprintf("Proxy error: %v", err))
 		}
 	}()
@@ -1548,9 +1686,10 @@ func apiFirewallUnbanCountry(c *gin.Context) {
 }
 
 type createTokenRequest struct {
-	Name       string `json:"name"`
-	Permission string `json:"permission"`
-	Expiration int    `json:"expiration"`
+	Name           string   `json:"name"`
+	Permission     string   `json:"permissions"`
+	Expiration     int      `json:"expiration"`
+	AllowedDomains []string `json:"allowed_domains"`
 }
 
 func apiTokensList(c *gin.Context) {
@@ -1597,7 +1736,7 @@ func apiTokensCreate(c *gin.Context) {
 		expiresDays = &req.Expiration
 	}
 
-	fullToken, err := core.CreateAPIToken(req.Name, req.Permission, username, expiresDays)
+	fullToken, err := core.CreateAPIToken(req.Name, req.Permission, username, expiresDays, req.AllowedDomains)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
 		return

@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"SparkProxy/core"
@@ -101,11 +102,54 @@ var (
 
 	indexTplOnce sync.Once
 	indexTpl     *template.Template
+
+	ProxyConfigs []core.Config
 )
+
+func ReloadConfigs() {
+	ProxyConfigs = core.ReadConfigs("./domains")
+	ui.SystemLog("info", "proxy", "Configs reloaded")
+}
 
 type ipRange struct {
 	network *net.IPNet
 	country string
+}
+
+type UpstreamPool struct {
+	upstreams []string
+	index     uint32
+	mu        sync.RWMutex
+}
+
+func NewUpstreamPool(location string) *UpstreamPool {
+	upstreams := []string{}
+	for _, u := range strings.Split(location, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			upstreams = append(upstreams, u)
+		}
+	}
+	return &UpstreamPool{
+		upstreams: upstreams,
+		index:     0,
+	}
+}
+
+func (p *UpstreamPool) Next() string {
+	if len(p.upstreams) == 0 {
+		return ""
+	}
+	idx := atomic.AddUint32(&p.index, 1) - 1
+	return p.upstreams[idx%uint32(len(p.upstreams))]
+}
+
+func (p *UpstreamPool) GetAll() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	copyUpstreams := make([]string, len(p.upstreams))
+	copy(copyUpstreams, p.upstreams)
+	return copyUpstreams
 }
 
 func clientIP(r *stdhttp.Request) string {
@@ -439,9 +483,11 @@ func itoa(i int) string {
 	return string(rune('0'+i/1000%10)) + string(rune('0'+i/100%10)) + string(rune('0'+i/10%10)) + string(rune('0'+i%10))
 }
 
-func StartProxy(configs []core.Config) error {
+func StartProxy() error {
 	initAnalyticsPersistence()
 	go cleanupVerifiedCookies()
+
+	ProxyConfigs = core.ReadConfigs("./domains")
 
 	addr := os.Getenv("PROXY_ADDR")
 	if addr == "" {
@@ -468,7 +514,7 @@ func StartProxy(configs []core.Config) error {
 		}
 
 		host := r.Host
-		cfg, ok := findConfigByHost(configs, host)
+		cfg, ok := findConfigByHost(ProxyConfigs, host)
 		if !ok {
 			serveIndexPage(w, r)
 			return
@@ -492,13 +538,15 @@ func StartProxy(configs []core.Config) error {
 			return
 		}
 
-		upstream := cfg.Location
-		if upstream == "" {
+		upstreamPool := NewUpstreamPool(cfg.Location)
+		upstreams := upstreamPool.GetAll()
+		if len(upstreams) == 0 {
 			w.WriteHeader(stdhttp.StatusBadGateway)
-			_, _ = w.Write([]byte("Upstream not configured"))
+			_, _ = w.Write([]byte("No upstreams configured"))
 			return
 		}
 
+		upstream := upstreamPool.Next()
 		targetURL, err := url.Parse("http://" + strings.TrimSpace(upstream))
 		if err != nil {
 			w.WriteHeader(stdhttp.StatusBadGateway)
@@ -542,7 +590,7 @@ func StartProxy(configs []core.Config) error {
 	})
 
 	ui.SystemLog("info", "http-proxy", fmt.Sprintf("Listening on %s", addr))
-	go StartTLSProxy(configs, mux)
+	go StartTLSProxy(ProxyConfigs, mux)
 	go func() {
 		if err := stdhttp.ListenAndServe(addr, mux); err != nil {
 			ui.SystemLog("error", "http-proxy", fmt.Sprintf("Server error: %v", err))

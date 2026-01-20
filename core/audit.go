@@ -217,13 +217,13 @@ func GetAuditStats() (total, last24h int) {
 }
 
 type RequestLog struct {
-	Timestamp time.Time
-	Action    string
-	IP        string
-	Country   string
-	Host      string
-	Path      string
-	Method    string
+	Timestamp time.Time `json:"timestamp"`
+	Action    string    `json:"action"`
+	IP        string    `json:"ip"`
+	Country   string    `json:"location"`
+	Host      string    `json:"host"`
+	Path      string    `json:"path"`
+	Method    string    `json:"method"`
 }
 
 type requestLogFile struct {
