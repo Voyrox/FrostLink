@@ -208,13 +208,13 @@
     right: 0;
     bottom: 0;
     z-index: 1000;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.page-api-tokens .modal.active {
-    display: flex;
+.page-api-tokens .modal[hidden] {
+    display: none;
 }
 
 .page-api-tokens .modal-backdrop {
@@ -225,6 +225,10 @@
     bottom: 0;
     background: rgba(0, 0, 0, .7);
     backdrop-filter: blur(4px);
+}
+
+.page-api-tokens .modal-backdrop[hidden] {
+    display: none;
 }
 
 .page-api-tokens .modal-content {
@@ -265,19 +269,24 @@
     color: var(--text);
 }
 
-.page-api-tokens .form-group {
+.page-api-tokens .token-form .field-row {
     margin-bottom: 16px;
 }
 
-.page-api-tokens .form-group label {
-    display: block;
-    margin-bottom: 6px;
-    font-size: .9rem;
-    color: var(--muted);
+.page-api-tokens .token-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-.page-api-tokens .form-group input,
-.page-api-tokens .form-group select {
+.page-api-tokens .token-form label > span {
+    font-size: .85rem;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.page-api-tokens .token-form input[type="text"],
+.page-api-tokens .token-form select {
     width: 100%;
     padding: 10px 12px;
     border-radius: 8px;
@@ -285,19 +294,44 @@
     background: #0c111a;
     color: var(--text);
     font-size: .95rem;
+    transition: border-color .2s ease, background .2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
 }
 
-.page-api-tokens .form-group input:focus,
-.page-api-tokens .form-group select:focus {
+.page-api-tokens .token-form input[type="text"]:focus,
+.page-api-tokens .token-form select:focus {
     outline: none;
     border-color: var(--orange);
+    background-color: #0e1420;
 }
 
-.page-api-tokens .form-actions {
+.page-api-tokens .token-form input[type="text"]::placeholder {
+    color: var(--muted);
+}
+
+.page-api-tokens .token-form select option {
+    background: #0c111a;
+    color: var(--text);
+    padding: 10px;
+}
+
+.page-api-tokens .token-form .actions-row {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
     margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.page-api-tokens .token-form .actions-row .btn {
+    padding: 10px 20px;
+    font-size: .95rem;
 }
 
 .page-api-tokens .token-display .warning {
@@ -317,17 +351,62 @@
 
 .page-api-tokens .token-value input {
     flex: 1;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 8px;
-    border: 1px solid #1e293b;
-    background: #0c111a;
+    border: 1px solid var(--orange);
+    background: rgba(252, 128, 51, 0.05);
     color: var(--text);
     font-family: monospace;
     font-size: .9rem;
+    letter-spacing: 0.5px;
+}
+
+.page-api-tokens .token-value input:focus {
+    outline: none;
+    background: rgba(252, 128, 51, 0.08);
+}
+
+.page-api-tokens .token-value .btn {
+    padding: 10px 16px;
+    font-size: .9rem;
+    white-space: nowrap;
+}
+
+.page-api-tokens .token-display-form .actions-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.page-api-tokens .token-display-form .actions-row .btn {
+    padding: 10px 24px;
+}
 }
 
 @media (max-width:900px) {
     .page-api-tokens .table {
         min-width: 700px;
+    }
+}
+
+@media (max-width:600px) {
+    .page-api-tokens .app {
+        grid-template-columns: 1fr;
+    }
+
+    .page-api-tokens .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-api-tokens .toolbar .right {
+        justify-content: flex-start;
+    }
+
+    .page-api-tokens .modal-content {
+        margin: 16px;
+        padding: 20px;
     }
 }

@@ -660,16 +660,17 @@ func randomBytes(n int) []byte {
 }
 
 type APIToken struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	TokenPrefix string     `json:"token_prefix"`
-	TokenHash   string     `json:"token_hash"`
-	Permission  string     `json:"permission"`
-	CreatedBy   string     `json:"created_by"`
-	CreatedAt   time.Time  `json:"created_at"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	Active      bool       `json:"active"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	TokenPrefix    string     `json:"token_prefix"`
+	TokenHash      string     `json:"token_hash"`
+	Permission     string     `json:"permission"`
+	AllowedDomains []string   `json:"allowed_domains"`
+	CreatedBy      string     `json:"created_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastUsedAt     *time.Time `json:"last_used_at"`
+	ExpiresAt      *time.Time `json:"expires_at"`
+	Active         bool       `json:"active"`
 }
 
 type tokenFile struct {
@@ -761,7 +762,7 @@ func HashAPIToken(token string) (string, error) {
 	return string(hash), nil
 }
 
-func CreateAPIToken(name, permission, createdBy string, expiresInDays *int) (fullToken string, err error) {
+func CreateAPIToken(name, permission, createdBy string, expiresInDays *int, allowedDomains []string) (fullToken string, err error) {
 	fullToken, tokenID, prefix, err := GenerateAPIToken()
 	if err != nil {
 		return "", err
@@ -779,16 +780,25 @@ func CreateAPIToken(name, permission, createdBy string, expiresInDays *int) (ful
 		expiresAt = &exp
 	}
 
+	var domains []string
+	for _, d := range allowedDomains {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if d != "" {
+			domains = append(domains, d)
+		}
+	}
+
 	t := APIToken{
-		ID:          tokenID,
-		Name:        name,
-		TokenPrefix: prefix,
-		TokenHash:   hash,
-		Permission:  permission,
-		CreatedBy:   createdBy,
-		CreatedAt:   now,
-		ExpiresAt:   expiresAt,
-		Active:      true,
+		ID:             tokenID,
+		Name:           name,
+		TokenPrefix:    prefix,
+		TokenHash:      hash,
+		Permission:     permission,
+		AllowedDomains: domains,
+		CreatedBy:      createdBy,
+		CreatedAt:      now,
+		ExpiresAt:      expiresAt,
+		Active:         true,
 	}
 
 	tokensMu.Lock()
@@ -799,7 +809,7 @@ func CreateAPIToken(name, permission, createdBy string, expiresInDays *int) (ful
 	return fullToken, nil
 }
 
-func ValidateAPIToken(rawToken, requiredPermission string) (*APIToken, bool) {
+func ValidateAPIToken(rawToken, requiredPermission, domain string) (*APIToken, bool) {
 	loadTokens()
 	tokensMu.RLock()
 	defer tokensMu.RUnlock()
@@ -815,6 +825,19 @@ func ValidateAPIToken(rawToken, requiredPermission string) (*APIToken, bool) {
 			continue
 		}
 		if err := bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(rawToken)); err == nil {
+			if domain != "" && len(t.AllowedDomains) > 0 {
+				domainLower := strings.ToLower(domain)
+				allowed := false
+				for _, d := range t.AllowedDomains {
+					if strings.ToLower(d) == domainLower {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					continue
+				}
+			}
 			return &t, true
 		}
 	}
@@ -891,15 +914,16 @@ func ListPublicPaginated(page, limit int) PaginatedTokensResponse {
 	allTokens := make([]map[string]interface{}, 0, len(tokens))
 	for _, t := range tokens {
 		allTokens = append(allTokens, map[string]interface{}{
-			"id":           t.ID,
-			"name":         t.Name,
-			"token_prefix": t.TokenPrefix,
-			"permission":   t.Permission,
-			"created_by":   t.CreatedBy,
-			"created_at":   t.CreatedAt.Format(time.RFC3339),
-			"last_used":    t.LastUsedAt,
-			"expires_at":   t.ExpiresAt,
-			"active":       t.Active,
+			"id":              t.ID,
+			"name":            t.Name,
+			"token_prefix":    t.TokenPrefix,
+			"permission":      t.Permission,
+			"allowed_domains": t.AllowedDomains,
+			"created_by":      t.CreatedBy,
+			"created_at":      t.CreatedAt.Format(time.RFC3339),
+			"last_used":       t.LastUsedAt,
+			"expires_at":      t.ExpiresAt,
+			"active":          t.Active,
 		})
 	}
 

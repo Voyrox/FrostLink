@@ -94,6 +94,11 @@ func csrfMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		if authType, exists := c.Get("auth_type"); exists && authType == "api_token" {
+			c.Next()
+			return
+		}
+
 		sid, err := c.Cookie("session")
 		if err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "csrf: no session"})
@@ -192,7 +197,7 @@ func authRequired() gin.HandlerFunc {
 	}
 }
 
-func apiAuthRequired() gin.HandlerFunc {
+func apiReadAuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sid, err := c.Cookie("session")
 		if err == nil && sid != "" && core.ValidateSession(sid) {
@@ -216,9 +221,86 @@ func apiAuthRequired() gin.HandlerFunc {
 			}
 		}
 
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+				token := parts[1]
+				domain := extractDomain(c)
+				if tokenObj, valid := core.ValidateAPIToken(token, "read", domain); valid {
+					c.Set("api_token_id", tokenObj.ID)
+					c.Set("api_token_name", tokenObj.Name)
+					c.Set("auth_type", "api_token")
+					c.Next()
+					return
+				}
+				if tokenObj, valid := core.ValidateAPIToken(token, "write", domain); valid {
+					c.Set("api_token_id", tokenObj.ID)
+					c.Set("api_token_name", tokenObj.Name)
+					c.Set("auth_type", "api_token")
+					c.Next()
+					return
+				}
+			}
+		}
+
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		c.Abort()
 	}
+}
+
+func apiWriteAuthRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sid, err := c.Cookie("session")
+		if err == nil && sid != "" && core.ValidateSession(sid) {
+			c.Set("session_id", sid)
+			c.Next()
+			return
+		}
+
+		spAuthShared, err := c.Cookie("sp_auth_shared")
+		if err == nil && spAuthShared != "" {
+			domain := c.Request.Host
+			if i := strings.IndexByte(domain, ':'); i > -1 {
+				domain = domain[:i]
+			}
+			username, valid := mainVerifySharedToken(spAuthShared, domain)
+			if valid {
+				c.Set("session_id", spAuthShared)
+				c.Set("username", username)
+				c.Next()
+				return
+			}
+		}
+
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+				token := parts[1]
+				domain := extractDomain(c)
+				if tokenObj, valid := core.ValidateAPIToken(token, "write", domain); valid {
+					c.Set("api_token_id", tokenObj.ID)
+					c.Set("api_token_name", tokenObj.Name)
+					c.Set("auth_type", "api_token")
+					core.UpdateAPITokenLastUsed(tokenObj.ID)
+					c.Next()
+					return
+				}
+			}
+		}
+
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.Abort()
+	}
+}
+
+func extractDomain(c *gin.Context) string {
+	domain := c.Request.Host
+	if i := strings.IndexByte(domain, ':'); i > -1 {
+		domain = domain[:i]
+	}
+	return domain
 }
 
 func main() {
@@ -293,7 +375,7 @@ func main() {
 
 	apiRead := r.Group("/api")
 	apiRead.GET("/identity-providers/public", apiIdentityProvidersList)
-	apiRead.Use(apiAuthRequired())
+	apiRead.Use(apiReadAuthRequired())
 	{
 		apiRead.GET("/dashboard", apiDashboard)
 		apiRead.GET("/system", apiSystem)
@@ -374,7 +456,7 @@ func main() {
 	}
 
 	apiWrite := r.Group("/api")
-	apiWrite.Use(apiAuthRequired(), csrfMiddleware())
+	apiWrite.Use(apiWriteAuthRequired(), csrfMiddleware())
 	{
 		apiWrite.POST("/passkeys/register/start", apiPasskeyRegistrationStart)
 		apiWrite.POST("/passkeys/register/complete", apiPasskeyRegistrationComplete)
@@ -418,8 +500,8 @@ func main() {
 	apiTokens := r.Group("/api/tokens")
 	{
 		apiTokens.GET("", apiTokensList)
-		apiTokens.POST("", apiAuthRequired(), csrfMiddleware(), apiTokensCreate)
-		apiTokens.DELETE("/:id", apiAuthRequired(), csrfMiddleware(), apiTokensRevoke)
+		apiTokens.POST("", apiWriteAuthRequired(), csrfMiddleware(), apiTokensCreate)
+		apiTokens.DELETE("/:id", apiWriteAuthRequired(), csrfMiddleware(), apiTokensRevoke)
 	}
 
 	prometheusRegistry := prometheus.NewRegistry()
@@ -1604,9 +1686,10 @@ func apiFirewallUnbanCountry(c *gin.Context) {
 }
 
 type createTokenRequest struct {
-	Name       string `json:"name"`
-	Permission string `json:"permission"`
-	Expiration int    `json:"expiration"`
+	Name           string   `json:"name"`
+	Permission     string   `json:"permissions"`
+	Expiration     int      `json:"expiration"`
+	AllowedDomains []string `json:"allowed_domains"`
 }
 
 func apiTokensList(c *gin.Context) {
@@ -1653,7 +1736,7 @@ func apiTokensCreate(c *gin.Context) {
 		expiresDays = &req.Expiration
 	}
 
-	fullToken, err := core.CreateAPIToken(req.Name, req.Permission, username, expiresDays)
+	fullToken, err := core.CreateAPIToken(req.Name, req.Permission, username, expiresDays, req.AllowedDomains)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
 		return
