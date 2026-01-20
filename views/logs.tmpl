@@ -168,7 +168,7 @@
             }
 
             function getStatusClass(code) {
-                if (!code) return '';
+                if (!code && code !== 0) return '';
                 const c = parseInt(code);
                 if (c >= 200 && c < 300) return 'status-success';
                 if (c >= 300 && c < 400) return 'status-redirect';
@@ -276,8 +276,8 @@
                     tdMethod.className = 'method-cell';
 
                     var tdStatus = document.createElement('td');
-                    var code = entry.status_code || '-';
-                    tdStatus.textContent = code;
+                    var code = entry.status_code;
+                    tdStatus.textContent = (code !== undefined && code !== null && code !== 0) ? code : '-';
                     tdStatus.className = 'status-cell ' + getStatusClass(code);
 
                     tr.appendChild(tdTs);

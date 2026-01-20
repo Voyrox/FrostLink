@@ -364,7 +364,7 @@ func logRequestStats(cfg core.Config, r *stdhttp.Request, bytesIn, bytesOut int6
 	AddBytesOut(domain, bytesOut)
 	ObserveDuration(domain, duration.Seconds())
 
-	core.LogRequest("Allow", ip, country, domain, path, method, statusCode)
+	core.LogRequest("Allow", ip, country, domain, path, method, statusCode, bytesIn, bytesOut)
 
 	debugLog := os.Getenv("DEBUG")
 	if debugLog == "true" {
@@ -385,7 +385,7 @@ func logBlockedRequest(host, ip, country string, r *stdhttp.Request, reason stri
 	}
 	IncFirewallBlocks(hostClean)
 
-	core.LogRequest(reason, ip, country, host, r.URL.Path, r.Method, 0)
+	core.LogRequest(reason, ip, country, host, r.URL.Path, r.Method, 0, 0, 0)
 
 	debugLog := os.Getenv("DEBUG")
 	if debugLog == "true" {

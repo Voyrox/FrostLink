@@ -225,6 +225,8 @@ type RequestLog struct {
 	Path       string    `json:"path"`
 	Method     string    `json:"method"`
 	StatusCode int       `json:"status_code"`
+	DataIn     int64     `json:"data_in"`
+	DataOut    int64     `json:"data_out"`
 }
 
 type requestLogFile struct {
@@ -294,7 +296,7 @@ func saveRequestLogsUnlocked() {
 	os.WriteFile(requestLogsPath, data, 0600)
 }
 
-func LogRequest(action, ip, country, host, path, method string, statusCode int) {
+func LogRequest(action, ip, country, host, path, method string, statusCode int, dataIn, dataOut int64) {
 	requestLogsMu.Lock()
 	const maxRequestLogs = 1000
 	if len(requestLogs) >= maxRequestLogs {
@@ -309,6 +311,8 @@ func LogRequest(action, ip, country, host, path, method string, statusCode int) 
 		Path:       path,
 		Method:     method,
 		StatusCode: statusCode,
+		DataIn:     dataIn,
+		DataOut:    dataOut,
 	}
 	requestLogs = append(requestLogs, newLog)
 	requestLogsMu.Unlock()
