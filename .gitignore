@@ -16,8 +16,5 @@ SparkProxy
 
 # Database files
 db/*.json
-db/certs
-db/metrics_token
-
-# Config files
-*.conf
+/db/*.json
+/db
