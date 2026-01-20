@@ -5,7 +5,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" type="image/x-icon" href="/img/logo.ico">
+    <link rel="icon" type="image/x-icon" href="/img/logo.ico">
     <title>SparkProxy • Request Logs</title>
     <link rel="stylesheet" href="/css/global.css" />
     <link rel="stylesheet" href="/css/sidebar.css" />
@@ -24,21 +24,38 @@
 
             <section class="panel" aria-label="Request Logs">
                 <div class="toolbar">
-                    <div class="left">
-                        <label class="input-icon" aria-label="Search sites">
-                            <span class="icon" aria-hidden="true">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
-                                    <path d="M21 21l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
-                                </svg>
-                            </span>
-                            <input type="search" placeholder="Search sites...">
-                        </label>
+                    <div class="filters-row">
+                        <select id="domain-filter" class="filter-select">
+                            <option value="">All Domains</option>
+                        </select>
+                        <select id="action-filter" class="filter-select">
+                            <option value="">All Actions</option>
+                            <option value="Allow">Allow</option>
+                            <option value="Block">Block</option>
+                        </select>
+                        <select id="method-filter" class="filter-select">
+                            <option value="">All Methods</option>
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="HEAD">HEAD</option>
+                            <option value="OPTIONS">OPTIONS</option>
+                        </select>
+                        <select id="status-filter" class="filter-select">
+                            <option value="">All Status</option>
+                            <option value="2xx">2xx Success</option>
+                            <option value="3xx">3xx Redirect</option>
+                            <option value="4xx">4xx Client Error</option>
+                            <option value="5xx">5xx Server Error</option>
+                        </select>
+                        <input type="text" id="ip-search" class="filter-input" placeholder="Search IP...">
                     </div>
-                    <div class="right">
-                        <button class="btn ghost" type="button">
+                    <div class="actions-row">
+                        <button class="btn ghost" type="button" id="refresh-btn">
                             <span class="icon orange" aria-hidden="true">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                     <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="2"></path>
                                     <path d="M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
                                 </svg>
@@ -47,13 +64,13 @@
                         </button>
                         <button class="btn ghost" type="button" id="export-btn">
                             <span class="icon orange" aria-hidden="true">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </span>
                             <span>Export</span>
                         </button>
-                        <select id="export-format" class="filter-select" style="margin-left: 8px; width: auto;">
+                        <select id="export-format" class="filter-select" style="width: auto;">
                             <option value="csv">CSV</option>
                             <option value="json">JSON</option>
                         </select>
@@ -71,6 +88,7 @@
                                 <th scope="col">Host</th>
                                 <th scope="col">Path</th>
                                 <th scope="col">Method</th>
+                                <th scope="col">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -119,21 +137,17 @@
 
     <script>
         (function () {
-            const card = document.querySelector('.profile-card');
-            if (!card) return;
-            const img = card.querySelector('.avatar');
-            const fallback = card.querySelector('.avatar-fallback');
-            const nameEl = card.querySelector('.username');
-            const initial = (nameEl && nameEl.textContent || '').trim().charAt(0).toUpperCase() || '?';
-            if (fallback) { fallback.textContent = initial; }
-            function showFallback() { if (img) { img.style.display = 'none'; } if (fallback) { fallback.style.display = 'grid'; } }
-            if (!img || !img.getAttribute('src')) { showFallback(); }
-            else { img.addEventListener('error', showFallback); }
-        })();
-
-        (function () {
             const tableBody = document.querySelector('.table tbody');
             if (!tableBody) return;
+
+            const domainFilter = document.getElementById('domain-filter');
+            const actionFilter = document.getElementById('action-filter');
+            const methodFilter = document.getElementById('method-filter');
+            const statusFilter = document.getElementById('status-filter');
+            const ipSearch = document.getElementById('ip-search');
+            const refreshBtn = document.getElementById('refresh-btn');
+            const exportBtn = document.getElementById('export-btn');
+            const exportFormat = document.getElementById('export-format');
 
             const firstPageBtn = document.getElementById('first-page-btn');
             const prevPageBtn = document.getElementById('prev-page-btn');
@@ -142,9 +156,156 @@
             const pageInfoText = document.getElementById('page-info-text');
 
             let currentPage = 1;
-            let itemsPerPage = 20;
+            let itemsPerPage = 25;
             let totalPages = 1;
             let totalItems = 0;
+            let allLogs = [];
+            let domains = [];
+
+            function codeToFlag(code) {
+                if (!code) return '';
+                return code.toUpperCase().replace(/./g, function(c) { return String.fromCodePoint(127397 + c.charCodeAt(0)); });
+            }
+
+            function getStatusClass(code) {
+                if (!code && code !== 0) return '';
+                const c = parseInt(code);
+                if (c >= 200 && c < 300) return 'status-success';
+                if (c >= 300 && c < 400) return 'status-redirect';
+                if (c >= 400 && c < 500) return 'status-client-error';
+                if (c >= 500) return 'status-server-error';
+                return '';
+            }
+
+            function loadDomains() {
+                fetch('/api/proxys')
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(data) {
+                        if (data && data.configs) {
+                            domains = data.configs;
+                            var current = domainFilter.value;
+                            domainFilter.innerHTML = '<option value="">All Domains</option>';
+                            domains.forEach(function(d) {
+                                var opt = document.createElement('option');
+                                opt.value = d.domain;
+                                opt.textContent = d.domain;
+                                domainFilter.appendChild(opt);
+                            });
+                            domainFilter.value = current;
+                        }
+                    })
+                    .catch(function() { console.error('Failed to load domains'); });
+            }
+
+            function filterLogs() {
+                const domain = domainFilter.value;
+                const action = actionFilter.value;
+                const method = methodFilter.value;
+                const status = statusFilter.value;
+                const ip = ipSearch.value.trim().toLowerCase();
+
+                return allLogs.filter(function(log) {
+                    if (domain && log.host && log.host.toLowerCase() !== domain.toLowerCase()) return false;
+                    if (action && log.action && log.action.toLowerCase() !== action.toLowerCase()) return false;
+                    if (method && log.method && log.method !== method) return false;
+                    if (status) {
+                        const code = parseInt(log.status_code) || 0;
+                        if (status === '2xx' && (code < 200 || code >= 300)) return false;
+                        if (status === '3xx' && (code < 300 || code >= 400)) return false;
+                        if (status === '4xx' && (code < 400 || code >= 500)) return false;
+                        if (status === '5xx' && (code < 500 || code >= 600)) return false;
+                    }
+                    if (ip && log.ip && log.ip.toLowerCase().indexOf(ip) === -1) return false;
+                    return true;
+                });
+            }
+
+            function render() {
+                const filtered = filterLogs();
+                totalItems = filtered.length;
+                totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+
+                const start = (currentPage - 1) * itemsPerPage;
+                const paginatedLogs = filtered.slice(start, start + itemsPerPage);
+
+                tableBody.innerHTML = '';
+                if (paginatedLogs.length === 0) {
+                    var tr = document.createElement('tr');
+                    var td = document.createElement('td');
+                    td.colSpan = 8;
+                    td.textContent = 'No logs found';
+                    td.className = 'empty-state';
+                    tr.appendChild(td);
+                    tableBody.appendChild(tr);
+                    updatePager();
+                    return;
+                }
+
+                paginatedLogs.forEach(function(entry) {
+                    var tr = document.createElement('tr');
+
+                    var tdTs = document.createElement('td');
+                    tdTs.textContent = entry.timestamp || '';
+                    tdTs.className = 'timestamp-cell';
+
+                    var tdAction = document.createElement('td');
+                    tdAction.textContent = entry.action || '';
+                    tdAction.className = 'action-cell ' + (entry.action && entry.action.toLowerCase() === 'allow' ? 'action-allow' : 'action-block');
+
+                    var tdIP = document.createElement('td');
+                    tdIP.textContent = entry.ip || '';
+                    tdIP.className = 'ip-cell';
+
+                    var tdLoc = document.createElement('td');
+                    var loc = entry.location || '';
+                    tdLoc.innerHTML = codeToFlag(loc) + ' ' + loc;
+                    tdLoc.className = 'location-cell';
+
+                    var tdHost = document.createElement('td');
+                    tdHost.textContent = entry.host || '';
+                    tdHost.className = 'host-cell';
+
+                    var tdPath = document.createElement('td');
+                    tdPath.textContent = entry.path || '/';
+                    tdPath.className = 'path-cell';
+
+                    var tdMethod = document.createElement('td');
+                    tdMethod.textContent = entry.method || '';
+                    tdMethod.className = 'method-cell';
+
+                    var tdStatus = document.createElement('td');
+                    var code = entry.status_code;
+                    tdStatus.textContent = (code !== undefined && code !== null && code !== 0) ? code : '-';
+                    tdStatus.className = 'status-cell ' + getStatusClass(code);
+
+                    tr.appendChild(tdTs);
+                    tr.appendChild(tdAction);
+                    tr.appendChild(tdIP);
+                    tr.appendChild(tdLoc);
+                    tr.appendChild(tdHost);
+                    tr.appendChild(tdPath);
+                    tr.appendChild(tdMethod);
+                    tr.appendChild(tdStatus);
+
+                    tableBody.appendChild(tr);
+                });
+
+                updatePager();
+            }
+
+            function loadLogs() {
+                fetch('/api/logs?limit=5000')
+                    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+                    .then(function(data) {
+                        allLogs = (data && data.logs) || [];
+                        render();
+                    })
+                    .catch(function(err) {
+                        console.error('Failed to load logs', err);
+                    });
+            }
 
             function updatePager() {
                 if (pageInfoText) {
@@ -156,107 +317,15 @@
                 if (lastPageBtn) lastPageBtn.disabled = currentPage >= totalPages;
             }
 
-            function render() {
-                fetch('/api/logs?page=' + currentPage + '&limit=' + itemsPerPage)
-                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
-                    .then(data => {
-                        const pagination = data.pagination || {};
-                        currentPage = pagination.page || 1;
-                        totalPages = pagination.total_pages || 1;
-                        totalItems = pagination.total || 0;
-
-                        const logs = (data && data.logs) || [];
-                        tableBody.innerHTML = '';
-                        logs.forEach(entry => {
-                            const tr = document.createElement('tr');
-
-                            const tdTs = document.createElement('td');
-                            tdTs.textContent = entry.timestamp || '';
-
-                            const tdAction = document.createElement('td');
-                            tdAction.textContent = entry.action || '';
-
-                            const tdIP = document.createElement('td');
-                            tdIP.textContent = entry.ip || '';
-
-                            const tdLoc = document.createElement('td');
-                            tdLoc.textContent = entry.location || '';
-
-                            const tdHost = document.createElement('td');
-                            tdHost.textContent = entry.host || '';
-
-                            const tdPath = document.createElement('td');
-                            tdPath.textContent = entry.path || '';
-
-                            const tdMethod = document.createElement('td');
-                            tdMethod.textContent = entry.method || '';
-
-                            tr.appendChild(tdTs);
-                            tr.appendChild(tdAction);
-                            tr.appendChild(tdIP);
-                            tr.appendChild(tdLoc);
-                            tr.appendChild(tdHost);
-                            tr.appendChild(tdPath);
-                            tr.appendChild(tdMethod);
-
-                            tableBody.appendChild(tr);
-                        });
-                        updatePager();
-                    })
-                    .catch(err => {
-                        console.error('Failed to load /api/logs', err);
-                    });
+            function goToPage(page) {
+                currentPage = page;
+                render();
             }
-
-            render();
-
-            const refreshBtn = document.querySelector('.toolbar .btn.ghost');
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', function () {
-                    render();
-                });
-            }
-
-            if (firstPageBtn) {
-                firstPageBtn.addEventListener('click', function () {
-                    if (currentPage > 1) {
-                        currentPage = 1;
-                        render();
-                    }
-                });
-            }
-            if (prevPageBtn) {
-                prevPageBtn.addEventListener('click', function () {
-                    if (currentPage > 1) {
-                        currentPage--;
-                        render();
-                    }
-                });
-            }
-            if (nextPageBtn) {
-                nextPageBtn.addEventListener('click', function () {
-                    if (currentPage < totalPages) {
-                        currentPage++;
-                        render();
-                    }
-                });
-            }
-            if (lastPageBtn) {
-                lastPageBtn.addEventListener('click', function () {
-                    if (currentPage < totalPages) {
-                        currentPage = totalPages;
-                        render();
-                    }
-                });
-            }
-
-            const exportBtn = document.getElementById('export-btn');
-            const exportFormat = document.getElementById('export-format');
 
             function downloadFile(content, filename, mimeType) {
-                const blob = new Blob([content], { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
+                var blob = new Blob([content], { type: mimeType });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
                 a.href = url;
                 a.download = filename;
                 a.click();
@@ -265,7 +334,7 @@
 
             function escapeCSV(str) {
                 if (str === null || str === undefined) return '';
-                const s = String(str);
+                var s = String(str);
                 if (s.includes(',') || s.includes('"') || s.includes('\n')) {
                     return '"' + s.replace(/"/g, '""') + '"';
                 }
@@ -273,55 +342,67 @@
             }
 
             function exportLogs(format) {
-                fetch('/api/logs?limit=10000')
-                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
-                    .then(data => {
-                        const logs = (data && data.logs) || [];
-                        const date = new Date().toISOString().split('T')[0];
-                        let content, filename, mimeType;
+                var filtered = filterLogs();
+                var date = new Date().toISOString().split('T')[0];
+                var content, filename, mimeType;
 
-                        if (format === 'csv') {
-                            const headers = ['Timestamp', 'Action', 'IP', 'Location', 'Host', 'Path', 'Method'];
-                            let csv = headers.map(escapeCSV).join(',') + '\n';
-                            logs.forEach(log => {
-                                const row = [
-                                    log.timestamp,
-                                    log.action,
-                                    log.ip,
-                                    log.location,
-                                    log.host,
-                                    log.path,
-                                    log.method
-                                ];
-                                csv += row.map(escapeCSV).join(',') + '\n';
-                            });
-                            content = csv;
-                            filename = 'request-logs-' + date + '.csv';
-                            mimeType = 'text/csv';
-                        } else {
-                            const exportData = {
-                                exported_at: new Date().toISOString(),
-                                total_logs: logs.length,
-                                logs: logs
-                            };
-                            content = JSON.stringify(exportData, null, 2);
-                            filename = 'request-logs-' + date + '.json';
-                            mimeType = 'application/json';
-                        }
-                        downloadFile(content, filename, mimeType);
-                    })
-                    .catch(err => {
-                        console.error('Failed to export logs', err);
-                        alert('Failed to export logs');
+                if (format === 'csv') {
+                    var headers = ['Timestamp', 'Action', 'IP', 'Location', 'Host', 'Path', 'Method', 'Status'];
+                    var csv = headers.map(escapeCSV).join(',') + '\n';
+                    filtered.forEach(function(log) {
+                        var row = [
+                            log.timestamp,
+                            log.action,
+                            log.ip,
+                            log.location,
+                            log.host,
+                            log.path,
+                            log.method,
+                            log.status_code
+                        ];
+                        csv += row.map(escapeCSV).join(',') + '\n';
                     });
+                    content = csv;
+                    filename = 'request-logs-' + date + '.csv';
+                    mimeType = 'text/csv';
+                } else {
+                    var exportData = {
+                        exported_at: new Date().toISOString(),
+                        filters: {
+                            domain: domainFilter.value,
+                            action: actionFilter.value,
+                            method: methodFilter.value,
+                            status: statusFilter.value,
+                            ip: ipSearch.value
+                        },
+                        total_logs: filtered.length,
+                        logs: filtered
+                    };
+                    content = JSON.stringify(exportData, null, 2);
+                    filename = 'request-logs-' + date + '.json';
+                    mimeType = 'application/json';
+                }
+                downloadFile(content, filename, mimeType);
             }
 
-            if (exportBtn) {
-                exportBtn.addEventListener('click', function() {
-                    const fmt = exportFormat ? exportFormat.value : 'csv';
-                    exportLogs(fmt);
-                });
-            }
+            if (domainFilter) domainFilter.addEventListener('change', render);
+            if (actionFilter) actionFilter.addEventListener('change', render);
+            if (methodFilter) methodFilter.addEventListener('change', render);
+            if (statusFilter) statusFilter.addEventListener('change', render);
+            if (ipSearch) ipSearch.addEventListener('input', render);
+            if (refreshBtn) refreshBtn.addEventListener('click', loadLogs);
+            if (exportBtn) exportBtn.addEventListener('click', function() {
+                var fmt = exportFormat ? exportFormat.value : 'csv';
+                exportLogs(fmt);
+            });
+
+            if (firstPageBtn) firstPageBtn.addEventListener('click', function() { if (currentPage > 1) goToPage(1); });
+            if (prevPageBtn) prevPageBtn.addEventListener('click', function() { if (currentPage > 1) goToPage(currentPage - 1); });
+            if (nextPageBtn) nextPageBtn.addEventListener('click', function() { if (currentPage < totalPages) goToPage(currentPage + 1); });
+            if (lastPageBtn) lastPageBtn.addEventListener('click', function() { if (currentPage < totalPages) goToPage(totalPages); });
+
+            loadDomains();
+            loadLogs();
         })();
     </script>
 </body>

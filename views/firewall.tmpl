@@ -136,11 +136,34 @@
                             </div>
                             <form id="ban-country-form" class="card-form">
                                 <div class="form-group">
-                                    <label for="ban-country-input">Country Codes</label>
-                                    <input type="text" id="ban-country-input" placeholder="e.g. US, AU, CN (comma separated)" />
+                                    <label for="ban-country-select">Country</label>
+                                    <select id="ban-country-select">
+                                        <option value="">Select countries...</option>
+                                        <option value="US">United States</option>
+                                        <option value="CN">China</option>
+                                        <option value="RU">Russia</option>
+                                        <option value="BR">Brazil</option>
+                                        <option value="IN">India</option>
+                                        <option value="KR">South Korea</option>
+                                        <option value="DE">Germany</option>
+                                        <option value="FR">France</option>
+                                        <option value="JP">Japan</option>
+                                        <option value="GB">United Kingdom</option>
+                                        <option value="AU">Australia</option>
+                                        <option value="CA">Canada</option>
+                                        <option value="NL">Netherlands</option>
+                                        <option value="SG">Singapore</option>
+                                        <option value="HK">Hong Kong</option>
+                                        <option value="TW">Taiwan</option>
+                                        <option value="VN">Vietnam</option>
+                                        <option value="ID">Indonesia</option>
+                                        <option value="TH">Thailand</option>
+                                        <option value="PH">Philippines</option>
+                                        <option value="MY">Malaysia</option>
+                                    </select>
                                 </div>
-                                <p class="form-hint">Use 2-letter ISO country codes, separated by commas</p>
-                                <button class="btn primary full-width" type="submit">Ban Countries</button>
+                                <p class="form-hint">Select a country to ban all traffic from that location</p>
+                                <button class="btn primary full-width" type="submit">Ban Country</button>
                             </form>
                         </div>
                     </div>
@@ -169,8 +192,25 @@
                                         <span>Banned IPs</span>
                                         <span class="count-badge" id="ips-count">0</span>
                                     </div>
+                                    <div class="search-filter">
+                                        <input type="text" id="ip-search" placeholder="Search IPs..." />
+                                    </div>
                                     <div id="banned-ips-list" class="bans-list">
                                         <span class="empty-state">No IPs banned</span>
+                                    </div>
+                                    <div class="bans-actions">
+                                        <button class="btn ghost" id="export-ips-btn">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                                            </svg>
+                                            Export
+                                        </button>
+                                        <button class="btn danger" id="unban-all-ips-btn">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                            </svg>
+                                            Unban All
+                                        </button>
                                     </div>
                                 </div>
                                 <div class="bans-section">
@@ -206,31 +246,54 @@
             const banIpUploadForm = document.getElementById('ban-ip-upload-form');
             const banIpFile = document.getElementById('ban-ip-file');
             const banCountryForm = document.getElementById('ban-country-form');
-            const banCountryInput = document.getElementById('ban-country-input');
+            const banCountrySelect = document.getElementById('ban-country-select');
             const bannedIpsList = document.getElementById('banned-ips-list');
             const bannedCountriesList = document.getElementById('banned-countries-list');
             const ipsCount = document.getElementById('ips-count');
             const countriesCount = document.getElementById('countries-count');
             const statIps = document.getElementById('stat-ips');
             const statCountries = document.getElementById('stat-countries');
+            const ipSearchInput = document.getElementById('ip-search');
+            const exportIpsBtn = document.getElementById('export-ips-btn');
+            const unbanAllIpsBtn = document.getElementById('unban-all-ips-btn');
 
-            function renderList(el, items, isCountry) {
+            let allBannedIps = [];
+            let allBannedCountries = [];
+
+            function getCSRFToken() {
+                const match = document.cookie.match(/csrf_token=([^;]+)/);
+                return match ? match[1] : '';
+            }
+
+            function renderList(el, items, isCountry, filterText) {
                 if (!el) return;
                 el.innerHTML = '';
-                if (!items || !items.length) {
+
+                let filteredItems = items;
+                if (!isCountry && filterText) {
+                    const lowerFilter = filterText.toLowerCase();
+                    filteredItems = items.filter(function(item) {
+                        return item.toLowerCase().indexOf(lowerFilter) !== -1;
+                    });
+                }
+
+                if (!filteredItems || !filteredItems.length) {
                     el.innerHTML = '<span class="empty-state">No ' + (isCountry ? 'countries' : 'IPs') + ' banned</span>';
                     return;
                 }
-                items.forEach(function (item) {
+                filteredItems.forEach(function (item) {
                     const chip = document.createElement('div');
                     chip.className = 'ban-chip';
-                    chip.innerHTML = '<span>' + item + '</span><button type="button" class="remove-chip" title="Unban ' + item + '">&times;</button>';
+                    chip.innerHTML = '<span class="chip-icon">' + (isCountry ? codeToFlag(item) : '') + '</span><span>' + item + '</span><button type="button" class="remove-chip" title="Unban ' + item + '">&times;</button>';
                     chip.querySelector('.remove-chip').addEventListener('click', function() {
                         if (!confirm('Unban ' + item + '?')) return;
                         const endpoint = isCountry
                             ? '/api/firewall/country/' + encodeURIComponent(item)
                             : '/api/firewall/ip/' + encodeURIComponent(item);
-                        fetch(endpoint, { method: 'DELETE' })
+                        fetch(endpoint, {
+                            method: 'DELETE',
+                            headers: { 'X-CSRF-Token': getCSRFToken() }
+                        })
                             .then(function(r) { return r.json(); })
                             .then(function(data) {
                                 if (data && data.error) {
@@ -246,22 +309,59 @@
                 });
             }
 
+            function codeToFlag(code) {
+                if (!code) return '';
+                return code.toUpperCase().replace(/./g, function(c) { return String.fromCodePoint(127397 + c.charCodeAt(0)); });
+            }
+
             function loadFirewall() {
                 fetch('/api/firewall')
                     .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
                     .then(function (data) {
-                        const ips = (data && data.banned_ips) || [];
-                        const countries = (data && data.banned_countries) || [];
-                        renderList(bannedIpsList, ips, false);
-                        renderList(bannedCountriesList, countries, true);
-                        if (statIps) statIps.textContent = ips.length;
-                        if (statCountries) statCountries.textContent = countries.length;
-                        if (ipsCount) ipsCount.textContent = ips.length;
-                        if (countriesCount) countriesCount.textContent = countries.length;
+                        allBannedIps = (data && data.banned_ips) || [];
+                        allBannedCountries = (data && data.banned_countries) || [];
+                        const filterText = ipSearchInput ? ipSearchInput.value.trim() : '';
+                        renderList(bannedIpsList, allBannedIps, false, filterText);
+                        renderList(bannedCountriesList, allBannedCountries, true, '');
+                        if (statIps) statIps.textContent = allBannedIps.length;
+                        if (statCountries) statCountries.textContent = allBannedCountries.length;
+                        if (ipsCount) ipsCount.textContent = allBannedIps.length;
+                        if (countriesCount) countriesCount.textContent = allBannedCountries.length;
                     })
                     .catch(function () {
                         showToast('Failed to load firewall rules');
                     });
+            }
+
+            function exportIps() {
+                if (!allBannedIps || allBannedIps.length === 0) {
+                    showToast('No IPs to export');
+                    return;
+                }
+                const content = allBannedIps.join('\n');
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'banned-ips-' + new Date().toISOString().split('T')[0] + '.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Exported ' + allBannedIps.length + ' IPs');
+            }
+
+            function unbanAllIps() {
+                if (!confirm('Unban all ' + allBannedIps.length + ' IPs? This cannot be undone.')) return;
+                Promise.all(allBannedIps.map(function(ip) {
+                    return fetch('/api/firewall/ip/' + encodeURIComponent(ip), {
+                        method: 'DELETE',
+                        headers: { 'X-CSRF-Token': getCSRFToken() }
+                    });
+                }))
+                    .then(function() {
+                        showToast('All IPs unbanned');
+                        loadFirewall();
+                    })
+                    .catch(function() { showToast('Failed to unban all IPs'); });
             }
 
             if (refreshBtn) {
@@ -280,7 +380,10 @@
                     }
                     fetch('/api/firewall/ban-ip', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCSRFToken()
+                        },
                         body: JSON.stringify({ ip: ip })
                     })
                         .then(function (r) { return r.json(); })
@@ -308,7 +411,8 @@
                     fd.append('file', banIpFile.files[0]);
                     fetch('/api/firewall/ban-ip-upload', {
                         method: 'POST',
-                        body: fd
+                        body: fd,
+                        headers: { 'X-CSRF-Token': getCSRFToken() }
                     })
                         .then(function (r) { return r.json(); })
                         .then(function (data) {
@@ -328,34 +432,45 @@
             if (banCountryForm) {
                 banCountryForm.addEventListener('submit', function (e) {
                     e.preventDefault();
-                    const raw = (banCountryInput && banCountryInput.value || '').trim();
-                    if (!raw) {
-                        showToast('Enter at least one country code');
-                        return;
-                    }
-                    const parts = raw.split(',').map(function (p) { return p.trim(); }).filter(function (p) { return p.length; });
-                    if (!parts.length) {
-                        showToast('Enter valid country codes');
+                    const country = banCountrySelect ? banCountrySelect.value : '';
+                    if (!country) {
+                        showToast('Select a country to ban');
                         return;
                     }
                     fetch('/api/firewall/ban-country', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ countries: parts })
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCSRFToken()
+                        },
+                        body: JSON.stringify({ countries: [country] })
                     })
                         .then(function (r) { return r.json(); })
                         .then(function (data) {
                             if (data && data.error) {
-                                showToast(data.error || 'Failed to ban countries');
+                                showToast(data.error || 'Failed to ban country');
                                 return;
                             }
-                            const added = data && typeof data.added === 'number' ? data.added : 0;
-                            showToast('Added ' + added + ' countries to firewall');
-                            if (banCountryInput) banCountryInput.value = '';
+                            showToast('Country banned');
+                            if (banCountrySelect) banCountrySelect.value = '';
                             loadFirewall();
                         })
-                        .catch(function () { showToast('Failed to ban countries'); });
+                        .catch(function () { showToast('Failed to ban country'); });
                 });
+            }
+
+            if (ipSearchInput) {
+                ipSearchInput.addEventListener('input', function() {
+                    renderList(bannedIpsList, allBannedIps, false, ipSearchInput.value.trim());
+                });
+            }
+
+            if (exportIpsBtn) {
+                exportIpsBtn.addEventListener('click', exportIps);
+            }
+
+            if (unbanAllIpsBtn) {
+                unbanAllIpsBtn.addEventListener('click', unbanAllIps);
             }
 
             loadFirewall();
