@@ -217,13 +217,14 @@ func GetAuditStats() (total, last24h int) {
 }
 
 type RequestLog struct {
-	Timestamp time.Time `json:"timestamp"`
-	Action    string    `json:"action"`
-	IP        string    `json:"ip"`
-	Country   string    `json:"location"`
-	Host      string    `json:"host"`
-	Path      string    `json:"path"`
-	Method    string    `json:"method"`
+	Timestamp  time.Time `json:"timestamp"`
+	Action     string    `json:"action"`
+	IP         string    `json:"ip"`
+	Country    string    `json:"location"`
+	Host       string    `json:"host"`
+	Path       string    `json:"path"`
+	Method     string    `json:"method"`
+	StatusCode int       `json:"status_code"`
 }
 
 type requestLogFile struct {
@@ -293,20 +294,21 @@ func saveRequestLogsUnlocked() {
 	os.WriteFile(requestLogsPath, data, 0600)
 }
 
-func LogRequest(action, ip, country, host, path, method string) {
+func LogRequest(action, ip, country, host, path, method string, statusCode int) {
 	requestLogsMu.Lock()
 	const maxRequestLogs = 1000
 	if len(requestLogs) >= maxRequestLogs {
 		requestLogs = requestLogs[1:]
 	}
 	newLog := RequestLog{
-		Timestamp: time.Now(),
-		Action:    action,
-		IP:        ip,
-		Country:   country,
-		Host:      host,
-		Path:      path,
-		Method:    method,
+		Timestamp:  time.Now(),
+		Action:     action,
+		IP:         ip,
+		Country:    country,
+		Host:       host,
+		Path:       path,
+		Method:     method,
+		StatusCode: statusCode,
 	}
 	requestLogs = append(requestLogs, newLog)
 	requestLogsMu.Unlock()
