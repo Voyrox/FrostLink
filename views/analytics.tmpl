@@ -575,7 +575,7 @@
           let filteredLogs = logs;
           if (selectedDomain) {
             filteredLogs = logs.filter(function(log) {
-              return log && log.domain && log.domain.toLowerCase() === selectedDomain.toLowerCase();
+              return log && log.host && log.host.toLowerCase() === selectedDomain.toLowerCase();
             });
           }
 
