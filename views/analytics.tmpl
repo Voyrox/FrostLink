@@ -304,6 +304,41 @@
         ctx.fill();
       }
 
+      function renderMethodsChart(container, methods) {
+        if (!container) return;
+        const entries = Object.entries(methods || {}).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 6);
+        if (entries.length === 0) {
+          container.innerHTML = '<div class="empty-state">No data</div>';
+          return;
+        }
+
+        const maxVal = entries[0][1];
+        const colors = {
+          'GET': '#3b82f6',
+          'POST': '#22c55e',
+          'PUT': '#f59e0b',
+          'DELETE': '#ef4444',
+          'PATCH': '#a855f7',
+          'HEAD': '#6b7280',
+          'OPTIONS': '#06b6d4'
+        };
+
+        let html = '';
+        entries.forEach(function([method, count]) {
+          const pct = maxVal > 0 ? (count / maxVal) * 100 : 0;
+          const color = colors[method] || '#6b7280';
+          html += '<div class="bar-item">' +
+            '<span class="bar-label">' + method + '</span>' +
+            '<div class="bar-track">' +
+              '<div class="bar-fill" style="width: ' + pct + '%; background: ' + color + ';">' +
+              '</div>' +
+            '</div>' +
+            '<span class="bar-value">' + formatNumber(count) + '</span>' +
+          '</div>';
+        });
+        container.innerHTML = html;
+      }
+
       function drawDonutChart(canvas, data) {
         if (!canvas || !data || Object.keys(data).length === 0) return;
 
@@ -363,85 +398,6 @@
             '<span>' + code + ' ' + formatNumber(count) + ' (' + pct + '%)</span>' +
           '</div>';
         });
-        container.innerHTML = html || '<div class="empty-state">No data</div>';
-      }
-        }
-
-        let currentAngle = -Math.PI / 2;
-        const thickness = radius - innerRadius;
-
-        for (const [cat, count] of Object.entries(categories)) {
-          if (count === 0) continue;
-          const sliceAngle = (count / total) * Math.PI * 2;
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
-          ctx.arc(centerX, centerY, innerRadius, currentAngle + sliceAngle, currentAngle, true);
-          ctx.closePath();
-          ctx.fillStyle = colors[cat];
-          ctx.fill();
-          currentAngle += sliceAngle;
-        }
-      }
-
-      function renderMethodsChart(container, methods) {
-        if (!container) return;
-        const entries = Object.entries(methods || {}).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 6);
-        if (entries.length === 0) {
-          container.innerHTML = '<div class="empty-state">No data</div>';
-          return;
-        }
-
-        const maxVal = entries[0][1];
-        const colors = {
-          'GET': '#3b82f6',
-          'POST': '#22c55e',
-          'PUT': '#f59e0b',
-          'DELETE': '#ef4444',
-          'PATCH': '#a855f7',
-          'HEAD': '#6b7280',
-          'OPTIONS': '#06b6d4'
-        };
-
-        let html = '';
-        entries.forEach(function([method, count]) {
-          const pct = maxVal > 0 ? (count / maxVal) * 100 : 0;
-          const color = colors[method] || '#6b7280';
-          html += '<div class="bar-item">' +
-            '<span class="bar-label">' + method + '</span>' +
-            '<div class="bar-track">' +
-              '<div class="bar-fill" style="width: ' + pct + '%; background: ' + color + ';">' +
-              '</div>' +
-            '</div>' +
-            '<span class="bar-value">' + formatNumber(count) + '</span>' +
-          '</div>';
-        });
-        container.innerHTML = html;
-      }
-
-      function renderResponseLegend(container, data) {
-        if (!container) return;
-        const categories = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 };
-        let total = 0;
-        for (const [code, count] of Object.entries(data || {})) {
-          const prefix = code.charAt(0);
-          if (categories[prefix + 'xx'] !== undefined) {
-            categories[prefix + 'xx'] += count;
-          }
-          total += count;
-        }
-
-        const colors = { '2xx': '#22c55e', '3xx': '#3b82f6', '4xx': '#f59e0b', '5xx': '#ef4444' };
-        const labels = { '2xx': '2xx', '3xx': '3xx', '4xx': '4xx', '5xx': '5xx' };
-
-        let html = '';
-        for (const [cat, count] of Object.entries(categories)) {
-          if (count === 0) continue;
-          const pct = total > 0 ? (count * 100 / total).toFixed(1) : 0;
-          html += '<div class="legend-item">' +
-            '<span class="legend-color" style="background: ' + colors[cat] + ';"></span>' +
-            '<span>' + labels[cat] + ' ' + formatNumber(count) + ' (' + pct + '%)</span>' +
-          '</div>';
-        }
         container.innerHTML = html || '<div class="empty-state">No data</div>';
       }
 
