@@ -652,7 +652,8 @@ var (
 	authSessionsMu sync.RWMutex
 	authSessions   = make(map[string]authSession)
 
-	sharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
+	sharedSecret     []byte
+	sharedSecretOnce sync.Once
 )
 
 type authSession struct {
@@ -660,9 +661,27 @@ type authSession struct {
 	Expires time.Time `json:"expires"`
 }
 
+func loadSharedSecret() {
+	sharedSecretOnce.Do(func() {
+		sharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
+		if len(sharedSecret) == 0 {
+			data, err := os.ReadFile("db/secrets.json")
+			if err == nil {
+				var secretData struct {
+					AuthSharedSecret string `json:"auth_shared_secret"`
+				}
+				if json.Unmarshal(data, &secretData) == nil && secretData.AuthSharedSecret != "" {
+					sharedSecret = []byte(secretData.AuthSharedSecret)
+				}
+			}
+		}
+	})
+}
+
 func generateSharedToken(username, domain string, expires time.Time) string {
+	loadSharedSecret()
 	if len(sharedSecret) == 0 {
-		sharedSecret = []byte("sparkproxy-shared-secret-change-in-production")
+		return ""
 	}
 	data := fmt.Sprintf("%s|%s|%d", username, domain, expires.Unix())
 	h := hmac.New(sha256.New, sharedSecret)
@@ -673,8 +692,9 @@ func generateSharedToken(username, domain string, expires time.Time) string {
 }
 
 func verifySharedToken(token, domain string) (username string, valid bool) {
+	loadSharedSecret()
 	if len(sharedSecret) == 0 {
-		sharedSecret = []byte("sparkproxy-shared-secret-change-in-production")
+		return "", false
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
@@ -857,6 +877,11 @@ func handleAuthRoutes(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	case stdhttp.MethodGet:
 		renderAuthLoginPage(w, domain, redirect, "")
 	case stdhttp.MethodPost:
+		if !core.CheckLoginRateLimit(r.RemoteAddr) {
+			renderAuthLoginPage(w, domain, redirect, "Too many login attempts, try again in 1 minute")
+			return
+		}
+
 		if err := r.ParseForm(); err != nil {
 			renderAuthLoginPage(w, domain, redirect, "Invalid form data")
 			return
@@ -1161,7 +1186,9 @@ func verifyCredentialsWithAPI(username, password string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 
 	var out struct {
 		Valid bool `json:"valid"`
