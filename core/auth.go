@@ -407,12 +407,6 @@ func initSessions() {
 	sessionsInit = true
 }
 
-func saveSessions() {
-	sessionsMu.Lock()
-	defer sessionsMu.Unlock()
-	saveSessionsUnlocked()
-}
-
 func saveSessionsUnlocked() {
 	sf := sessionFile{Sessions: make([]Session, 0, len(sessions))}
 	for _, s := range sessions {
@@ -588,12 +582,6 @@ func initCSRF() {
 	csrfInit = true
 }
 
-func saveCSRF() {
-	csrfMu.Lock()
-	defer csrfMu.Unlock()
-	saveCSRFUnlocked()
-}
-
 func saveCSRFUnlocked() {
 	tf := csrfFile{Tokens: make([]CSRFToken, 0, len(csrfTokens))}
 	for _, t := range csrfTokens {
@@ -718,12 +706,6 @@ func loadTokens() {
 		}
 	}
 	tokensLoaded = true
-}
-
-func saveTokens() {
-	tokensMu.Lock()
-	defer tokensMu.Unlock()
-	saveTokensUnlocked()
 }
 
 func saveTokensUnlocked() {
