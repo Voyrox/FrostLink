@@ -21,38 +21,30 @@ type roleFile struct {
 }
 
 var (
-	rolesMu     sync.RWMutex
-	roles       []Role
-	rolesLoaded bool
+	rolesMu   sync.RWMutex
+	roles     []Role
+	rolesOnce sync.Once
 )
 
 func loadRoles() {
-	if rolesLoaded {
-		return
-	}
-	rolesMu.Lock()
-	defer rolesMu.Unlock()
-	if rolesLoaded {
-		return
-	}
-	b, err := os.ReadFile(rolesPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			initializeDefaultRoles()
+	rolesOnce.Do(func() {
+		rolesMu.Lock()
+		defer rolesMu.Unlock()
+
+		b, err := os.ReadFile(rolesPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				initializeDefaultRoles()
+			}
 			return
 		}
-		roles = []Role{}
-		rolesLoaded = true
-		return
-	}
-	var rf roleFile
-	if err := json.Unmarshal(b, &rf); err != nil {
-		roles = []Role{}
-		rolesLoaded = true
-		return
-	}
-	roles = rf.Roles
-	rolesLoaded = true
+		var rf roleFile
+		if err := json.Unmarshal(b, &rf); err != nil {
+			roles = []Role{}
+			return
+		}
+		roles = rf.Roles
+	})
 }
 
 func initializeDefaultRoles() {
@@ -84,7 +76,6 @@ func initializeDefaultRoles() {
 		IsSystem: false,
 	}
 	roles = []Role{owner, admin, member}
-	rolesLoaded = true
 	if err := saveRoles(); err != nil {
 		return
 	}
@@ -98,11 +89,7 @@ func saveRoles() error {
 	if err := os.MkdirAll(filepath.Dir(rolesPath), 0755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(rolesPath, data, 0600); err != nil {
-		return err
-	}
-	rolesLoaded = true
-	return nil
+	return os.WriteFile(rolesPath, data, 0600)
 }
 
 func ListRoles() []Role {
@@ -158,7 +145,7 @@ func CreateRole(name, description string, permissions []Permission) (Role, error
 		Name:        strings.TrimSpace(name),
 		Description: strings.TrimSpace(description),
 		Permissions: permissions,
-		IsSystem:    false,
+		IsSystem:    true,
 	}
 	roles = append(roles, role)
 	if err := saveRoles(); err != nil {

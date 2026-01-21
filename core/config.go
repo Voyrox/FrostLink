@@ -148,7 +148,7 @@ func WriteConfig(dir string, cfg Config) error {
 		b.WriteString("}\n")
 	}
 
-	return ioutil.WriteFile(path, []byte(b.String()), 0644)
+	return ioutil.WriteFile(path, []byte(b.String()), 0600)
 }
 
 func GetDomainConfig(domain string) (Config, bool) {

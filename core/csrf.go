@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/hmac"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -25,44 +26,34 @@ type csrfFile struct {
 var (
 	csrfMu     sync.RWMutex
 	csrfTokens = make(map[string]CSRFToken)
-	csrfInit   bool
+	csrfOnce   sync.Once
 )
 
 func initCSRF() {
-	if csrfInit {
-		return
-	}
-	csrfMu.Lock()
-	defer csrfMu.Unlock()
-	if csrfInit {
-		return
-	}
+	csrfOnce.Do(func() {
+		csrfMu.Lock()
+		defer csrfMu.Unlock()
 
-	data, err := os.ReadFile(csrfPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			csrfTokens = make(map[string]CSRFToken)
-			csrfInit = true
+		data, err := os.ReadFile(csrfPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				csrfTokens = make(map[string]CSRFToken)
+			}
 			return
 		}
-		csrfTokens = make(map[string]CSRFToken)
-		csrfInit = true
-		return
-	}
 
-	var cf csrfFile
-	if err := json.Unmarshal(data, &cf); err != nil {
-		csrfTokens = make(map[string]CSRFToken)
-		csrfInit = true
-		return
-	}
-
-	for _, t := range cf.Tokens {
-		if t.CreatedAt.After(time.Now().Add(-1 * time.Hour)) {
-			csrfTokens[t.SessionID] = t
+		var cf csrfFile
+		if err := json.Unmarshal(data, &cf); err != nil {
+			csrfTokens = make(map[string]CSRFToken)
+			return
 		}
-	}
-	csrfInit = true
+
+		for _, t := range cf.Tokens {
+			if t.CreatedAt.After(time.Now().Add(-1 * time.Hour)) {
+				csrfTokens[t.SessionID] = t
+			}
+		}
+	})
 }
 
 func saveCSRFUnlocked() {
@@ -108,7 +99,7 @@ func ValidateCSRFToken(sessionID, token string) bool {
 	if !ok {
 		return false
 	}
-	if t.Token != token {
+	if !hmac.Equal([]byte(t.Token), []byte(token)) {
 		return false
 	}
 	if t.CreatedAt.Before(time.Now().Add(-1 * time.Hour)) {
