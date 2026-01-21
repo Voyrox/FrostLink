@@ -110,3 +110,54 @@ func RequestAnalyticsSave() {
 	default:
 	}
 }
+
+type CountryCount struct {
+	Country string `json:"country"`
+	Count   int64  `json:"count"`
+}
+
+type CountryBreakdown struct {
+	TopCountries []CountryCount   `json:"top_countries"`
+	ByCountry    map[string]int64 `json:"by_country"`
+}
+
+func GetDomainCountryBreakdown(domain string) CountryBreakdown {
+	analyticsMu.Lock()
+	defer analyticsMu.Unlock()
+
+	da, ok := domainAnalyticsM[domain]
+	if !ok {
+		return CountryBreakdown{
+			TopCountries: []CountryCount{},
+			ByCountry:    make(map[string]int64),
+		}
+	}
+
+	countryCounts := make(map[string]int64)
+	for ip, count := range da.IPs {
+		country := lookupCountry(ip)
+		countryCounts[country] += count
+	}
+
+	var topCountries []CountryCount
+	for country, count := range countryCounts {
+		topCountries = append(topCountries, CountryCount{Country: country, Count: count})
+	}
+
+	for i := 0; i < len(topCountries)-1; i++ {
+		for j := i + 1; j < len(topCountries); j++ {
+			if topCountries[j].Count > topCountries[i].Count {
+				topCountries[i], topCountries[j] = topCountries[j], topCountries[i]
+			}
+		}
+	}
+
+	if len(topCountries) > 10 {
+		topCountries = topCountries[:10]
+	}
+
+	return CountryBreakdown{
+		TopCountries: topCountries,
+		ByCountry:    countryCounts,
+	}
+}
