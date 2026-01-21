@@ -33,46 +33,36 @@ type tokenFile struct {
 }
 
 var (
-	tokensMu     sync.RWMutex
-	tokens       = make(map[string]APIToken)
-	tokensLoaded bool
+	tokensMu   sync.RWMutex
+	tokens     = make(map[string]APIToken)
+	tokensOnce sync.Once
 )
 
 func loadTokens() {
-	if tokensLoaded {
-		return
-	}
-	tokensMu.Lock()
-	defer tokensMu.Unlock()
-	if tokensLoaded {
-		return
-	}
+	tokensOnce.Do(func() {
+		tokensMu.Lock()
+		defer tokensMu.Unlock()
 
-	data, err := os.ReadFile(tokensPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			tokens = make(map[string]APIToken)
-			tokensLoaded = true
+		data, err := os.ReadFile(tokensPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				tokens = make(map[string]APIToken)
+			}
 			return
 		}
-		tokens = make(map[string]APIToken)
-		tokensLoaded = true
-		return
-	}
 
-	var tf tokenFile
-	if err := json.Unmarshal(data, &tf); err != nil {
-		tokens = make(map[string]APIToken)
-		tokensLoaded = true
-		return
-	}
-
-	for _, t := range tf.Tokens {
-		if t.Active && (t.ExpiresAt == nil || t.ExpiresAt.After(time.Now())) {
-			tokens[t.ID] = t
+		var tf tokenFile
+		if err := json.Unmarshal(data, &tf); err != nil {
+			tokens = make(map[string]APIToken)
+			return
 		}
-	}
-	tokensLoaded = true
+
+		for _, t := range tf.Tokens {
+			if t.Active && (t.ExpiresAt == nil || t.ExpiresAt.After(time.Now())) {
+				tokens[t.ID] = t
+			}
+		}
+	})
 }
 
 func saveTokensUnlocked() {

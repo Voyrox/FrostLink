@@ -28,44 +28,34 @@ type sessionFile struct {
 var (
 	sessionsMu   sync.RWMutex
 	sessions     = make(map[string]Session)
-	sessionsInit bool
+	sessionsOnce sync.Once
 )
 
 func initSessions() {
-	if sessionsInit {
-		return
-	}
-	sessionsMu.Lock()
-	defer sessionsMu.Unlock()
-	if sessionsInit {
-		return
-	}
+	sessionsOnce.Do(func() {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
 
-	data, err := os.ReadFile(sessionsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			sessions = make(map[string]Session)
-			sessionsInit = true
+		data, err := os.ReadFile(sessionsPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				sessions = make(map[string]Session)
+			}
 			return
 		}
-		sessions = make(map[string]Session)
-		sessionsInit = true
-		return
-	}
 
-	var sf sessionFile
-	if err := json.Unmarshal(data, &sf); err != nil {
-		sessions = make(map[string]Session)
-		sessionsInit = true
-		return
-	}
-
-	for _, s := range sf.Sessions {
-		if s.ExpiresAt.After(time.Now()) {
-			sessions[s.ID] = s
+		var sf sessionFile
+		if err := json.Unmarshal(data, &sf); err != nil {
+			sessions = make(map[string]Session)
+			return
 		}
-	}
-	sessionsInit = true
+
+		for _, s := range sf.Sessions {
+			if s.ExpiresAt.After(time.Now()) {
+				sessions[s.ID] = s
+			}
+		}
+	})
 }
 
 func saveSessionsUnlocked() {
