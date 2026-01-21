@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,12 +17,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const defaultMetricsTokenFile = "./db/metrics_token"
+const defaultMetricsTokenFile = "./db/metrics_token.json"
+
+type metricsToken struct {
+	Token string `json:"token"`
+}
 
 var (
 	metricsAuthToken     string
 	metricsAuthTokenOnce sync.Once
-	tokenLoaded          bool
 )
 
 func GetMetricsAuthToken() string {
@@ -32,11 +36,13 @@ func GetMetricsAuthToken() string {
 		if tokenFromEnv != "" {
 			metricsAuthToken = tokenFromEnv
 			ui.SystemLog("info", "metrics", "Using METRICS_AUTH_TOKEN from environment")
-			tokenLoaded = true
 		} else if tokenFromFile != "" {
 			metricsAuthToken = tokenFromFile
-			tokenLoaded = true
-			ui.SystemLog("info", "metrics", fmt.Sprintf("Loaded metrics token from file (first 8 chars): %s...", metricsAuthToken[:8]))
+			preview := metricsAuthToken
+			if len(preview) > 8 {
+				preview = preview[:8]
+			}
+			ui.SystemLog("info", "metrics", fmt.Sprintf("Loaded metrics token from file (first 8 chars): %s...", preview))
 		} else {
 			b := make([]byte, 32)
 			_, err := rand.Read(b)
@@ -45,7 +51,11 @@ func GetMetricsAuthToken() string {
 				return
 			}
 			metricsAuthToken = hex.EncodeToString(b)
-			ui.SystemLog("info", "metrics", fmt.Sprintf("Generated new metrics auth token (first 8 chars): %s...", metricsAuthToken[:8]))
+			preview := metricsAuthToken
+			if len(preview) > 8 {
+				preview = preview[:8]
+			}
+			ui.SystemLog("info", "metrics", fmt.Sprintf("Generated new metrics auth token (first 8 chars): %s...", preview))
 
 			if err := saveMetricsTokenToFile(metricsAuthToken); err != nil {
 				ui.SystemLog("error", "metrics", fmt.Sprintf("Failed to save metrics token: %v", err))
@@ -70,8 +80,18 @@ func loadMetricsTokenFromFile() string {
 		return ""
 	}
 
-	token := strings.TrimSpace(string(data))
-	return token
+	var mt metricsToken
+	if err := json.Unmarshal(data, &mt); err != nil {
+		ui.SystemLog("error", "metrics", fmt.Sprintf("Failed to parse metrics token file: %v", err))
+		return ""
+	}
+
+	if len(mt.Token) == 0 {
+		ui.SystemLog("error", "metrics", "Metrics token file contains empty token")
+		return ""
+	}
+
+	return mt.Token
 }
 
 func saveMetricsTokenToFile(token string) error {
@@ -80,11 +100,17 @@ func saveMetricsTokenToFile(token string) error {
 		path = defaultMetricsTokenFile
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("failed to create metrics token directory: %w", err)
 	}
 
-	if err := os.WriteFile(path, []byte(token), 0600); err != nil {
+	mt := metricsToken{Token: token}
+	data, err := json.MarshalIndent(mt, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal metrics token: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write metrics token file: %w", err)
 	}
 
