@@ -648,7 +648,7 @@
           
           const [proxysResp, logsResp] = await Promise.all([
             fetch('/api/proxys').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
-            fetch('/api/logs?page=1&limit=5000').then(function(r) { return r.ok ? r.json() : { logs: [] }; }).catch(function() { return logs: []; })
+            fetch('/api/logs?page=1&limit=5000').then(function(r) { return r.ok ? r.json() : { logs: [] }; }).catch(function() { return { logs: [] }; })
           ]);
 
           const logs = Array.isArray(logsResp.logs) ? logsResp.logs : [];
