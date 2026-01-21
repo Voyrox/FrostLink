@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-acme/lego/v4/certcrypto"
@@ -341,8 +342,7 @@ func tryFallbackSave(domain string, certs *certificate.Resource, primaryErr erro
 }
 
 func sanitizeEmail(email string) string {
-	email = filepath.Clean(email)
-	return email
+	return strings.TrimSpace(email)
 }
 
 func GetDNSProvider(provider string, credentials map[string]string) (interface{}, error) {
