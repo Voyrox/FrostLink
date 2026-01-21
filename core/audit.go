@@ -32,47 +32,37 @@ type auditLogFile struct {
 var (
 	auditLogsMu sync.Mutex
 	auditLogs   []AuditLog
-	auditInit   bool
+	auditOnce   sync.Once
 )
 
 func initAudit() {
-	if auditInit {
-		return
-	}
-	auditLogsMu.Lock()
-	defer auditLogsMu.Unlock()
-	if auditInit {
-		return
-	}
+	auditOnce.Do(func() {
+		auditLogsMu.Lock()
+		defer auditLogsMu.Unlock()
 
-	data, err := os.ReadFile(auditLogsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			auditLogs = []AuditLog{}
-			auditInit = true
+		data, err := os.ReadFile(auditLogsPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				auditLogs = []AuditLog{}
+			}
 			return
 		}
-		auditLogs = []AuditLog{}
-		auditInit = true
-		return
-	}
 
-	var af auditLogFile
-	if err := json.Unmarshal(data, &af); err != nil {
-		auditLogs = []AuditLog{}
-		auditInit = true
-		return
-	}
-
-	cutoff := time.Now().AddDate(0, 0, -30)
-	var validLogs []AuditLog
-	for _, log := range af.Logs {
-		if log.Timestamp.After(cutoff) {
-			validLogs = append(validLogs, log)
+		var af auditLogFile
+		if err := json.Unmarshal(data, &af); err != nil {
+			auditLogs = []AuditLog{}
+			return
 		}
-	}
-	auditLogs = validLogs
-	auditInit = true
+
+		cutoff := time.Now().AddDate(0, 0, -30)
+		var validLogs []AuditLog
+		for _, log := range af.Logs {
+			if log.Timestamp.After(cutoff) {
+				validLogs = append(validLogs, log)
+			}
+		}
+		auditLogs = validLogs
+	})
 }
 
 func saveAuditLogs() {

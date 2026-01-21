@@ -394,3 +394,34 @@
         min-width: 150px;
     }
 }
+
+/* Refresh button */
+.page-analytics .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: #0e1420;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: .9rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .2s ease, border-color .2s ease;
+}
+
+.page-analytics .btn:hover {
+    background: #121a28;
+    border-color: #1f2937;
+}
+
+.page-analytics .btn:active {
+    transform: translateY(1px);
+}
+
+.page-analytics .btn svg {
+    width: 14px;
+    height: 14px;
+    color: var(--muted);
+}

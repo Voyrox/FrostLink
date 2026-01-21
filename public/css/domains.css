@@ -661,6 +661,7 @@
 .page-domains .cert-form .btn.danger:hover {
     background: rgba(239, 68, 68, 0.2);
     border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
 }
 
 .page-domains .cert-form .btn.ghost {
@@ -691,4 +692,25 @@
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .page-domains .app {
+        grid-template-columns: 1fr;
+    }
+    .page-domains .sidebar {
+        position: fixed;
+        left: -260px;
+        top: 0;
+        bottom: 0;
+        z-index: 1000;
+        transition: left 0.3s ease;
+    }
+    .page-domains .sidebar.open {
+        left: 0;
+    }
+    .page-domains .modal-backdrop .modal {
+        max-width: 90vw;
+        margin: 5vh auto;
+    }
 }

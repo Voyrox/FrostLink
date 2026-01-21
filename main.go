@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,11 +30,30 @@ import (
 )
 
 var startupTime = time.Now()
-var mainSharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
+var mainSharedSecret []byte
+var mainSharedSecretOnce sync.Once
+
+func loadMainSharedSecret() {
+	mainSharedSecretOnce.Do(func() {
+		mainSharedSecret = []byte(os.Getenv("AUTH_SHARED_SECRET"))
+		if len(mainSharedSecret) == 0 {
+			data, err := os.ReadFile("db/secrets.json")
+			if err == nil {
+				var secretData struct {
+					AuthSharedSecret string `json:"auth_shared_secret"`
+				}
+				if json.Unmarshal(data, &secretData) == nil && secretData.AuthSharedSecret != "" {
+					mainSharedSecret = []byte(secretData.AuthSharedSecret)
+				}
+			}
+		}
+	})
+}
 
 func mainVerifySharedToken(token, domain string) (username string, valid bool) {
+	loadMainSharedSecret()
 	if len(mainSharedSecret) == 0 {
-		mainSharedSecret = []byte("sparkproxy-shared-secret-change-in-production")
+		return "", false
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
@@ -304,6 +325,10 @@ func extractDomain(c *gin.Context) string {
 }
 
 func main() {
+	if isFirstRun() {
+		runFirstRunSetup()
+	}
+
 	loadEnv(".env")
 
 	core.InitRootUser()
@@ -325,8 +350,8 @@ func main() {
 	{
 		public.GET("/", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
 		public.GET("/login", func(c *gin.Context) { c.HTML(http.StatusOK, "login", gin.H{}) })
-		public.POST("/login", loginPost)
-		public.POST("/api/login", apiLogin)
+		public.POST("/login", core.RateLimitMiddleware(), loginPost)
+		public.POST("/api/login", core.RateLimitMiddleware(), apiLogin)
 		public.POST("/api/logout", apiLogout)
 		public.GET("/_auth/oauth/:provider_id", apiOAuthLogin)
 		public.GET("/_auth/oauth/callback/:provider_id", apiOAuthCallback)
@@ -842,11 +867,23 @@ func apiDomainAnalytics(c *gin.Context) {
 		return
 	}
 
+	now := time.Now()
+
+	stats24h := calculatePeriodStats(domain, now.Add(-24*time.Hour))
+	stats7d := calculatePeriodStats(domain, now.AddDate(0, 0, -7))
+	stats30d := calculatePeriodStats(domain, now.AddDate(0, 0, -30))
+
 	analytics := proxy.GetDomainAnalytics(domain)
 	profilerEnabled := proxy.IsProfilerEnabled(domain)
+	countryBreakdown := proxy.GetDomainCountryBreakdown(domain)
 
 	c.JSON(http.StatusOK, gin.H{
-		"domain":           cfg.Domain,
+		"domain": cfg.Domain,
+		"periods": gin.H{
+			"24h": stats24h,
+			"7d":  stats7d,
+			"30d": stats30d,
+		},
 		"methods":          analytics.Methods,
 		"paths":            analytics.Paths,
 		"ips":              analytics.IPs,
@@ -854,7 +891,38 @@ func apiDomainAnalytics(c *gin.Context) {
 		"hourly_requests":  analytics.HourlyRequests,
 		"slowest_requests": analytics.SlowestRequests,
 		"profiler_enabled": profilerEnabled,
+		"top_countries":    countryBreakdown.TopCountries,
+		"by_country":       countryBreakdown.ByCountry,
 	})
+}
+
+type periodStats struct {
+	TotalRequests   int64 `json:"total_requests"`
+	BlockedRequests int64 `json:"blocked_requests"`
+	SuccessRequests int64 `json:"success_requests"`
+	DataInBytes     int64 `json:"data_in_bytes"`
+	DataOutBytes    int64 `json:"data_out_bytes"`
+}
+
+func calculatePeriodStats(domain string, since time.Time) periodStats {
+	logs := core.GetRequestLogs()
+	var stats periodStats
+	for _, log := range logs {
+		if log.Host != domain || !log.Timestamp.After(since) {
+			continue
+		}
+		stats.TotalRequests++
+		stats.DataInBytes += log.DataIn
+		stats.DataOutBytes += log.DataOut
+
+		action := strings.ToLower(strings.TrimSpace(log.Action))
+		if action == "" || action == "allow" {
+			stats.SuccessRequests++
+		} else {
+			stats.BlockedRequests++
+		}
+	}
+	return stats
 }
 
 func apiDomainProfilerStatus(c *gin.Context) {
@@ -1061,9 +1129,6 @@ func apiDashboard(c *gin.Context) {
 }
 
 func apiSystem(c *gin.Context) {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 
@@ -3091,4 +3156,79 @@ func apiOAuthLinkCallback(c *gin.Context) {
 		"ToastMessage": fmt.Sprintf("Successfully linked %s account", provider.Name),
 		"Redirect":     "/linked-accounts",
 	})
+}
+
+func isFirstRun() bool {
+	_, err := os.Stat("db/users.json")
+	return os.IsNotExist(err)
+}
+
+func runFirstRunSetup() {
+	rootUser := generateUsername(8)
+	rootPass := generatePassword(16)
+	sharedSecret := generateSecret(32)
+
+	fmt.Println()
+	fmt.Println("\x1b[1;32m╔════════════════════════════════════════════════════════════╗\x1b[0m")
+	fmt.Println("\x1b[1;32m║                    SPARKPROXY SETUP                        ║\x1b[0m")
+	fmt.Println("\x1b[1;32m╠════════════════════════════════════════════════════════════╣\x1b[0m")
+	fmt.Println("\x1b[1;32m║                                                            ║\x1b[0m")
+	fmt.Printf("\x1b[1;32m║   Root Username: \x1b[1;37m%-8s\x1b[0m\x1b[1;32m                                ║\n\x1b[0m", rootUser)
+	fmt.Printf("\x1b[1;32m║   Root Password: \x1b[1;37m%-16s\x1b[0m\x1b[1;32m                 ║\n\x1b[0m", rootPass)
+	fmt.Println("\x1b[1;32m║                                                            ║\x1b[0m")
+	fmt.Println("\x1b[1;33m║   ⚠️  SAVE THESE CREDENTIALS NOW!                          ║\x1b[0m")
+	fmt.Println("\x1b[1;33m║   They will be displayed only this one time.              ║\x1b[0m")
+	fmt.Println("\x1b[1;32m║                                                            ║\x1b[0m")
+	fmt.Println("\x1b[1;32m╚════════════════════════════════════════════════════════════╝\x1b[0m")
+	fmt.Println()
+	fmt.Print("Press Enter to continue to startup... ")
+
+	var input string
+	fmt.Scanln(&input)
+
+	if err := os.MkdirAll("db", 0755); err != nil {
+		fmt.Printf("Failed to create db directory: %v\n", err)
+		return
+	}
+
+	secretData := struct {
+		AuthSharedSecret string `json:"auth_shared_secret"`
+	}{
+		AuthSharedSecret: sharedSecret,
+	}
+	secretBytes, _ := json.MarshalIndent(secretData, "", "  ")
+	os.WriteFile("db/secrets.json", secretBytes, 0600)
+
+	_, err := core.CreateUser(rootUser, "root@localhost", rootPass, "Owner", "all", nil)
+	if err != nil {
+		fmt.Printf("Failed to create root user: %v\n", err)
+	} else {
+		fmt.Printf("Root user '%s' created successfully\n", rootUser)
+	}
+}
+
+func generateUsername(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, length)
+	rand.Read(b)
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
+}
+
+func generatePassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	b := make([]byte, length)
+	rand.Read(b)
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
+}
+
+func generateSecret(length int) string {
+	b := make([]byte, length)
+	rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
 }

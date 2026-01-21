@@ -17,41 +17,32 @@ type FirewallRules struct {
 }
 
 var (
-	firewallMu     sync.RWMutex
-	firewallLoaded bool
-	firewallRules  FirewallRules
-	firewallPath   = filepath.Join(".", "db", "firewall.json")
+	firewallMu    sync.RWMutex
+	firewallRules FirewallRules
+	firewallPath  = filepath.Join(".", "db", "firewall.json")
+	firewallOnce  sync.Once
 )
 
 func loadFirewall() {
-	if firewallLoaded {
-		return
-	}
-	firewallMu.Lock()
-	defer firewallMu.Unlock()
-	if firewallLoaded {
-		return
-	}
-	b, err := os.ReadFile(firewallPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			firewallRules = FirewallRules{}
-			firewallLoaded = true
+	firewallOnce.Do(func() {
+		firewallMu.Lock()
+		defer firewallMu.Unlock()
+
+		b, err := os.ReadFile(firewallPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				firewallRules = FirewallRules{}
+			}
 			return
 		}
-		firewallRules = FirewallRules{}
-		firewallLoaded = true
-		return
-	}
-	var r FirewallRules
-	if err := json.Unmarshal(b, &r); err != nil {
-		firewallRules = FirewallRules{}
-		firewallLoaded = true
-		return
-	}
-	dedupeAndSortFirewall(&r)
-	firewallRules = r
-	firewallLoaded = true
+		var r FirewallRules
+		if err := json.Unmarshal(b, &r); err != nil {
+			firewallRules = FirewallRules{}
+			return
+		}
+		dedupeAndSortFirewall(&r)
+		firewallRules = r
+	})
 }
 
 func saveFirewallLocked() error {

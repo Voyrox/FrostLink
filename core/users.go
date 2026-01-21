@@ -29,41 +29,30 @@ type userFile struct {
 }
 
 var (
-	usersMu     sync.RWMutex
-	users       []User
-	usersLoaded bool
+	usersMu   sync.RWMutex
+	users     []User
+	usersOnce sync.Once
 )
 
 func loadUsers() {
-	if usersLoaded && len(users) > 0 {
-		return
-	}
-	usersMu.Lock()
-	if usersLoaded && len(users) > 0 {
-		usersMu.Unlock()
-		return
-	}
-	b, err := os.ReadFile(usersPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			users = []User{}
-		} else {
-			users = []User{}
+	usersOnce.Do(func() {
+		usersMu.Lock()
+		defer usersMu.Unlock()
+
+		b, err := os.ReadFile(usersPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				users = []User{}
+			}
+			return
 		}
-		usersLoaded = true
-		usersMu.Unlock()
-		return
-	}
-	var uf userFile
-	if err := json.Unmarshal(b, &uf); err != nil {
-		users = []User{}
-		usersLoaded = true
-		usersMu.Unlock()
-		return
-	}
-	users = uf.Users
-	usersLoaded = true
-	usersMu.Unlock()
+		var uf userFile
+		if err := json.Unmarshal(b, &uf); err != nil {
+			users = []User{}
+			return
+		}
+		users = uf.Users
+	})
 }
 
 func saveUsers() error {
@@ -77,7 +66,6 @@ func saveUsers() error {
 	if err := os.WriteFile(usersPath, data, 0600); err != nil {
 		return err
 	}
-	usersLoaded = true
 	return nil
 }
 
@@ -147,9 +135,6 @@ func InitRootUser() {
 	if rootUser == "" {
 		rootUser = "root"
 	}
-	if rootPass == "" {
-		rootPass = "1234567890"
-	}
 	if rootEmail == "" {
 		rootEmail = "root@localhost"
 	}
@@ -163,6 +148,10 @@ func InitRootUser() {
 		}
 	}
 	usersMu.RUnlock()
+
+	if rootPass == "" {
+		return
+	}
 
 	_, err := CreateUser(rootUser, rootEmail, rootPass, "Owner", "all", nil)
 	if err != nil {

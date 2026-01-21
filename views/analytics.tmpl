@@ -642,26 +642,16 @@
 
       async function refreshAnalytics() {
         try {
-          const [dashboardResp, proxysResp, logsResp] = await Promise.all([
-            fetch('/api/dashboard').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
+          const selectedDomain = domainSelect ? domainSelect.value : '';
+          const timeRange = timeRangeSelect ? timeRangeSelect.value : '7d';
+          const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
+          
+          const [proxysResp, logsResp] = await Promise.all([
             fetch('/api/proxys').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
             fetch('/api/logs?page=1&limit=5000').then(function(r) { return r.ok ? r.json() : { logs: [] }; }).catch(function() { return { logs: [] }; })
           ]);
 
-          const dashboard = dashboardResp || {};
-          const configs = proxysResp && Array.isArray(proxysResp.configs) ? proxysResp.configs : [];
           const logs = Array.isArray(logsResp.logs) ? logsResp.logs : [];
-
-          if (totalRequestsEl) totalRequestsEl.textContent = formatNumber(dashboard.total_requests || 0);
-          if (blockedRequestsEl) blockedRequestsEl.textContent = formatNumber(dashboard.firewall_blocked || 0);
-          if (successRateEl) {
-            const rate = dashboard.total_requests > 0 ? ((dashboard.total_requests - (dashboard.firewall_blocked || 0)) * 100 / dashboard.total_requests) : 0;
-            successRateEl.textContent = rate.toFixed(1) + '%';
-          }
-          if (dataTransferEl) {
-            const totalBytes = (dashboard.upload_bytes_total || 0) + (dashboard.download_bytes_total || 0);
-            dataTransferEl.textContent = formatBytes(totalBytes);
-          }
 
           let filteredLogs = logs;
           if (selectedDomain) {
@@ -669,6 +659,30 @@
               return log && log.host && log.host.toLowerCase() === selectedDomain.toLowerCase();
             });
           }
+
+          const statsTotalRequests = filteredLogs.length;
+          let statsBlockedRequests = 0;
+          let statsDataIn = 0;
+          let statsDataOut = 0;
+
+          filteredLogs.forEach(function(entry) {
+            if (!entry) return;
+            const action = (entry.action || '').toLowerCase();
+            if (action && action !== 'allow' && action !== '') statsBlockedRequests++;
+            statsDataIn += Number(entry.data_in) || 0;
+            statsDataOut += Number(entry.data_out) || 0;
+          });
+
+          if (totalRequestsEl) totalRequestsEl.textContent = formatNumber(statsTotalRequests);
+          if (blockedRequestsEl) blockedRequestsEl.textContent = formatNumber(statsBlockedRequests);
+          if (successRateEl) {
+            const success = statsTotalRequests - statsBlockedRequests;
+            const rate = statsTotalRequests > 0 ? (success * 100 / statsTotalRequests) : 0;
+            successRateEl.textContent = rate.toFixed(1) + '%';
+          }
+          if (dataTransferEl) dataTransferEl.textContent = formatBytes(statsDataIn + statsDataOut);
+
+          const configs = proxysResp && Array.isArray(proxysResp.configs) ? proxysResp.configs : [];
 
           const methods = {};
           const responseCodes = {};
@@ -753,113 +767,6 @@
           renderResponseLegend(document.getElementById('response-legend'), responseCodes);
           renderTopPaths(document.getElementById('top-paths-body'), paths);
           renderTopCountries(document.getElementById('top-countries-body'), countries, filteredLogs.length);
-          updateWorldMap(countries);
-
-        } catch (e) {
-          console.error('Analytics error:', e);
-        }
-      }
-
-          const totalRequests = filteredLogs.length;
-          let blockedRequests = 0;
-          let dataIn = 0;
-          let dataOut = 0;
-          const methods = {};
-          const responseCodes = {};
-          const paths = {};
-          const countries = {};
-
-          filteredLogs.forEach(function(entry) {
-            if (!entry) return;
-            const action = (entry.action || '').toLowerCase();
-            if (action && action !== 'allow') blockedRequests++;
-            dataIn += Number(entry.data_in) || 0;
-            dataOut += Number(entry.data_out) || 0;
-
-            const method = entry.method || 'UNKNOWN';
-            methods[method] = (methods[method] || 0) + 1;
-
-            const code = entry.status_code || '0';
-            responseCodes[code] = (responseCodes[code] || 0) + 1;
-
-            const path = entry.path || '/';
-            paths[path] = (paths[path] || 0) + 1;
-
-            const loc = entry.location;
-            if (loc) countries[loc] = (countries[loc] || 0) + 1;
-          });
-
-          if (totalRequestsEl) totalRequestsEl.textContent = formatNumber(totalRequests);
-          if (blockedRequestsEl) blockedRequestsEl.textContent = formatNumber(blockedRequests);
-          if (successRateEl) {
-            const success = totalRequests - blockedRequests;
-            const rate = totalRequests > 0 ? (success * 100 / totalRequests) : 0;
-            successRateEl.textContent = rate.toFixed(1) + '%';
-          }
-          if (dataTransferEl) dataTransferEl.textContent = formatBytes(dataIn + dataOut);
-
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          if (canvas && filteredLogs.length > 0) {
-            const dayKeys = [];
-            const labels = [];
-            for (let i = days - 1; i >= 0; i--) {
-              const d = new Date(today);
-              d.setDate(d.getDate() - i);
-              dayKeys.push(formatDateKey(d));
-              labels.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
-            }
-
-            const countsByDay = {};
-            filteredLogs.forEach(function(entry) {
-              if (!entry || !entry.timestamp) return;
-              const t = String(entry.timestamp).replace(' ', 'T');
-              const d = new Date(t);
-              if (!isNaN(d.getTime())) {
-                const key = formatDateKey(d);
-                countsByDay[key] = (countsByDay[key] || 0) + 1;
-              }
-            });
-
-            const data = dayKeys.map(function(k) { return countsByDay[k] || 0; });
-            drawLineChart(canvas, labels, data, '#f97316');
-          }
-
-          const transferCanvas = document.getElementById('transferChart');
-          if (transferCanvas && filteredLogs.length > 0) {
-            const countsInByDay = {};
-            const countsOutByDay = {};
-            filteredLogs.forEach(function(entry) {
-              if (!entry || !entry.timestamp) return;
-              const t = String(entry.timestamp).replace(' ', 'T');
-              const d = new Date(t);
-              if (!isNaN(d.getTime())) {
-                const key = formatDateKey(d);
-                countsInByDay[key] = (countsInByDay[key] || 0) + (Number(entry.data_in) || 0);
-                countsOutByDay[key] = (countsOutByDay[key] || 0) + (Number(entry.data_out) || 0);
-              }
-            });
-
-            const transferLabels = [];
-            const transferDataIn = [];
-            const transferDataOut = [];
-            for (let i = days - 1; i >= 0; i--) {
-              const d = new Date(today);
-              d.setDate(d.getDate() - i);
-              const key = formatDateKey(d);
-              transferLabels.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
-              transferDataIn.push(countsInByDay[key] || 0);
-              transferDataOut.push(countsOutByDay[key] || 0);
-            }
-            drawTransferChart(transferCanvas, transferLabels, transferDataIn, transferDataOut);
-          }
-
-          renderMethodsChart(document.getElementById('methods-chart'), methods);
-          drawDonutChart(document.getElementById('responseCodesChart'), responseCodes);
-          renderResponseLegend(document.getElementById('response-legend'), responseCodes);
-          renderTopPaths(document.getElementById('top-paths-body'), paths);
-          renderTopCountries(document.getElementById('top-countries-body'), countries, totalRequests);
           updateWorldMap(countries);
 
         } catch (e) {
