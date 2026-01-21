@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"strconv"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -63,7 +65,7 @@ var (
 )
 
 func IncRequests(domain, method string, statusCode int) {
-	RequestsTotal.WithLabelValues(domain, method, itoa(statusCode)).Inc()
+	RequestsTotal.WithLabelValues(domain, method, strconv.Itoa(statusCode)).Inc()
 }
 
 func AddBytesIn(domain string, bytes int64) {
